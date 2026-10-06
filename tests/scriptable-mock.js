@@ -869,9 +869,9 @@ function createScriptableEnv(opts) {
     parameter(name) { return o.queryParameters[name] == null ? null : o.queryParameters[name] },
   }
   const config = strict({
-    runsInApp: !o.runsInWidget && o.shortcutParameter == null,
+    runsInApp: !o.runsInWidget && !o.runsWithSiri && o.shortcutParameter == null,
     runsInActionExtension: false,
-    runsWithSiri: false,
+    runsWithSiri: !!o.runsWithSiri,
     runsInWidget: !!o.runsInWidget,
     runsInAccessoryWidget: !!(o.runsInWidget && o.widgetFamily && o.widgetFamily.indexOf('accessory') === 0),
     runsInNotification: false,

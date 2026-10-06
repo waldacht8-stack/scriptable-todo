@@ -433,6 +433,14 @@ asyncTests.push(['模擬実行 バックグラウンド同期: 予定取り込�
   assert.ok(env.files.exists('/iCloud/Documents/todo-data/todo-data.backup.json'), '上書き前にバックアップ')
 }])
 
+asyncTests.push(['模擬実行 ショートカットから Parameter なしで実行しても同期モードで動く（アラートを出さない）', async () => {
+  const env = await runTodo({ runsWithSiri: true, events: sampleEvents() }, sampleData())
+  assert.deepStrictEqual(env.uncaught, [])
+  assert.strictEqual(env.alerts.length, 0, 'アラートは出さない')
+  assert.strictEqual(env.script.output, 'ok')
+  assert.strictEqual(env.pages.length, 0, '画面は開かない')
+}])
+
 asyncTests.push(['模擬実行 バックグラウンド同期: カレンダー失敗時はエラー通知', async () => {
   const env = await runTodo({ shortcutParameter: 'sync', calendarError: new Error('アクセス拒否') }, sampleData())
   assert.deepStrictEqual(env.uncaught, [])

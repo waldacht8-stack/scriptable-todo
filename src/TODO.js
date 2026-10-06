@@ -82,6 +82,15 @@ async function runBackground() {
 }
 
 async function showError(title, e) {
+  // 画面を出せない実行環境（ショートカット・Siri）ではアラートが使えないので通知で知らせる
+  if (!config.runsInApp) {
+    const n = new Notification()
+    n.identifier = 'todo-error'
+    n.title = title
+    n.body = messageOf(e)
+    await n.schedule()
+    return
+  }
   const a = new Alert()
   a.title = title
   a.message = messageOf(e) + (e && e.stack ? '\n\n' + e.stack : '')
@@ -121,8 +130,11 @@ async function runApp() {
 }
 
 const mode = String(args.shortcutParameter || (args.queryParameters && args.queryParameters.mode) || '')
+// ショートカットのオートメーション（Run In App オフ）は runsWithSiri / runsInApp=false で動く。
+// Parameter の入れ忘れでも画面を出そうとしないよう、画面を出せない環境は同期モードにする
+const background = mode === 'sync' || config.runsWithSiri || !config.runsInApp
 if (config.runsInWidget) await runWidget()
-else if (mode === 'sync') await runBackground()
+else if (background) await runBackground()
 else {
   try {
     await runApp()
