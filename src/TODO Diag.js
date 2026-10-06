@@ -2,7 +2,7 @@
 // These must be at the very top of the file. Do not edit.
 // icon-color: red; icon-glyph: stethoscope;
 // TODO Diag.js — 1段階ずつ実行して、どこで止まるかを表示する診断スクリプト
-const DIAG_VERSION = 'diag-1'
+const DIAG_VERSION = 'diag-2'
 const results = []
 
 function msg(e) { return e && e.message ? e.message : String(e) }
@@ -55,13 +55,14 @@ await step('配置ファイルの確認', async () => {
   return '\n  ' + out.join('\n  ')
 }, 20000)
 
-let model, store, sync, notify, ui
+let model, store, sync, notify, ui, widget
 await step('モジュール読み込み', async () => {
   model = importModule('todo-lib/model')
   store = importModule('todo-lib/store')
   sync = importModule('todo-lib/sync')
   notify = importModule('todo-lib/notify')
   ui = importModule('todo-lib/ui')
+  widget = importModule('todo-lib/widget')
   return 'OK'
 })
 
@@ -110,6 +111,18 @@ await step('本番画面のWebView表示', async () => {
   const info = await wv.evaluateJavaScript('(document.getElementById("app") || {}).innerHTML ? "描画あり" : "描画なし"')
   await wv.present(true)
   return info + '・閉じた'
+}, 120000)
+
+await step('ウィジェット生成（中・小・ロック画面）', async () => {
+  const now = new Date()
+  for (const f of ['small', 'medium', 'large', 'accessoryCircular', 'accessoryRectangular', 'accessoryInline']) widget.build(data, f, now, model, null)
+  return 'OK'
+})
+
+await step('ウィジェットのプレビュー表示（中）', async () => {
+  const w = widget.build(data, 'medium', new Date(), model, null)
+  await w.presentMedium()
+  return '閉じた'
 }, 120000)
 
 const report = results.join('\n')
