@@ -191,7 +191,7 @@ function clientMain(DATA) {
       '<button type="button" class="btn-save" data-act="save">保存</button></div></form>'
     const el = document.getElementById('sheet')
     el.innerHTML = html
-    if (!t) setTimeout(() => document.getElementById('f-title').focus(), 50)
+    if (!t) setTimeout(() => { const f = document.getElementById('f-title'); if (f) f.focus() }, 50)
   }
 
   function closeSheet() {
@@ -208,6 +208,7 @@ function clientMain(DATA) {
       existing.updatedAt = stamp
     } else {
       const titleEl = document.getElementById('f-title')
+      if (!titleEl) return
       const title = titleEl.value.trim()
       if (!title) {
         titleEl.focus()

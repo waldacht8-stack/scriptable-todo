@@ -301,6 +301,253 @@ asyncTests.push(['UITable画面: 行の組み立て/追加/完了/削除', async
   assert.strictEqual(ed.note, 'メモ')
 }])
 
+// ===== Scriptable 模擬環境で TODO.js を丸ごと実行する（tests/scriptable-mock.js） =====
+const { createScriptableEnv } = require('./scriptable-mock')
+const DATA_FILE = '/iCloud/Documents/todo-data/todo-data.json'
+const DAY = 86400e3
+
+function todayStart() {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
+// 期限切れ / 今日(時刻) / 今日(終日) / 期限なし / 今後 / 完了 を1件ずつ
+function sampleData() {
+  const n = Date.now()
+  const t0 = todayStart()
+  const iso = x => new Date(x).toISOString()
+  return {
+    version: 1,
+    todos: [
+      todo({ id: 'od', title: '期限切れタスク', due: iso(n - DAY) }),
+      todo({ id: 'tt', title: '今日の時刻つき', due: iso(Math.min(n + 3600e3, t0 + DAY - 60e3)) }),
+      todo({ id: 'ad', title: '今日の終日', due: iso(t0), allDay: true }),
+      todo({ id: 'n1', title: '期限なしタスク' }),
+      todo({ id: 'up', title: '明後日の予定', due: iso(t0 + 2 * DAY + 10 * 3600e3) }),
+      todo({ id: 'dn', title: '完了済み', done: true, doneAt: iso(n - 60e3) }),
+    ],
+    dismissed: {},
+    settings: {},
+    meta: {},
+  }
+}
+
+function sampleEvents() {
+  const t0 = todayStart()
+  return [
+    { identifier: 'ev-1', title: '歯医者', startDate: new Date(t0 + 2 * DAY + 14 * 3600e3), endDate: new Date(t0 + 2 * DAY + 15 * 3600e3), calendar: '仕事' },
+    { identifier: 'ev-2', title: '出張', startDate: new Date(t0 + 3 * DAY), endDate: new Date(t0 + 4 * DAY), isAllDay: true, calendar: '仕事' },
+    { identifier: 'hol', title: '祝日', startDate: new Date(t0 + DAY), endDate: new Date(t0 + 2 * DAY), isAllDay: true, calendar: '日本の祝日' },
+    { identifier: 'ev-old', title: '先週から続く', startDate: new Date(t0 - 2 * DAY), endDate: new Date(t0 + DAY), calendar: '仕事' },
+  ]
+}
+
+async function runTodo(opts, data) {
+  const env = createScriptableEnv(opts)
+  if (data !== undefined) env.files.write(DATA_FILE, typeof data === 'string' ? data : JSON.stringify(data))
+  try {
+    await env.run('TODO.js')
+  } finally {
+    env.dispose()
+  }
+  return env
+}
+
+// 例外・エラー表示・後始末漏れがないこと
+function assertClean(env) {
+  assert.deepStrictEqual(env.uncaught.map(e => e.stack || String(e)), [], 'タイマー内の例外')
+  assert.deepStrictEqual(env.errors(), [], 'console.error')
+  assert.deepStrictEqual(env.alerts.map(a => a.title + ': ' + a.message), [], 'エラーのアラート')
+  for (const p of env.pages) assert.deepStrictEqual(p.errors.map(e => e.stack || String(e)), [], '画面内の例外')
+  assert.ok(env.script.completed, 'Script.complete() が呼ばれた')
+}
+
+function savedData(env) {
+  return JSON.parse(env.files.read(DATA_FILE))
+}
+
+const FAMILIES = ['small', 'medium', 'large', 'extraLarge', 'accessoryCircular', 'accessoryRectangular', 'accessoryInline']
+for (const family of FAMILIES) {
+  for (const kind of ['空データ', 'サンプル']) {
+    asyncTests.push(['模擬実行 ウィジェット ' + family + '（' + kind + '）', async () => {
+      const sample = kind === 'サンプル'
+      const env = await runTodo({ runsInWidget: true, widgetFamily: family, events: sample ? sampleEvents() : [] }, sample ? sampleData() : undefined)
+      assertClean(env)
+      const w = env.script.widget
+      assert.ok(w, 'Script.setWidget にウィジェットが渡った')
+      const texts = env.widgetTexts(w)
+      assert.ok(texts.length > 0, 'テキストがある')
+      assert.ok(!(texts[0] === 'TODO' && texts.length === 2), 'エラー用ウィジェットになった: ' + texts[1])
+      assert.ok(!texts.some(t => t.indexOf('同期エラー') >= 0), '同期エラー表示\n' + env.widgetTree(w))
+      assert.strictEqual(w.url, 'scriptable:///run/TODO')
+      assert.ok(w.refreshAfterDate > new Date())
+      if (sample && (family === 'large' || family === 'extraLarge')) {
+        const all = texts.join('\n')
+        for (const s of ['期限切れタスク', '今日の終日', '期限なしタスク']) assert.ok(all.indexOf(s) >= 0, s + '\n' + env.widgetTree(w))
+      }
+      if (sample) {
+        // ウィジェット実行でもカレンダー同期・保存が行われる
+        const titles = savedData(env).todos.map(t => t.title)
+        assert.ok(titles.indexOf('歯医者') >= 0, titles.join(','))
+      }
+    }])
+  }
+}
+
+asyncTests.push(['模擬実行 ウィジェット: データファイルが壊れていたらエラー表示ウィジェット', async () => {
+  const env = await runTodo({ runsInWidget: true, widgetFamily: 'small' }, '{ broken')
+  const texts = env.widgetTexts(env.script.widget)
+  assert.strictEqual(texts[0], 'TODO')
+  assert.ok(texts[1].indexOf('データファイルが壊れています') >= 0, texts[1])
+  assert.ok(env.files.list().some(p => p.indexOf('todo-data.json.broken-') >= 0), '退避ファイル')
+}])
+
+asyncTests.push(['模擬実行 バックグラウンド同期: 予定取り込みと通知予約', async () => {
+  const env = createScriptableEnv({ shortcutParameter: 'sync', events: sampleEvents() })
+  env.files.write(DATA_FILE, JSON.stringify(sampleData()))
+  // 以前の予約（このアプリ分は消える・他のスクリプトの分は残る）
+  env.notifications.pending.set('todo-remind-old', { identifier: 'todo-remind-old', triggerDate: new Date(Date.now() + DAY) })
+  env.notifications.pending.set('other-1', { identifier: 'other-1', triggerDate: new Date(Date.now() + DAY) })
+  await env.run('TODO.js')
+  env.dispose()
+  assertClean(env)
+  assert.strictEqual(env.script.output, 'ok')
+  const data = savedData(env)
+  const titles = data.todos.map(t => t.title)
+  assert.ok(titles.indexOf('歯医者') >= 0 && titles.indexOf('出張') >= 0, titles.join(','))
+  assert.ok(titles.indexOf('祝日') < 0, '除外カレンダーは取り込まない')
+  assert.ok(titles.indexOf('先週から続く') < 0, '前日から続く予定は取り込まない')
+  const ev1 = data.todos.find(t => t.title === '歯医者')
+  assert.strictEqual(ev1.source, 'calendar')
+  assert.strictEqual(ev1.calendarTitle, '仕事')
+  assert.ok(data.meta.lastSync)
+  const ids = Array.from(env.notifications.pending.keys())
+  assert.ok(ids.indexOf('todo-remind-old') < 0, '古い予約は消える')
+  assert.ok(ids.indexOf('other-1') >= 0, '他の予約は残す')
+  assert.ok(ids.indexOf('todo-remind-' + ev1.id) >= 0, ids.join(','))
+  assert.ok(ids.some(id => id.indexOf('todo-morning-') === 0), ids.join(','))
+  const rec = env.notifications.pending.get('todo-remind-' + ev1.id)
+  assert.strictEqual(rec.openURL, 'scriptable:///run/TODO')
+  assert.strictEqual(rec.triggerDate.getTime(), new Date(ev1.due).getTime() - 30 * 60000)
+  assert.ok(env.files.exists('/iCloud/Documents/todo-data/todo-data.backup.json'), '上書き前にバックアップ')
+}])
+
+asyncTests.push(['模擬実行 バックグラウンド同期: カレンダー失敗時はエラー通知', async () => {
+  const env = await runTodo({ shortcutParameter: 'sync', calendarError: new Error('アクセス拒否') }, sampleData())
+  assert.deepStrictEqual(env.uncaught, [])
+  assert.ok(String(env.script.output).indexOf('error') === 0, String(env.script.output))
+  assert.ok(env.script.output.indexOf('アクセス拒否') >= 0)
+  assert.ok(env.notifications.delivered.some(n => n.identifier === 'todo-error'), 'エラー通知がすぐ配信された')
+  assert.ok(savedData(env).meta.lastErrorAt)
+}])
+
+asyncTests.push(['模擬実行 バックグラウンド同期: iCloud 未ダウンロードのファイルを取得して読む', async () => {
+  const env = createScriptableEnv({ shortcutParameter: 'sync' })
+  env.files.write(DATA_FILE, JSON.stringify(sampleData()), { downloaded: false })
+  await env.run('TODO.js')
+  env.dispose()
+  assertClean(env)
+  assert.strictEqual(env.script.output, 'ok')
+  assert.strictEqual(savedData(env).todos.length, sampleData().todos.length)
+}])
+
+asyncTests.push(['模擬実行 アプリ: 表示 → 完了・追加 → 保存', async () => {
+  let seen = null
+  const env = await runTodo({
+    events: sampleEvents(),
+    onWebViewPresent: async (page, env) => {
+      seen = page.text()
+      // 完了チェック（350ms 後に保存 → todoapp://flush → __drain で回収）
+      page.click('toggle', 'n1')
+      await env.waitFor(() => savedData(env).todos.some(t => t.id === 'n1' && t.done), 3000, '完了の保存')
+      // 追加
+      page.click('add')
+      await env.wait(100) // 入力欄にフォーカスが移るまで待つ（人の操作より速く押さない）
+      page.window.document.getElementById('f-title').value = '牛乳を買う'
+      page.click('save')
+      await env.waitFor(() => savedData(env).todos.some(t => t.title === '牛乳を買う'), 3000, '追加の保存')
+    },
+  }, sampleData())
+  assertClean(env)
+  for (const s of ['期限切れタスク', '今日の時刻つき', '歯医者', '残り']) assert.ok(seen.indexOf(s) >= 0, s)
+  const page = env.pages[0]
+  assert.ok(page.navigations.some(n => n.url === 'todoapp://flush' && !n.allowed), '合図のナビゲーションは止める')
+  const data = savedData(env)
+  assert.ok(data.todos.some(t => t.title === '歯医者'), 'カレンダー同期済み')
+  assert.ok(data.todos.find(t => t.id === 'n1').doneAt)
+  assert.strictEqual(data.todos.find(t => t.title === '牛乳を買う').source, 'manual')
+  assert.ok(!Array.from(env.timers).some(t => t.repeats), '定期回収タイマーは止まっている')
+}])
+
+asyncTests.push(['模擬実行 アプリ: 閉じる直前の変更も回収される', async () => {
+  const env = await runTodo({
+    onWebViewPresent: async (page, env) => {
+      page.click('add')
+      await env.wait(100) // 入力欄にフォーカスが移るまで待つ（人の操作より速く押さない）
+      page.window.document.getElementById('f-title').value = '閉じる直前'
+      page.click('save') // すぐ閉じる
+    },
+  }, sampleData())
+  assertClean(env)
+  assert.ok(savedData(env).todos.some(t => t.title === '閉じる直前'))
+}])
+
+asyncTests.push(['模擬実行 アプリ: 閉じた後に WebView が応答しなくても終了する', async () => {
+  const t = Date.now()
+  const env = await runTodo({ evaluateAfterClose: 'hang' }, sampleData())
+  assertClean(env)
+  assert.ok(Date.now() - t < 5000)
+}])
+
+asyncTests.push(['模擬実行 アプリ: カレンダー失敗は画面のエラー表示になる', async () => {
+  let seen = ''
+  const env = await runTodo({ calendarError: new Error('拒否'), onWebViewPresent: async page => { seen = page.text() } })
+  assertClean(env)
+  assert.ok(seen.indexOf('カレンダーを読み込めませんでした') >= 0, seen)
+  assert.ok(env.files.exists(DATA_FILE), '空データでも保存される')
+}])
+
+asyncTests.push(['模擬実行 アプリ（TODO Lite / UITable）', async () => {
+  let rows = 0
+  const env = await runTodo({ scriptName: 'TODO Lite', events: sampleEvents(), onTablePresent: async table => { rows = table.rows.length } }, sampleData())
+  assertClean(env)
+  assert.strictEqual(env.webViews.length, 0)
+  assert.ok(rows > 5, String(rows))
+}])
+
+asyncTests.push(['模擬実行 store: ファイルなし → 既定値 / 壊れたJSON → 退避して例外', async () => {
+  let env = createScriptableEnv()
+  let store = env.importModule('todo-lib/store')
+  const d = await store.load()
+  assert.strictEqual(JSON.stringify(d.todos), '[]')
+  assert.strictEqual(d.settings.remindMinutes, 30)
+  assert.strictEqual(JSON.stringify(d.meta), '{"lastSync":null,"lastErrorAt":null}')
+  store.save(d)
+  assert.deepStrictEqual(savedData(env).todos, [])
+  env.dispose()
+
+  env = createScriptableEnv()
+  env.files.write(DATA_FILE, '{"todos": [')
+  store = env.importModule('todo-lib/store')
+  await assert.rejects(() => store.load(), /データファイルが壊れています/)
+  const broken = env.files.list().filter(p => p.indexOf(DATA_FILE + '.broken-') === 0)
+  assert.strictEqual(broken.length, 1)
+  assert.strictEqual(env.files.read(broken[0]), '{"todos": [')
+  assert.strictEqual(env.files.read(DATA_FILE), '{"todos": [', '元ファイルは上書きしない')
+  env.dispose()
+}])
+
+asyncTests.push(['模擬環境: 存在しない API・不正な型は例外になる', async () => {
+  const env = createScriptableEnv()
+  const w = new env.globals.ListWidget()
+  assert.throws(() => w.layoutHorizontally(), /ListWidget.layoutHorizontally/)
+  assert.throws(() => { w.textColor = new env.globals.Color('#000') }, /代入できる/)
+  assert.throws(() => { w.addText('x').textColor = '#000' }, /Color が必要/)
+  assert.throws(() => env.globals.Font.boldFont(12), /Font.boldFont/)
+  env.dispose()
+}])
+
 ;(async () => {
   for (const [name, fn] of asyncTests) {
     try {
