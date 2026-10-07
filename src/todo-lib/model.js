@@ -99,12 +99,21 @@ function mergeEvents(data, events, rangeStart, rangeEnd, now) {
   const byKey = {}
   for (const t of data.todos) if (t.source === 'calendar') byKey[t.eventKey] = t
   const seen = {}
+  for (const ev of events) seen[ev.key] = true
   const result = { added: 0, updated: 0, removed: 0 }
   const stamp = now.toISOString()
   for (const ev of events) {
-    seen[ev.key] = true
     if (data.dismissed[ev.key]) continue
-    const t = byKey[ev.key]
+    let t = byKey[ev.key]
+    if (!t) {
+      // アプリから登録した予定は、保存直後の識別子が同期で見える識別子と異なることがあるので、
+      // 「どの予定にも対応していないカレンダー由来TODO」をタイトルと日時で照合して付け替える
+      t = data.todos.find(x => x.source === 'calendar' && !seen[x.eventKey] && x.title === ev.title && x.due === ev.due)
+      if (t) {
+        t.eventKey = ev.key
+        byKey[ev.key] = t
+      }
+    }
     if (!t) {
       data.todos.push({
         id: newId(), title: ev.title, due: ev.due, allDay: ev.allDay, note: '',

@@ -107,6 +107,16 @@ test('カレンダー取り込み: 追加・更新・削除・再取り込みし
   assert.ok('c' in data.dismissed)
 })
 
+test('カレンダー取り込み: 識別子が変わったアプリ登録の予定はタイトル・日時で照合して付け替える', () => {
+  const start = model.startOfDay(now)
+  const due = at('2026-10-08T15:00').toISOString()
+  const data = { todos: [todo({ title: '打ち合わせ', due: due, source: 'calendar', eventKey: 'null@' + due })], dismissed: {} }
+  const r = model.mergeEvents(data, [{ key: 'real-id@' + due, title: '打ち合わせ', due: due, allDay: false, calendarTitle: '仕事' }], start, model.addDays(start, 14), now)
+  assert.deepStrictEqual(r, { added: 0, updated: 0, removed: 0 })
+  assert.strictEqual(data.todos.length, 1)
+  assert.strictEqual(data.todos[0].eventKey, 'real-id@' + due)
+})
+
 test('手動TODOはカレンダー同期で消えない', () => {
   const start = model.startOfDay(now)
   const data = { todos: [todo({ title: '手動', due: at('2026-10-08T10:00').toISOString() })], dismissed: {} }
@@ -486,6 +496,45 @@ asyncTests.push(['模擬実行 アプリ: 表示 → 完了・追加 → 保存'
   assert.ok(data.todos.find(t => t.id === 'n1').doneAt)
   assert.strictEqual(data.todos.find(t => t.title === '牛乳を買う').source, 'manual')
   assert.ok(!Array.from(env.timers).some(t => t.repeats), '定期回収タイマーは止まっている')
+}])
+
+asyncTests.push(['模擬実行 アプリ: 「カレンダーにも登録」で予定が作られ、次の同期で重複しない', async () => {
+  const start = new Date()
+  start.setDate(start.getDate() + 2)
+  const ymd = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0')
+  let html = ''
+  const env = await runTodo({
+    events: sampleEvents(),
+    onWebViewPresent: async (page, env) => {
+      page.click('add')
+      await env.wait(100)
+      html = page.window.document.getElementById('sheet').innerHTML
+      const doc = page.window.document
+      doc.getElementById('f-title').value = '打ち合わせ'
+      doc.getElementById('f-date').value = ymd
+      doc.getElementById('f-time').value = '15:00'
+      doc.getElementById('f-cal').checked = true
+      page.click('save')
+      await env.waitFor(() => env.savedEvents.length === 1 && savedData(env).todos.some(t => t.title === '打ち合わせ' && t.source === 'calendar'), 3000, '予定の作成')
+    },
+  }, sampleData())
+  assertClean(env)
+  assert.ok(html.indexOf('カレンダーにも予定として登録') >= 0, '追加画面にチェックが出る')
+  const ev = env.savedEvents[0]
+  assert.strictEqual(ev.title, '打ち合わせ')
+  assert.strictEqual(ev.startDate.getHours(), 15)
+  assert.strictEqual(ev.endDate.getTime() - ev.startDate.getTime(), 3600 * 1000, '1時間の予定')
+  const todo = savedData(env).todos.find(t => t.title === '打ち合わせ')
+  assert.ok(!todo.pendingEvent && todo.eventKey, 'カレンダー由来に切り替わる')
+
+  // 作った予定を含めて同期しても TODO は1件のまま、予定も二重に作られない
+  const env2 = createScriptableEnv({ shortcutParameter: 'sync', events: env.options.events })
+  env2.files.write(DATA_FILE, env.files.read(DATA_FILE))
+  await env2.run('TODO.js')
+  env2.dispose()
+  assert.strictEqual(env2.script.output, 'ok')
+  assert.strictEqual(savedData(env2).todos.filter(t => t.title === '打ち合わせ').length, 1)
+  assert.strictEqual(env2.savedEvents.length, 0)
 }])
 
 asyncTests.push(['模擬実行 アプリ: 閉じる直前の変更も回収される', async () => {

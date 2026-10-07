@@ -32,6 +32,12 @@ function withTimeout(promise, ms, label) {
 async function refresh(data, now) {
   let error = null
   try {
+    // 画面で「カレンダーにも登録」したのに作れていない予定があれば、同期の前に作る
+    await withTimeout(sync.createPendingEvents(data), 10000, '予定の登録')
+  } catch (e) {
+    error = 'カレンダーに予定を登録できませんでした（' + messageOf(e) + '）。次回また試します。'
+  }
+  try {
     console.log('カレンダー同期 開始')
     const r = await withTimeout(sync.syncCalendar(data, now, model), 10000, 'カレンダー同期')
     console.log('カレンダー同期 完了: ' + JSON.stringify(r))
@@ -110,15 +116,27 @@ async function runApp() {
   step = 'データ保存'
   console.log(step)
   store.save(data)
+  let calendars = []
+  try {
+    calendars = await withTimeout(sync.writableCalendars(data.settings), 5000, 'カレンダー一覧')
+  } catch (e) {
+    // 一覧が取れなければ「カレンダーにも登録」を出さないだけ
+  }
   step = '画面表示'
   console.log(step)
   await ui.present(data, {
     model: model,
     error: error,
+    calendars: calendars,
     onMessage: async msg => {
       if (msg.type !== 'save') return
       data.todos = msg.todos
       for (const d of msg.dismissed) data.dismissed[d.key] = d.due
+      try {
+        await withTimeout(sync.createPendingEvents(data), 10000, '予定の登録')
+      } catch (e) {
+        // 作れなかった予定は pendingEvent のまま残り、次回の同期で再試行される
+      }
       store.save(data)
       try {
         await withTimeout(notify.reschedule(data, new Date(), model), 10000, '通知予約')

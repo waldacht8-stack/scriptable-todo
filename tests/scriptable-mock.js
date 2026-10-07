@@ -123,6 +123,7 @@ function createScriptableEnv(opts) {
     tables: [],
     timers: new Set(),
     pages: [],
+    savedEvents: [],       // new CalendarEvent().save() された予定
   }
 
   function log(level, args) {
@@ -577,8 +578,34 @@ function createScriptableEnv(opts) {
       return c ? Promise.resolve(c) : Promise.reject(new Error('No calendar named ' + title))
     },
   }
-  const CalendarEvent = {
-    between(start, end, calendars) {
+  // new CalendarEvent() → save() で o.events に追加される（Scriptable と同様、identifier は save 後に付く）
+  let eventSeq = 0
+  function CalendarEvent() {
+    const ev = {
+      identifier: null, title: '', notes: null, location: null, url: null,
+      startDate: null, endDate: null, isAllDay: false, calendar: null,
+      attendees: null, availability: 'busy', timeZone: 'Asia/Tokyo', __mockType: 'CalendarEvent',
+      save() {
+        if (typeof ev.title !== 'string' || !ev.title) return Promise.reject(new MockError('CalendarEvent.save: title が空'))
+        needArgs('CalendarEvent.save', [ev.startDate, ev.endDate], ['Date', 'Date'])
+        if (ev.endDate < ev.startDate) return Promise.reject(new MockError('CalendarEvent.save: endDate が startDate より前'))
+        const cal = ev.calendar || calendarObjs[0]
+        if (!ev.identifier) ev.identifier = 'created-' + (++eventSeq)
+        const rec = { identifier: ev.identifier, title: ev.title, notes: ev.notes, startDate: ev.startDate, endDate: ev.endDate, isAllDay: !!ev.isAllDay, calendar: cal.title }
+        const i = o.events.findIndex(e => e.identifier === rec.identifier)
+        if (i >= 0) o.events[i] = rec
+        else o.events.push(rec)
+        env.savedEvents.push(rec)
+        return Promise.resolve()
+      },
+      remove() {
+        const i = o.events.findIndex(e => e.identifier === ev.identifier)
+        if (i >= 0) o.events.splice(i, 1)
+      },
+    }
+    return strict(ev, 'CalendarEvent', { startDate: 'Date', endDate: 'Date' })
+  }
+  CalendarEvent.between = function (start, end, calendars) {
       needArgs('CalendarEvent.between', [start, end], ['Date', 'Date'])
       if (calendars != null && !Array.isArray(calendars)) throw new MockError('CalendarEvent.between: calendars は配列')
       if (o.calendarError) return Promise.reject(o.calendarError)
@@ -588,9 +615,8 @@ function createScriptableEnv(opts) {
         .filter(ev => ev.startDate < end && ev.endDate > start || (ev.startDate >= start && ev.startDate < end))
         .filter(ev => !titles || titles.indexOf(ev.calendar.title) >= 0)
       return Promise.resolve(list)
-    },
-    today(calendars) { return CalendarEvent.between(startOfToday(), new Date(startOfToday().getTime() + 86400e3), calendars) },
   }
+  CalendarEvent.today = function (calendars) { return CalendarEvent.between(startOfToday(), new Date(startOfToday().getTime() + 86400e3), calendars) }
   function startOfToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
 
   // ---------- 通知 ----------
@@ -915,7 +941,7 @@ function createScriptableEnv(opts) {
     WidgetSpacer: strictClass(WidgetSpacer, 'WidgetSpacer'),
     WidgetDate: strictClass(WidgetDate, 'WidgetDate'),
     Calendar: strict(Calendar, 'Calendar'),
-    CalendarEvent: strict(CalendarEvent, 'CalendarEvent'),
+    CalendarEvent: strictClass(CalendarEvent, 'CalendarEvent'),
     Notification: strictClass(Notification, 'Notification'),
     Timer: strictClass(Timer, 'Timer'),
     Alert: strictClass(Alert, 'Alert'),
@@ -1039,6 +1065,8 @@ class FakePage {
         __owner: owner || null,
         __classes: new Set((t.attrs.class || '').split(/\s+/).filter(Boolean)),
         value: t.tag === 'textarea' ? (t.inner || '') : (t.attrs.value || ''),
+        checked: 'checked' in t.attrs,
+        style: {},
         textContent: '',
         get innerHTML() { return this.__html },
         set innerHTML(v) { page.setInner(proxy, String(v)) },

@@ -79,6 +79,9 @@ section{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 .btn-cancel{background:var(--bg)}
 .btn-del{background:var(--overdue-bg);color:var(--overdue)}
 .btn-del.armed{background:var(--overdue);color:#fff}
+.sheet select{font:inherit;font-size:17px;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;width:100%;min-height:48px}
+.sheet .check-row{flex-direction:row;align-items:center;gap:10px;font-size:16px;font-weight:600;color:var(--text);min-height:44px}
+.sheet .check-row input{width:24px;height:24px;min-height:0;padding:0;flex-shrink:0;accent-color:var(--accent)}
 `
 
 // 画面側で動くコード。toString() で HTML に埋め込むため、外の変数は参照しない
@@ -124,7 +127,7 @@ function clientMain(DATA) {
 
   function itemHTML(t, now, small) {
     const label = fmtDue(t, now)
-    const cal = t.source === 'calendar' ? '<span style="display:flex;align-items:center;gap:4px">' + CAL + 'カレンダー</span>' : ''
+    const cal = t.source === 'calendar' || t.pendingEvent ? '<span style="display:flex;align-items:center;gap:4px">' + CAL + 'カレンダー</span>' : ''
     return '<div class="item' + (small ? ' small' : '') + (t.done ? ' done' : '') + '">' +
       '<button class="check' + (t.done ? ' on' : '') + '" data-act="toggle" data-id="' + esc(t.id) + '" aria-label="' + (t.done ? '未完了に戻す' : '完了にする') + '">' + CHECK + '</button>' +
       '<button class="body" data-act="edit" data-id="' + esc(t.id) + '">' +
@@ -171,7 +174,7 @@ function clientMain(DATA) {
 
   function openSheet(t) {
     state.sheet = { id: t ? t.id : null, armed: false }
-    const isCal = t && t.source === 'calendar'
+    const isCal = t && (t.source === 'calendar' || t.pendingEvent)
     const d = t && t.due ? new Date(t.due) : null
     let html = '<div class="backdrop" data-act="close"></div><form class="sheet" onsubmit="return false">'
     html += '<h3>' + (t ? 'TODOを編集' : 'TODOを追加') + '</h3>'
@@ -183,6 +186,11 @@ function clientMain(DATA) {
         '<div class="row2"><label>日付<input id="f-date" type="date" value="' + (d ? toInputDate(d) : '') + '"></label>' +
         '<label>時刻<input id="f-time" type="time" value="' + (d && !t.allDay ? pad2(d.getHours()) + ':' + pad2(d.getMinutes()) : '') + '"></label></div>' +
         '<button type="button" class="link" data-act="clear-date">期限なしにする</button>'
+      if (!t && DATA.calendars && DATA.calendars.length) {
+        html += '<label class="check-row"><input id="f-cal" type="checkbox" data-act="toggle-cal">カレンダーにも予定として登録</label>' +
+          '<label id="f-calrow" style="display:none">登録先カレンダー<select id="f-calname">' +
+          DATA.calendars.map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('') + '</select></label>'
+      }
     }
     html += '<label>メモ<textarea id="f-note">' + esc(t ? t.note : '') + '</textarea></label>'
     html += '<div class="actions">' +
@@ -203,7 +211,7 @@ function clientMain(DATA) {
     const stamp = new Date().toISOString()
     const existing = state.sheet.id ? state.todos.find(x => x.id === state.sheet.id) : null
     const note = document.getElementById('f-note').value
-    if (existing && existing.source === 'calendar') {
+    if (existing && (existing.source === 'calendar' || existing.pendingEvent)) {
       existing.note = note
       existing.updatedAt = stamp
     } else {
@@ -221,9 +229,21 @@ function clientMain(DATA) {
       if (date && time) due = new Date(date + 'T' + time)
       else if (date) { due = new Date(date + 'T00:00'); allDay = true }
       else if (time) due = new Date(toInputDate(new Date()) + 'T' + time)
+      const calEl = document.getElementById('f-cal')
+      const toCalendar = !existing && calEl && calEl.checked
+      if (toCalendar && !due) {
+        // カレンダーに入れるには日付が必要
+        document.getElementById('f-date').focus()
+        return
+      }
       const fields = { title: title, due: due ? due.toISOString() : null, allDay: allDay, note: note, updatedAt: stamp }
       if (existing) Object.assign(existing, fields)
-      else state.todos.push(Object.assign({ id: newId(), done: false, doneAt: null, source: 'manual', createdAt: stamp }, fields))
+      else {
+        const todo = Object.assign({ id: newId(), done: false, doneAt: null, source: 'manual', createdAt: stamp }, fields)
+        // 予定の作成は Scriptable 側が行う（値は登録先カレンダー名。空なら既定のカレンダー）
+        if (toCalendar) todo.pendingEvent = document.getElementById('f-calname').value || true
+        state.todos.push(todo)
+      }
     }
     closeSheet()
     render()
@@ -274,6 +294,10 @@ function clientMain(DATA) {
     else if (act === 'close') closeSheet()
     else if (act === 'save') saveSheet()
     else if (act === 'delete') deleteFromSheet(el)
+    else if (act === 'toggle-cal') {
+      const row = document.getElementById('f-calrow')
+      if (row) row.style.display = el.checked ? '' : 'none'
+    }
     else if (act === 'clear-date') {
       document.getElementById('f-date').value = ''
       document.getElementById('f-time').value = ''
@@ -284,10 +308,10 @@ function clientMain(DATA) {
   setInterval(() => { if (!state.sheet) render() }, 60000) // 時間経過で「期限切れ」へ移るのを反映
 }
 
-function buildHTML(data, model, error) {
+function buildHTML(data, model, error, calendars) {
   const helpers = ['startOfDay', 'addDays', 'pad2', 'fmtTime', 'fmtDate', 'fmtDue', 'compareDue', 'categorize', 'newId']
     .map(name => model[name].toString()).join('\n')
-  const payload = JSON.stringify({ todos: data.todos, error: error || null }).replace(/</g, '\\u003c')
+  const payload = JSON.stringify({ todos: data.todos, error: error || null, calendars: calendars || [] }).replace(/</g, '\\u003c')
   return '<!doctype html><html lang="ja"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">' +
     '<style>' + CSS + '</style></head><body><div id="app"></div><div id="sheet"></div>' +
@@ -335,7 +359,7 @@ async function present(data, ctx) {
     return true
   }
   console.log('画面: HTML生成')
-  const html = buildHTML(data, ctx.model, ctx.error)
+  const html = buildHTML(data, ctx.model, ctx.error, ctx.calendars)
   console.log('画面: HTML読み込み (' + html.length + '文字)')
   await wv.loadHTML(html)
   console.log('画面: 表示開始')

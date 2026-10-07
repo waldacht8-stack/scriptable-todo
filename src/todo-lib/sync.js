@@ -27,4 +27,61 @@ async function syncCalendar(data, now, model) {
   return result
 }
 
-module.exports = { syncCalendar }
+// 予定を書き込めるカレンダー名（既定のカレンダーを先頭に）。画面の「登録先」選択肢に使う
+async function writableCalendars(settings) {
+  const all = (await Calendar.forEvents())
+    .filter(c => c.allowsContentModifications && settings.excludeCalendars.indexOf(c.title) < 0)
+  let def = null
+  try { def = await Calendar.defaultForEvents() } catch (e) { /* 既定が取れなくても一覧は出す */ }
+  const titles = all.map(c => c.title)
+  const i = def ? titles.indexOf(def.title) : -1
+  if (i > 0) {
+    titles.splice(i, 1)
+    titles.unshift(def.title)
+  }
+  return titles
+}
+
+// 画面で「カレンダーにも登録」した TODO（pendingEvent）を iOS カレンダーに予定として作り、
+// カレンダー由来の TODO に切り替える。画面は保存のたびに全 TODO を送ってくる（pendingEvent が残ったまま）ので、
+// 作成済みかどうかは meta.eventLinks（TODO id → 予定）で判定して二重に作らない。
+async function createPendingEvents(data) {
+  const links = data.meta.eventLinks = data.meta.eventLinks || {}
+  let created = 0
+  for (const t of data.todos) {
+    if (!t.pendingEvent) continue
+    let link = links[t.id]
+    if (!link) {
+      if (!t.due) { delete t.pendingEvent; continue }
+      const start = new Date(t.due)
+      const ev = new CalendarEvent()
+      ev.title = t.title
+      ev.startDate = start
+      ev.endDate = t.allDay ? start : new Date(start.getTime() + 3600 * 1000)
+      ev.isAllDay = !!t.allDay
+      if (t.note) ev.notes = t.note
+      const cals = await Calendar.forEvents()
+      const want = typeof t.pendingEvent === 'string' ? t.pendingEvent : null
+      ev.calendar = cals.find(c => c.title === want && c.allowsContentModifications) || await Calendar.defaultForEvents()
+      await ev.save()
+      link = { eventKey: ev.identifier + '@' + start.toISOString(), calendarTitle: ev.calendar.title, due: t.due }
+      links[t.id] = link
+      created++
+    }
+    t.source = 'calendar'
+    t.eventKey = link.eventKey
+    t.calendarTitle = link.calendarTitle
+    delete t.pendingEvent
+  }
+  // 画面で削除された TODO の予定は、次の同期で取り込み直さない
+  const ids = {}
+  for (const t of data.todos) ids[t.id] = true
+  for (const id of Object.keys(links)) {
+    if (ids[id]) continue
+    data.dismissed[links[id].eventKey] = links[id].due
+    delete links[id]
+  }
+  return created
+}
+
+module.exports = { syncCalendar, writableCalendars, createPendingEvents }
