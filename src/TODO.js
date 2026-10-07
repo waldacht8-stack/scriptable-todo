@@ -121,6 +121,18 @@ async function runApp() {
   step = 'データ読み込み'
   console.log(step)
   const data = await store.load()
+  // ウィジェットの行タップ（?action=done&id=…）で起動されたら、そのTODOを完了にしてから画面を開く
+  let toast = null
+  const q = args.queryParameters || {}
+  if (q.action === 'done' && q.id) {
+    const t = data.todos.find(x => x.id === q.id)
+    if (t && !t.done) {
+      t.done = true
+      t.doneAt = now.toISOString()
+      t.updatedAt = t.doneAt
+      toast = { id: t.id, title: t.title }
+    }
+  }
   step = 'カレンダー同期・通知予約'
   console.log(step)
   const error = await refresh(data, now)
@@ -139,6 +151,7 @@ async function runApp() {
     model: model,
     error: error,
     calendars: calendars,
+    toast: toast,
     onMessage: async msg => {
       if (msg.type !== 'save') return
       data.todos = msg.todos

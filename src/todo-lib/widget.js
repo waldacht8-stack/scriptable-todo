@@ -63,7 +63,13 @@ function row(parent, t, color, label, labelColor, size, C) {
   text(r, t.title, size, C.text)
   r.addSpacer()
   if (label) text(r, label, size - 3, labelColor)
+  // 行をタップ → そのTODOを完了にしてアプリを開く（中・大サイズのみ有効。小・ロック画面は全体の url）
+  r.url = doneURL(t)
   return r
+}
+
+function doneURL(t) {
+  return URLScheme.forRunningScript() + '?action=done&id=' + encodeURIComponent(t.id)
 }
 
 function overduePill(parent, count, C) {

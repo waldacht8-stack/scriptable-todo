@@ -171,12 +171,28 @@ function planNotifications(data, now) {
       body: parts.join(' / ') + (rest > 0 ? ' ほか' + rest + '件' : ''),
     })
   }
+  // 夜の残りタスク通知（eveningHour が null なら送らない）
+  for (let i = 0; i < 3 && s.eveningHour != null; i++) {
+    const at = addDays(startOfDay(now), i)
+    at.setHours(s.eveningHour, s.eveningMinute || 0, 0, 0)
+    if (at <= now) continue
+    const g = categorize(data.todos, at)
+    if (g.stats.remaining === 0) continue
+    const items = g.overdue.concat(g.today)
+    const shown = items.slice(0, 3).map(t => t.title)
+    plans.push({
+      id: 'todo-evening-' + i,
+      at: at.toISOString(),
+      title: '今日の残り ' + g.stats.remaining + '件',
+      body: shown.join(' / ') + (items.length > shown.length ? ' ほか' + (items.length - shown.length) + '件' : ''),
+    })
+  }
   const reminders = data.todos
     .filter(t => !t.done && t.due && !t.allDay)
     .map(t => ({ t: t, at: new Date(new Date(t.due).getTime() - s.remindMinutes * 60000) }))
     .filter(x => x.at > now)
     .sort((a, b) => a.at - b.at)
-    .slice(0, 55)
+    .slice(0, 52) // 朝3 + 夜3 + リマインド52 で iOS の上限64件に収める
   for (const x of reminders) {
     plans.push({
       id: 'todo-remind-' + x.t.id,

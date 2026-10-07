@@ -140,6 +140,24 @@ test('完了から30日以上たったTODOを削除', () => {
   assert.strictEqual(data.todos.length, 1)
 })
 
+test('通知計画: 夜の残りタスク通知（残りがある日だけ）', () => {
+  const data = {
+    settings: { remindMinutes: 30, morningHour: 7, morningMinute: 0, eveningHour: 20, eveningMinute: 0 },
+    todos: [
+      todo({ id: 'a', title: '請求書を確認' }), // 期限なし＝毎日「今日」に残る
+      todo({ id: 'b', title: '歯医者', due: at('2026-10-07T14:00').toISOString() }),
+    ],
+  }
+  const ev = model.planNotifications(data, now).filter(p => p.id.indexOf('todo-evening-') === 0)
+  assert.deepStrictEqual(ev.map(p => p.id), ['todo-evening-0', 'todo-evening-1', 'todo-evening-2'])
+  assert.strictEqual(new Date(ev[0].at).getTime(), at('2026-10-07T20:00').getTime())
+  assert.strictEqual(ev[0].title, '今日の残り 2件') // 14:00 の歯医者は20時時点で期限切れとして数える
+  assert.ok(ev[0].body.indexOf('歯医者') >= 0 && ev[0].body.indexOf('請求書を確認') >= 0, ev[0].body)
+  data.todos.forEach(t => { t.done = true; t.doneAt = now.toISOString() })
+  assert.strictEqual(model.planNotifications(data, now).filter(p => p.id.indexOf('todo-evening-') === 0).length, 0, '全部終わっていれば送らない')
+  assert.ok(model.planNotifications({ settings: Object.assign({}, data.settings, { eveningHour: null }), todos: [todo({})] }, now).every(p => p.id.indexOf('todo-evening-') < 0), 'null で無効')
+})
+
 test('通知計画: 朝の一覧と30分前リマインド', () => {
   const data = {
     settings: { remindMinutes: 30, morningHour: 7, morningMinute: 0 },
@@ -303,6 +321,14 @@ for (const family of FAMILIES) {
         const all = texts.join('\n')
         for (const s of ['期限切れタスク', '今日の終日', '期限なしタスク']) assert.ok(all.indexOf(s) >= 0, s + '\n' + env.widgetTree(w))
       }
+      if (sample && (family === 'medium' || family === 'large')) {
+        // 各TODOの行に「完了にする」タップ先が付いている
+        const urls = []
+        const walk = n => { if (n.__mockType !== 'ListWidget' && n.__mockType !== 'WidgetStack') return; if (n.url && n.url.indexOf('action=done') >= 0) urls.push(n.url); n.children.forEach(walk) }
+        walk(w)
+        assert.ok(urls.length >= 2, '行ごとのタップ先\n' + urls.join('\n'))
+        assert.ok(urls.every(u => /^scriptable:\/\/\/run\/TODO\?action=done&id=.+/.test(u)), urls.join('\n'))
+      }
       if (sample) {
         // ウィジェット実行でもカレンダー同期・保存が行われる
         const titles = savedData(env).todos.map(t => t.title)
@@ -464,6 +490,32 @@ asyncTests.push(['模擬実行 アプリ: 日時なしで「カレンダーに�
   assert.strictEqual(ev.startDate.toDateString(), new Date().toDateString())
   assert.ok(env.notifications.delivered.some(n => n.title === 'カレンダーに登録しました' && n.body.indexOf('買い物') >= 0), '成功を通知')
   assert.ok(env.logs.some(l => l.text.indexOf('登録先カレンダーを指定できませんでした') >= 0), 'calendar 代入不可でも保存は続く')
+}])
+
+asyncTests.push(['模擬実行 ウィジェットの行タップ: 完了にして画面にお知らせ → 元に戻す', async () => {
+  let shown = ''
+  let afterUndo = null
+  const env = await runTodo({
+    events: sampleEvents(),
+    queryParameters: { action: 'done', id: 'n1' },
+    onWebViewPresent: async (page, env) => {
+      shown = page.text()
+      assert.ok(savedData(env).todos.find(t => t.id === 'n1').done, '画面を開く前に完了・保存済み')
+      page.click('undo-toast')
+      await env.waitFor(() => !savedData(env).todos.find(t => t.id === 'n1').done, 3000, '元に戻すの保存')
+      afterUndo = page.text()
+    },
+  }, sampleData())
+  assertClean(env)
+  assert.ok(shown.indexOf('を完了しました') >= 0 && shown.indexOf('元に戻す') >= 0, shown)
+  assert.ok(afterUndo.indexOf('を完了しました') < 0, 'お知らせは消える')
+}])
+
+asyncTests.push(['模擬実行 ウィジェットの行タップ: 存在しないIDなら普通に画面を開く', async () => {
+  const env = await runTodo({ events: [], queryParameters: { action: 'done', id: 'nope' } }, sampleData())
+  assertClean(env)
+  assert.strictEqual(env.webViews.length, 1)
+  assert.ok(env.pages[0].text().indexOf('を完了しました') < 0)
 }])
 
 asyncTests.push(['模擬実行 アプリ: 閉じる直前の変更も回収される', async () => {

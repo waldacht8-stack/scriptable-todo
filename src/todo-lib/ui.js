@@ -27,6 +27,8 @@ h1{margin:2px 0 0;font-size:34px;font-weight:800;letter-spacing:.02em}
 .bar{height:8px;border-radius:4px;background:var(--track);overflow:hidden}
 .bar i{display:block;height:8px;border-radius:4px;background:var(--accent);transition:width .3s}
 .ratio{font-size:13px;color:var(--sub)}
+.toast{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--btn);color:var(--btn-text);border-radius:14px;padding:10px 10px 10px 16px;font-size:14px;font-weight:600;margin-bottom:16px}
+.toast button{background:none;border:1px solid currentColor;color:inherit;border-radius:10px;padding:8px 12px;font-size:14px;font-weight:700;min-height:40px;flex-shrink:0}
 .error{background:var(--overdue-bg);color:var(--overdue);border-radius:14px;padding:12px 14px;font-size:13px;font-weight:600;margin-bottom:16px;line-height:1.5}
 section{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 .sec-head{display:flex;align-items:center;gap:8px;padding:0 4px}
@@ -87,7 +89,7 @@ section{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 // 画面側で動くコード。toString() で HTML に埋め込むため、外の変数は参照しない
 // （categorize などの model 関数は同じ <script> 内に埋め込まれる）
 function clientMain(DATA) {
-  const state = { todos: DATA.todos, dismissed: [], showDone: false, sheet: null }
+  const state = { todos: DATA.todos, dismissed: [], showDone: false, sheet: null, toast: DATA.toast }
   const queue = []
   let waiter = null
 
@@ -152,6 +154,7 @@ function clientMain(DATA) {
     const pct = g.stats.total ? Math.round(g.stats.done / g.stats.total * 100) : 0
     let html = ''
     if (DATA.error) html += '<div class="error">' + esc(DATA.error) + '</div>'
+    if (state.toast) html += '<div class="toast"><span>「' + esc(state.toast.title) + '」を完了しました</span><button data-act="undo-toast">元に戻す</button></div>'
     html += '<div class="head"><div class="head-row"><div><div class="date">' + fmtDate(now) + '</div><h1>今日</h1></div>' +
       '<div class="count">残り<b>' + g.stats.remaining + '</b>件</div></div>' +
       '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
@@ -294,6 +297,17 @@ function clientMain(DATA) {
     else if (act === 'close') closeSheet()
     else if (act === 'save') saveSheet()
     else if (act === 'delete') deleteFromSheet(el)
+    else if (act === 'undo-toast') {
+      const u = state.toast && state.todos.find(x => x.id === state.toast.id)
+      if (u) {
+        u.done = false
+        u.doneAt = null
+        u.updatedAt = new Date().toISOString()
+        persist()
+      }
+      state.toast = null
+      render()
+    }
     else if (act === 'toggle-cal') {
       const row = document.getElementById('f-calrow')
       if (row) row.style.display = el.checked ? '' : 'none'
@@ -306,12 +320,13 @@ function clientMain(DATA) {
 
   render()
   setInterval(() => { if (!state.sheet) render() }, 60000) // 時間経過で「期限切れ」へ移るのを反映
+  if (state.toast) setTimeout(() => { state.toast = null; if (!state.sheet) render() }, 6000) // 完了のお知らせは6秒で消す
 }
 
-function buildHTML(data, model, error, calendars) {
+function buildHTML(data, model, error, calendars, toast) {
   const helpers = ['startOfDay', 'addDays', 'pad2', 'fmtTime', 'fmtDate', 'fmtDue', 'compareDue', 'categorize', 'newId']
     .map(name => model[name].toString()).join('\n')
-  const payload = JSON.stringify({ todos: data.todos, error: error || null, calendars: calendars || [] }).replace(/</g, '\\u003c')
+  const payload = JSON.stringify({ todos: data.todos, error: error || null, calendars: calendars || [], toast: toast || null }).replace(/</g, '\\u003c')
   return '<!doctype html><html lang="ja"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">' +
     '<style>' + CSS + '</style></head><body><div id="app"></div><div id="sheet"></div>' +
@@ -359,7 +374,7 @@ async function present(data, ctx) {
     return true
   }
   console.log('画面: HTML生成')
-  const html = buildHTML(data, ctx.model, ctx.error, ctx.calendars)
+  const html = buildHTML(data, ctx.model, ctx.error, ctx.calendars, ctx.toast)
   console.log('画面: HTML読み込み (' + html.length + '文字)')
   await wv.loadHTML(html)
   console.log('画面: 表示開始')

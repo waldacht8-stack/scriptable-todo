@@ -5,6 +5,8 @@ const DEFAULT_SETTINGS = {
   remindMinutes: 30,        // 期限の何分前に通知するか
   morningHour: 7,           // 朝の一覧通知の時刻
   morningMinute: 0,
+  eveningHour: 20,          // 夜の残りタスク通知の時刻（null で送らない）
+  eveningMinute: 0,
   lookaheadDays: 14,        // 今日から何日先までカレンダーを取り込むか
   excludeCalendars: ['日本の祝日', '祝日', '誕生日', 'Birthdays', 'Japanese Holidays', 'Holidays in Japan'],
 }
