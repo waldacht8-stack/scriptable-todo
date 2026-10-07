@@ -5,12 +5,12 @@
 const CSS = `
 :root{
   --bg:#F4F5F7;--card:#FFFFFF;--text:#15181D;--sub:#5A6270;--line:#ECEEF1;--track:#E1E4E9;
-  --accent:#1D4ED8;--overdue:#C2410C;--overdue-bg:#FDEEE6;--muted:#8A919C;--btn:#15181D;--btn-text:#FFFFFF;
+  --accent:#1D4ED8;--accent-bg:#E8EEFC;--overdue:#C2410C;--overdue-bg:#FDEEE6;--muted:#8A919C;--btn:#15181D;--btn-text:#FFFFFF;
 }
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#0F1115;--card:#1C1F26;--text:#F2F4F7;--sub:#9AA3AF;--line:#2A2F38;--track:#2A2F38;
-    --accent:#6EA0FF;--overdue:#FB923C;--overdue-bg:#3A2214;--muted:#6B7280;--btn:#F2F4F7;--btn-text:#15181D;
+    --accent:#6EA0FF;--accent-bg:#1E2A44;--overdue:#FB923C;--overdue-bg:#3A2214;--muted:#6B7280;--btn:#F2F4F7;--btn-text:#15181D;
   }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -30,9 +30,9 @@ h1{margin:2px 0 0;font-size:34px;font-weight:800;letter-spacing:.02em}
 .tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;background:var(--track);border-radius:12px;padding:4px;margin-bottom:18px}
 .tab{border:none;background:none;border-radius:9px;min-height:38px;font-size:15px;font-weight:700;color:var(--sub)}
 .tab.on{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
-.nav{display:flex;gap:8px}
-.nav button{border:none;background:var(--card);border-radius:10px;min-height:44px;min-width:48px;font-size:20px;font-weight:700;color:var(--text)}
-.nav .nav-today{flex:1;font-size:14px}
+.title-row{display:flex;align-items:center;gap:10px;min-height:44px}
+.home{display:flex;align-items:center;gap:4px;border:none;background:var(--accent-bg);color:var(--accent);border-radius:18px;padding:0 14px;min-height:36px;font-size:13px;font-weight:700}
+.swipe-hint{text-align:center;font-size:12px;color:var(--muted);letter-spacing:.04em}
 .note{margin:0 4px 14px;font-size:12px;color:var(--sub)}
 section.day{margin-bottom:14px;gap:6px}
 .is-today .group{border:2px solid var(--accent)}
@@ -203,13 +203,14 @@ function clientMain(DATA) {
       '" data-act="view" data-id="' + v[0] + '">' + v[1] + '</button>').join('') + '</div>'
   }
 
-  // 週・月の見出し（‹ 今週／今月 › と、その期間の残り件数）
-  function periodHeadHTML(sub, title, remaining, homeLabel) {
-    return '<div class="head"><div class="head-row"><div><div class="date">' + esc(sub) + '</div><h1>' + esc(title) + '</h1></div>' +
+  // 週・月の見出し。期間の切り替えは左右スワイプ。別の期間を見ているときだけ「今週／今月」に戻るボタンを出す
+  const BACK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg>'
+  function periodHeadHTML(sub, title, remaining, homeLabel, away) {
+    return '<div class="head"><div class="head-row"><div><div class="date">' + esc(sub) + '</div>' +
+      '<div class="title-row"><h1>' + esc(title) + '</h1>' +
+      (away ? '<button class="home" data-act="nav-today">' + BACK + homeLabel + '</button>' : '') + '</div></div>' +
       '<div class="count">残り<b>' + remaining + '</b>件</div></div>' +
-      '<div class="nav"><button data-act="nav" data-id="-1" aria-label="前へ">‹</button>' +
-      '<button class="nav-today" data-act="nav-today">' + homeLabel + '</button>' +
-      '<button data-act="nav" data-id="1" aria-label="次へ">›</button></div></div>'
+      '<div class="swipe-hint">‹ 左右にスワイプで切り替え ›</div></div>'
   }
 
   function undatedNoteHTML() {
@@ -256,7 +257,7 @@ function clientMain(DATA) {
     }
     const names = { '-1': '先週', '0': '今週', '1': '来週' }
     const range = (mon.getMonth() + 1) + '/' + mon.getDate() + '〜' + (sun.getMonth() + 1) + '/' + sun.getDate()
-    return periodHeadHTML(range, names[state.weekOffset] || range, remaining, '今週') + undatedNoteHTML() +
+    return periodHeadHTML(range, names[state.weekOffset] || range, remaining, '今週', state.weekOffset !== 0) + undatedNoteHTML() +
       '<div class="week' + (state.slide ? ' slide-' + state.slide : '') + '">' + body + '</div>'
   }
 
@@ -287,7 +288,7 @@ function clientMain(DATA) {
     }
     const selDate = new Date(sel + 'T00:00')
     const selItems = map[sel] || []
-    let html = periodHeadHTML(first.getFullYear() + '年', (first.getMonth() + 1) + '月', remaining, '今月') + undatedNoteHTML()
+    let html = periodHeadHTML(first.getFullYear() + '年', (first.getMonth() + 1) + '月', remaining, '今月', state.monthOffset !== 0) + undatedNoteHTML()
     html += '<div class="cal' + (state.slide ? ' slide-' + state.slide : '') + '"><div class="cal-week">' + ['月', '火', '水', '木', '金', '土', '日'].map((w, i) =>
       '<span class="' + (i === 5 ? 'sat' : i === 6 ? 'sun' : '') + '">' + w + '</span>').join('') + '</div>' +
       '<div class="cal-grid">' + cells + '</div></div>'

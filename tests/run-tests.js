@@ -530,10 +530,14 @@ asyncTests.push(['模擬実行 アプリ: 今日／週／月の切り替えと�
   const env = await runTodo({
     events: sampleEvents(),
     onWebViewPresent: async page => {
+      const swipeLeft = () => {
+        page.listeners.touchstart.forEach(fn => fn({ changedTouches: [{ clientX: 300, clientY: 200 }] }))
+        page.listeners.touchend.forEach(fn => fn({ changedTouches: [{ clientX: 100, clientY: 205 }] }))
+      }
       views.today = page.text()
       page.click('view', 'week')
       views.week = page.text()
-      page.click('nav', '1')
+      swipeLeft()
       views.nextWeek = page.text()
       page.click('nav-today')
       page.click('view', 'month')
@@ -542,7 +546,7 @@ asyncTests.push(['模擬実行 アプリ: 今日／週／月の切り替えと�
       const t = new Date()
       t.setDate(t.getDate() + 2)
       const key = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0')
-      if (t.getMonth() !== new Date().getMonth()) page.click('nav', '1')
+      if (t.getMonth() !== new Date().getMonth()) swipeLeft()
       page.click('pick-day', key)
       views.picked = page.text()
       // 週表示の行から完了にできる
@@ -615,7 +619,7 @@ asyncTests.push(['模擬実行 月ウィジェットの日付タップ → 月�
   let shown = ''
   const env = await runTodo({ events: [], queryParameters: { view: 'month', day: key }, onWebViewPresent: async page => { shown = page.text() } }, sampleData())
   assertClean(env)
-  assert.ok(shown.indexOf('今月') >= 0 && shown.indexOf('今日に戻る') < 0, '月表示で開く')
+  assert.ok(shown.indexOf('スワイプで切り替え') >= 0 && shown.indexOf((new Date().getMonth() + 1) + '月') >= 0, '月表示で開く')
   if (t.getMonth() === new Date().getMonth()) assert.ok(shown.indexOf('明後日の予定') >= 0, 'その日が選ばれている\n' + shown)
 }])
 
