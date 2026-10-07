@@ -11,7 +11,6 @@ function palette() {
     overdue: dyn('#C2410C', '#FB923C'),
     overdueText: dyn('#9A3412', '#FDBA74'),
     overdueBg: dyn('#FDEEE6', '#3A2214'),
-    accentBg: dyn('#E8EEFC', '#1E2A44'),
     line: dyn('#ECEEF1', '#2A2F38'),
   }
 }
@@ -33,27 +32,6 @@ function circle(stack, color, size) {
   return img
 }
 
-// 進捗バー（DrawContext は動的カラー非対応なので固定色）
-function progressBar(width, height, ratio) {
-  const dc = new DrawContext()
-  dc.size = new Size(width, height)
-  dc.opaque = false
-  dc.respectScreenScale = true
-  const r = height / 2
-  const bg = new Path()
-  bg.addRoundedRect(new Rect(0, 0, width, height), r, r)
-  dc.addPath(bg)
-  dc.setFillColor(new Color('#8E949C', 0.3))
-  dc.fillPath()
-  if (ratio > 0) {
-    const fg = new Path()
-    fg.addRoundedRect(new Rect(0, 0, Math.max(height, width * ratio), height), r, r)
-    dc.addPath(fg)
-    dc.setFillColor(new Color('#2F6BEF'))
-    dc.fillPath()
-  }
-  return dc.getImage()
-}
 
 function row(parent, t, color, label, labelColor, size, C) {
   const r = parent.addStack()
@@ -85,9 +63,9 @@ function overduePill(parent, count, C) {
   return p
 }
 
-// 今日の終わり（24:00）までの残り時間。数字は iOS が秒単位で減らすので、ウィジェットの更新を待たない
-function addTodayLeft(parent, now, model, size, labelColor, timeColor, stacked) {
-  const end = model.addDays(model.startOfDay(now), 1)
+// 次の期限（時刻つき・未来）までの残り時間。数字は iOS が秒単位で減らすので、ウィジェットの更新を待たない
+function addNextLeft(parent, next, size, labelColor, timeColor, stacked) {
+  if (!next) return null
   const s = parent.addStack()
   if (stacked) s.layoutVertically()
   else {
@@ -95,8 +73,8 @@ function addTodayLeft(parent, now, model, size, labelColor, timeColor, stacked) 
     s.centerAlignContent()
     s.spacing = 4
   }
-  text(s, '今日あと', size - 2, labelColor)
-  const d = s.addDate(end)
+  text(s, '次の期限まで', size - 2, labelColor)
+  const d = s.addDate(new Date(next.due))
   d.applyTimerStyle()
   d.font = Font.boldSystemFont(size)
   d.textColor = timeColor
@@ -104,27 +82,49 @@ function addTodayLeft(parent, now, model, size, labelColor, timeColor, stacked) 
   return s
 }
 
-function buildSmall(w, g, now, model, C) {
-  w.setPadding(16, 16, 16, 16)
-  text(w, '今日の残り', 13, C.sub)
-  w.addSpacer()
-  const n = w.addStack()
-  n.bottomAlignContent()
-  n.spacing = 4
-  text(n, g.stats.remaining, 56, C.accent, { weight: 'heavy' })
-  text(n, '件', 16, C.sub)
-  w.addSpacer()
-  if (g.overdue.length) {
-    overduePill(w, g.overdue.length, C)
-  } else {
-    const next = model.nextItem(g, now)
-    text(w, next ? model.fmtDue(next, now) + ' ' + next.title : 'すべて完了', 12, C.sub, { minScale: 0.8 })
-  }
-  w.addSpacer(4)
-  addTodayLeft(w, now, model, 12, C.sub, C.text, false)
+// 期限の近さで色を分ける：期限切れ＝オレンジ、今日中＝青、それ以降・期限なし＝灰
+function dueColor(t, now, model, C) {
+  if (model.isOverdue(t, now)) return C.overdue
+  if (t.due && new Date(t.due) < model.addDays(model.startOfDay(now), 1)) return C.accent
+  return C.sub
 }
 
-function buildMedium(w, g, now, model, C) {
+function dueLabel(t, now, model) {
+  return t.due ? model.fmtDue(t, now) : '期限なし'
+}
+
+function countHead(parent, d, size, C) {
+  const n = parent.addStack()
+  n.bottomAlignContent()
+  n.spacing = 4
+  text(n, d.items.length, size, C.accent, { weight: 'heavy' })
+  text(n, '件', Math.round(size / 3.2), C.sub)
+}
+
+function emptyLine(parent, C) {
+  parent.addSpacer()
+  text(parent, '未完了のTODOはありません', 15, C.sub)
+  parent.addSpacer()
+}
+
+function buildSmall(w, d, now, model, C) {
+  w.setPadding(16, 16, 16, 16)
+  text(w, '未完了', 13, C.sub)
+  w.addSpacer()
+  countHead(w, d, 56, C)
+  w.addSpacer()
+  if (d.overdue) overduePill(w, d.overdue, C)
+  else {
+    const first = d.items[0]
+    text(w, first ? dueLabel(first, now, model) + ' ' + first.title : 'すべて完了', 12, C.sub, { minScale: 0.8 })
+  }
+  if (d.next) {
+    w.addSpacer(4)
+    addNextLeft(w, d.next, 12, C.sub, C.text, false)
+  }
+}
+
+function buildMedium(w, d, now, model, C) {
   w.setPadding(14, 16, 14, 16)
   const h = w.addStack()
   h.layoutHorizontally()
@@ -132,329 +132,101 @@ function buildMedium(w, g, now, model, C) {
 
   const left = h.addStack()
   left.layoutVertically()
-  left.size = new Size(70, 0)
-  text(left, (now.getMonth() + 1) + '/' + now.getDate() + '（' + ['日', '月', '火', '水', '木', '金', '土'][now.getDay()] + '）', 12, C.sub)
+  left.size = new Size(76, 0)
+  text(left, '未完了', 12, C.sub)
   left.addSpacer()
-  text(left, g.stats.remaining, 44, C.accent, { weight: 'heavy' })
-  text(left, '残り', 12, C.sub)
-  left.addSpacer(6)
-  addTodayLeft(left, now, model, 13, C.sub, C.text, true)
+  text(left, d.items.length, 44, C.accent, { weight: 'heavy' })
+  text(left, d.overdue ? '期限切れ ' + d.overdue : '件', 12, d.overdue ? C.overdue : C.sub)
+  if (d.next) {
+    left.addSpacer(6)
+    addNextLeft(left, d.next, 13, C.sub, C.text, true)
+  }
 
   const right = h.addStack()
   right.layoutVertically()
   right.spacing = 8
-  const items = g.overdue.map(t => ({ t: t, od: true })).concat(g.today.map(t => ({ t: t, od: false })))
-  if (!items.length) {
-    right.addSpacer()
-    text(right, '今日のTODOはすべて完了', 15, C.sub)
-    right.addSpacer()
-    return
-  }
-  for (const x of items.slice(0, 3)) {
-    if (x.od) row(right, x.t, C.overdue, '期限切れ', C.overdue, 15, C)
-    else row(right, x.t, C.accent, x.t.due ? model.fmtDue(x.t, now) : '', C.accent, 15, C)
+  if (!d.items.length) return emptyLine(right, C)
+  for (const t of d.items.slice(0, 3)) {
+    const c = dueColor(t, now, model, C)
+    row(right, t, c, dueLabel(t, now, model), c, 15, C)
   }
   right.addSpacer()
-  if (items.length > 3) text(right, 'ほか ' + (items.length - 3) + '件', 11, C.sub)
+  if (d.items.length > 3) text(right, 'ほか ' + (d.items.length - 3) + '件', 11, C.sub)
 }
 
-function buildLarge(w, g, now, model, C) {
+function buildLarge(w, d, now, model, C) {
   w.setPadding(18, 18, 18, 18)
   const head = w.addStack()
   head.bottomAlignContent()
-  text(head, '今日のTODO', 20, C.text, { weight: 'heavy' })
+  text(head, '期限が近い順', 20, C.text, { weight: 'heavy' })
   head.addSpacer()
-  text(head, '残り ', 14, C.sub)
-  text(head, g.stats.remaining, 22, C.accent, { weight: 'heavy' })
-  text(head, ' / ' + g.stats.total, 14, C.sub)
+  text(head, '未完了 ', 14, C.sub)
+  text(head, d.items.length, 22, C.accent, { weight: 'heavy' })
+  w.addSpacer(6)
+  const info = w.addStack()
+  info.centerAlignContent()
+  if (d.overdue) overduePill(info, d.overdue, C)
+  info.addSpacer()
+  if (d.next) addNextLeft(info, d.next, 12, C.sub, C.text, false)
   w.addSpacer(10)
-  const ratio = g.stats.total ? g.stats.done / g.stats.total : 0
-  const bar = w.addImage(progressBar(320, 6, ratio))
-  bar.imageSize = new Size(320, 6)
-  w.addSpacer(6)
-  const leftRow = w.addStack()
-  leftRow.addSpacer()
-  addTodayLeft(leftRow, now, model, 12, C.sub, C.text, false)
-  w.addSpacer(8)
 
-  let rows = 0
+  if (!d.items.length) return emptyLine(w, C)
   const max = 8
-  if (g.overdue.length) {
-    text(w, '期限切れ', 12, C.overdue)
-    w.addSpacer(6)
-    for (const t of g.overdue.slice(0, 2)) {
-      const box = w.addStack()
-      box.backgroundColor = C.overdueBg
-      box.cornerRadius = 10
-      box.setPadding(7, 10, 7, 10)
-      row(box, t, C.overdue, model.fmtDue(t, now), C.overdueText, 15, C)
-      w.addSpacer(4)
-      rows++
-    }
-    w.addSpacer(8)
-  }
-  text(w, '今日', 12, C.accent)
-  w.addSpacer(6)
-  if (!g.today.length) text(w, 'なし', 14, C.sub)
-  const shown = g.today.slice(0, max - rows)
-  for (const t of shown) {
+  for (const t of d.items.slice(0, max)) {
+    const c = dueColor(t, now, model, C)
     const box = w.addStack()
     box.setPadding(5, 10, 5, 10)
-    row(box, t, C.accent, t.due ? model.fmtDue(t, now) : '—', t.due ? C.accent : C.sub, 15, C)
+    box.cornerRadius = 10
+    if (model.isOverdue(t, now)) box.backgroundColor = C.overdueBg
+    row(box, t, c, dueLabel(t, now, model), model.isOverdue(t, now) ? C.overdueText : c, 15, C)
+    w.addSpacer(3)
   }
-  const hidden = g.today.length - shown.length
-  if (hidden > 0) text(w, '　ほか ' + hidden + '件', 11, C.sub)
+  if (d.items.length > max) text(w, '　ほか ' + (d.items.length - max) + '件', 11, C.sub)
   w.addSpacer()
-  const tomorrow = model.addDays(model.startOfDay(now), 1)
-  const t2 = g.upcoming.find(t => new Date(t.due) < model.addDays(tomorrow, 1))
-  if (t2) text(w, '明日：' + t2.title + (t2.allDay ? '' : ' ' + model.fmtTime(new Date(t2.due))), 12, C.sub)
 }
 
-function buildCircular(w, g) {
+function buildCircular(w, d) {
   w.addAccessoryWidgetBackground = true
   const s = w.addStack()
   s.layoutVertically()
   s.centerAlignContent()
   const a = s.addStack()
   a.addSpacer()
-  text(a, g.stats.remaining, 24, null, { weight: 'heavy' })
+  text(a, d.items.length, 24, null, { weight: 'heavy' })
   a.addSpacer()
   const b = s.addStack()
   b.addSpacer()
-  text(b, '残り', 10, null)
+  text(b, '未完了', 9, null)
   b.addSpacer()
 }
 
-function buildRectangular(w, g, now, model) {
-  const next = model.nextItem(g, now)
-  text(w, '次のTODO', 11, null)
-  text(w, next ? (next.due ? model.fmtDue(next, now) + ' ' : '') + next.title : 'なし', 15, null, { weight: 'heavy', minScale: 0.7 })
-  text(w, g.overdue.length ? '期限切れ ' + g.overdue.length + '件' : '残り ' + g.stats.remaining + '件', 11, null)
+function buildRectangular(w, d, now, model) {
+  const first = d.items[0]
+  text(w, '期限が近いTODO', 11, null)
+  text(w, first ? dueLabel(first, now, model) + ' ' + first.title : 'なし', 15, null, { weight: 'heavy', minScale: 0.7 })
+  text(w, d.overdue ? '期限切れ ' + d.overdue + '件' : '未完了 ' + d.items.length + '件', 11, null)
 }
 
-function buildInline(w, g, now, model) {
-  const next = model.nextItem(g, now)
-  text(w, '残り' + g.stats.remaining + '件' + (next ? '・次 ' + (next.due ? model.fmtDue(next, now) + ' ' : '') + next.title : ''), 12, null)
+function buildInline(w, d, now, model) {
+  const first = d.items[0]
+  text(w, '未完了' + d.items.length + '件' + (first ? '・' + dueLabel(first, now, model) + ' ' + first.title : ''), 12, null)
 }
 
-// ===== 週・月のウィジェット（ウィジェットの Parameter 欄に「週」「月」） =====
-const WEEKDAY = ['日', '月', '火', '水', '木', '金', '土']
-
-function appURL(query) {
-  return URLScheme.forRunningScript() + '?' + query
-}
-
-// 横方向の中央に1行置く
-function centerLine(parent, value, size, color, opts) {
-  const s = parent.addStack()
-  s.addSpacer()
-  const t = text(s, value, size, color, opts)
-  s.addSpacer()
-  return t
-}
-
-function weekdayColor(d, C) {
-  return d.getDay() === 0 ? C.overdue : d.getDay() === 6 ? C.accent : C.sub
-}
-
-function dayInfo(map, d, today, model) {
-  const items = map[model.dayKey(d)] || []
-  return { d: d, items: items, open: items.filter(t => !t.done), past: d < today, isToday: model.dayKey(d) === model.dayKey(today) }
-}
-
-function periodHead(w, title, sub, remaining, big, C) {
-  const head = w.addStack()
-  head.centerAlignContent()
-  text(head, title, big ? 18 : 15, C.text, { weight: 'heavy' })
-  head.addSpacer(6)
-  text(head, sub, 12, C.sub)
-  head.addSpacer()
-  text(head, '残り ', 12, C.sub)
-  text(head, remaining, big ? 20 : 17, C.accent, { weight: 'heavy' })
-}
-
-function buildWeek(w, family, data, now, model, C) {
-  const today = model.startOfDay(now)
-  const mon = model.addDays(today, -((today.getDay() + 6) % 7))
-  const map = model.groupByDay(data.todos)
-  const days = []
-  for (let i = 0; i < 7; i++) days.push(dayInfo(map, model.addDays(mon, i), today, model))
-  const remaining = days.reduce((n, x) => n + x.open.length, 0)
-  const sun = days[6].d
-  const range = (mon.getMonth() + 1) + '/' + mon.getDate() + '〜' + (sun.getMonth() + 1) + '/' + sun.getDate()
-  w.url = appURL('view=week')
-
-  if (family === 'small') {
-    w.setPadding(16, 16, 16, 16)
-    text(w, '今週の残り', 13, C.sub)
-    w.addSpacer()
-    const n = w.addStack()
-    n.bottomAlignContent()
-    n.spacing = 4
-    text(n, remaining, 52, C.accent, { weight: 'heavy' })
-    text(n, '件', 16, C.sub)
-    w.addSpacer()
-    // 7日分の点（未完了あり＝青、過ぎて未完了＝オレンジ、なし＝灰。今日は大きく）
-    const dots = w.addStack()
-    dots.centerAlignContent()
-    dots.spacing = 5
-    for (const x of days) {
-      const dot = dots.addStack()
-      const s = x.isToday ? 14 : 10
-      dot.size = new Size(s, s)
-      dot.cornerRadius = s / 2
-      dot.backgroundColor = x.open.length ? (x.past ? C.overdue : C.accent) : C.line
-    }
-    w.addSpacer(4)
-    text(w, range, 11, C.sub)
-    return
-  }
-
-  const big = family !== 'medium'
-  w.setPadding(14, 14, 14, 14)
-  periodHead(w, '今週', range, remaining, big, C)
-  w.addSpacer(8)
-
-  if (!big) {
-    // 中：月〜日の7列（曜日・日付・未完了件数）
-    const row = w.addStack()
-    row.spacing = 4
-    for (const x of days) {
-      const col = row.addStack()
-      col.layoutVertically()
-      col.size = new Size(40, 60)
-      col.cornerRadius = 10
-      col.setPadding(4, 0, 4, 0)
-      if (x.isToday) col.backgroundColor = C.accentBg
-      col.url = appURL('view=week')
-      centerLine(col, WEEKDAY[x.d.getDay()], 10, weekdayColor(x.d, C))
-      centerLine(col, x.d.getDate(), 15, x.isToday ? C.accent : C.text, { weight: 'heavy' })
-      col.addSpacer()
-      centerLine(col, x.open.length ? x.open.length : '–', 12, x.open.length ? (x.past ? C.overdue : C.accent) : C.sub)
-    }
-    w.addSpacer()
-    // 今日以降の次の予定を2件
-    const next = []
-    for (const x of days) if (!x.past) for (const t of x.open) next.push(t)
-    for (const t of next.slice(0, 2)) {
-      const d = new Date(t.due)
-      text(w, (d.getMonth() + 1) + '/' + d.getDate() + (t.allDay ? '' : ' ' + model.fmtTime(d)) + '  ' + t.title, 11, C.sub)
-    }
-    if (!next.length) text(w, '今週の残りの予定はありません', 11, C.sub)
-    return
-  }
-
-  // 大：7日分を行で（日付と、その日の未完了TODO）
-  for (const x of days) {
-    const r = w.addStack()
-    r.centerAlignContent()
-    r.spacing = 10
-    r.setPadding(6, 8, 6, 8)
-    r.cornerRadius = 10
-    if (x.isToday) r.backgroundColor = C.accentBg
-    r.url = appURL('view=week')
-    const lab = r.addStack()
-    lab.size = new Size(66, 0)
-    text(lab, (x.d.getMonth() + 1) + '/' + x.d.getDate(), 14, x.isToday ? C.accent : C.text, { weight: 'heavy' })
-    text(lab, '（' + WEEKDAY[x.d.getDay()] + '）', 12, weekdayColor(x.d, C))
-    const titles = x.open.map(t => (t.due && !t.allDay ? model.fmtTime(new Date(t.due)) + ' ' : '') + t.title)
-    text(r, titles.length ? titles.slice(0, 2).join(' / ') + (titles.length > 2 ? ' ほか' + (titles.length - 2) : '') : (x.items.length ? '完了' : '—'), 13,
-      titles.length ? (x.past ? C.overdue : C.text) : C.sub, { minScale: 0.8 })
-    r.addSpacer()
-    w.addSpacer(2)
-  }
-}
-
-function buildMonth(w, family, data, now, model, C) {
-  const today = model.startOfDay(now)
-  const first = new Date(now.getFullYear(), now.getMonth(), 1)
-  const count = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate()
-  const lead = (first.getDay() + 6) % 7 // 月曜始まり
-  const map = model.groupByDay(data.todos)
-  let remaining = 0
-  let overdue = 0
-  for (let n = 1; n <= count; n++) {
-    const x = dayInfo(map, new Date(first.getFullYear(), first.getMonth(), n), today, model)
-    remaining += x.open.length
-    if (x.past) overdue += x.open.length
-  }
-  w.url = appURL('view=month')
-
-  if (family === 'small') {
-    w.setPadding(16, 16, 16, 16)
-    text(w, (first.getMonth() + 1) + '月の残り', 13, C.sub)
-    w.addSpacer()
-    const n = w.addStack()
-    n.bottomAlignContent()
-    n.spacing = 4
-    text(n, remaining, 52, C.accent, { weight: 'heavy' })
-    text(n, '件', 16, C.sub)
-    w.addSpacer()
-    if (overdue) overduePill(w, overdue, C)
-    else text(w, '期限切れなし', 12, C.sub)
-    return
-  }
-
-  const big = family !== 'medium'
-  const cellW = big ? 44 : 42
-  const cellH = big ? 40 : 15
-  w.setPadding(big ? 14 : 10, 12, big ? 14 : 10, 12)
-  periodHead(w, (first.getMonth() + 1) + '月', first.getFullYear() + '年', remaining, big, C)
-  w.addSpacer(big ? 8 : 4)
-  const wk = w.addStack()
-  ;['月', '火', '水', '木', '金', '土', '日'].forEach((label, i) => {
-    const c = wk.addStack()
-    c.size = new Size(cellW, 0)
-    c.addSpacer()
-    text(c, label, big ? 11 : 9, i === 5 ? C.accent : i === 6 ? C.overdue : C.sub)
-    c.addSpacer()
-  })
-  w.addSpacer(big ? 4 : 2)
-  const weeks = Math.ceil((lead + count) / 7)
-  for (let r = 0; r < weeks; r++) {
-    const row = w.addStack()
-    for (let c = 0; c < 7; c++) {
-      const n = r * 7 + c - lead + 1
-      const cell = row.addStack()
-      cell.size = new Size(cellW, cellH)
-      if (n < 1 || n > count) continue
-      const x = dayInfo(map, new Date(first.getFullYear(), first.getMonth(), n), today, model)
-      cell.url = appURL('view=month&day=' + model.dayKey(x.d))
-      cell.cornerRadius = big ? 10 : 7
-      const color = x.isToday ? C.bg : x.open.length ? (x.past ? C.overdue : C.accent) : C.sub
-      if (x.isToday) cell.backgroundColor = C.accent
-      if (big) {
-        cell.layoutVertically()
-        cell.setPadding(3, 0, 3, 0)
-        centerLine(cell, n, 14, color, { weight: x.open.length || x.isToday ? 'heavy' : 'regular' })
-        cell.addSpacer()
-        centerLine(cell, x.open.length ? x.open.length + '件' : ' ', 9, color)
-      } else {
-        cell.addSpacer()
-        text(cell, n, 10, color, { weight: x.open.length || x.isToday ? 'heavy' : 'regular' })
-        cell.addSpacer()
-      }
-    }
-  }
-}
-
-function build(data, family, now, model, errorMessage, view) {
+function build(data, family, now, model, errorMessage) {
   const C = palette()
-  const g = model.categorize(data.todos, now)
+  const d = model.byDeadline(data.todos, now)
   const w = new ListWidget()
   w.url = URLScheme.forRunningScript()
   w.refreshAfterDate = new Date(now.getTime() + 15 * 60000)
   const f = family || 'medium'
-  if (f === 'accessoryCircular') buildCircular(w, g)
-  else if (f === 'accessoryRectangular') buildRectangular(w, g, now, model)
-  else if (f === 'accessoryInline') buildInline(w, g, now, model)
+  if (f === 'accessoryCircular') buildCircular(w, d)
+  else if (f === 'accessoryRectangular') buildRectangular(w, d, now, model)
+  else if (f === 'accessoryInline') buildInline(w, d, now, model)
   else {
     w.backgroundColor = C.bg
-    if (view === 'week') buildWeek(w, f, data, now, model, C)
-    else if (view === 'month') buildMonth(w, f, data, now, model, C)
-    else if (f === 'small') buildSmall(w, g, now, model, C)
-    else if (f === 'large' || f === 'extraLarge') buildLarge(w, g, now, model, C)
-    else buildMedium(w, g, now, model, C)
+    if (f === 'small') buildSmall(w, d, now, model, C)
+    else if (f === 'large' || f === 'extraLarge') buildLarge(w, d, now, model, C)
+    else buildMedium(w, d, now, model, C)
     if (errorMessage) {
       w.addSpacer(2)
       text(w, '同期エラー：アプリを開いて確認', 9, C.overdue)

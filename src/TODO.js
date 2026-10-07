@@ -62,7 +62,7 @@ async function runWidget() {
     const error = await refresh(data, now)
     if (error) await notify.error(data, error, now)
     store.save(data)
-    w = widget.build(data, config.widgetFamily, now, model, error, model.widgetView(args.widgetParameter))
+    w = widget.build(data, config.widgetFamily, now, model, error)
   } catch (e) {
     w = widget.buildError(messageOf(e))
   }

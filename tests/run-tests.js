@@ -74,6 +74,22 @@ test('分類: 期限切れ/今日/今後/期限なし/完了', () => {
   assert.strictEqual(model.nextItem(g, now).title, '今日14時')
 })
 
+test('ウィジェットの並び: 期限切れ → 期限が近い順 → 期限なし、完了は除外', () => {
+  const todos = [
+    todo({ title: '期限なし' }),
+    todo({ title: '来週', due: at('2026-10-14T09:00').toISOString() }),
+    todo({ title: '昨日', due: at('2026-10-06T17:00').toISOString() }),
+    todo({ title: '今日14時', due: at('2026-10-07T14:00').toISOString() }),
+    todo({ title: '明日終日', due: at('2026-10-08T00:00').toISOString(), allDay: true }),
+    todo({ title: '完了', due: at('2026-10-07T13:00').toISOString(), done: true, doneAt: now.toISOString() }),
+  ]
+  const d = model.byDeadline(todos, now)
+  assert.deepStrictEqual(d.items.map(t => t.title), ['昨日', '今日14時', '明日終日', '来週', '期限なし'])
+  assert.strictEqual(d.overdue, 1)
+  assert.strictEqual(d.next.title, '今日14時', '次の期限は時刻つきで未来の一番近いもの')
+  assert.strictEqual(model.byDeadline([todo({ title: 'x' })], now).next, null)
+})
+
 test('期限ラベル', () => {
   assert.strictEqual(model.fmtDue(todo({ due: at('2026-10-07T14:00').toISOString() }), now), '14:00')
   assert.strictEqual(model.fmtDue(todo({ due: at('2026-10-06T17:00').toISOString() }), now), '昨日 17:00')
@@ -321,13 +337,14 @@ for (const family of FAMILIES) {
         const all = texts.join('\n')
         for (const s of ['期限切れタスク', '今日の終日', '期限なしタスク']) assert.ok(all.indexOf(s) >= 0, s + '\n' + env.widgetTree(w))
       }
-      if (family === 'small' || family === 'medium' || family === 'large') {
-        // 「今日あと h:mm:ss」：今日の24:00を指す日付表示がある
-        const midnight = new Date()
-        midnight.setHours(24, 0, 0, 0)
-        assert.ok(env.widgetTree(w).indexOf('Date ' + midnight.toISOString()) >= 0, '今日あと の表示\n' + env.widgetTree(w))
-        assert.ok(texts.indexOf('今日あと') >= 0)
+      if (sample && (family === 'small' || family === 'medium' || family === 'large')) {
+        // 「次の期限まで h:mm:ss」：まだ来ていない一番近い時刻つきの期限を指す
+        const next = model.byDeadline(savedData(env).todos, new Date()).next
+        assert.ok(next, 'サンプルには未来の時刻つきTODOがある')
+        assert.ok(env.widgetTree(w).indexOf('Date ' + new Date(next.due).toISOString()) >= 0, '次の期限まで の表示\n' + env.widgetTree(w))
+        assert.ok(texts.indexOf('次の期限まで') >= 0)
       }
+      if (!sample) assert.ok(texts.indexOf('次の期限まで') < 0, '期限がなければカウントダウンは出さない')
       if (sample && (family === 'medium' || family === 'large')) {
         // 各TODOの行に「完了にする」タップ先が付いている
         const urls = []
@@ -573,44 +590,6 @@ asyncTests.push(['store: v1 のデータは取り込み範囲を45日に移行�
   assert.strictEqual(store.normalize(null).version, 2)
   env.dispose()
 }])
-
-for (const param of ['週', '月']) {
-  for (const family of ['small', 'medium', 'large', 'extraLarge']) {
-    asyncTests.push(['模擬実行 ウィジェット（' + param + '）' + family, async () => {
-      const env = await runTodo({ runsInWidget: true, widgetFamily: family, widgetParameter: param, events: sampleEvents() }, sampleData())
-      assertClean(env)
-      const w = env.script.widget
-      const all = env.widgetTexts(w).join('\n')
-      assert.ok(!/同期エラー/.test(all), all)
-      const view = param === '週' ? 'week' : 'month'
-      assert.strictEqual(w.url, 'scriptable:///run/TODO?view=' + view)
-      if (family === 'small') {
-        assert.ok(all.indexOf(param === '週' ? '今週の残り' : '月の残り') >= 0, all)
-      } else {
-        assert.ok(all.indexOf(param === '週' ? '今週' : (new Date().getMonth() + 1) + '月') >= 0, all)
-        if (param === '月') {
-          // 日付のマスに、その日を開くタップ先がある
-          const urls = []
-          const walk = n => { if (n.__mockType !== 'ListWidget' && n.__mockType !== 'WidgetStack') return; if (n.url && n.url.indexOf('day=') >= 0) urls.push(n.url); n.children.forEach(walk) }
-          walk(w)
-          const days = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
-          assert.strictEqual(urls.length, days, '日数分のマス')
-        }
-        if (param === '週' && family !== 'medium') assert.ok(all.indexOf('今日の時刻つき') >= 0, '大は各日のTODOを表示\n' + all)
-      }
-    }])
-  }
-}
-
-test('ウィジェットの Parameter 解釈', () => {
-  assert.strictEqual(model.widgetView(''), 'day')
-  assert.strictEqual(model.widgetView(null), 'day')
-  assert.strictEqual(model.widgetView('週'), 'week')
-  assert.strictEqual(model.widgetView(' Week '), 'week')
-  assert.strictEqual(model.widgetView('月'), 'month')
-  assert.strictEqual(model.widgetView('month'), 'month')
-  assert.strictEqual(model.widgetView('日'), 'day')
-})
 
 asyncTests.push(['模擬実行 月ウィジェットの日付タップ → 月表示でその日を選んだ状態で開く', async () => {
   const t = new Date()
