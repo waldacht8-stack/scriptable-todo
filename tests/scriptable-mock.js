@@ -546,6 +546,7 @@ function createScriptableEnv(opts) {
       if (n.__mockType === 'WidgetText') return pad + 'Text ' + JSON.stringify(n.text)
       if (n.__mockType === 'WidgetImage') return pad + 'Image'
       if (n.__mockType === 'WidgetSpacer') return pad + 'Spacer' + (n.length != null ? ' ' + n.length : '')
+      if (n.__mockType === 'WidgetDate') return pad + 'Date ' + n.date.toISOString()
       const head = pad + n.__mockType + (n.__mockType === 'WidgetStack' ? ' ' + n.__layout : '')
       return [head].concat(n.children.map(c => walk(c, depth + 1))).join('\n')
     }

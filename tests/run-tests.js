@@ -321,6 +321,13 @@ for (const family of FAMILIES) {
         const all = texts.join('\n')
         for (const s of ['期限切れタスク', '今日の終日', '期限なしタスク']) assert.ok(all.indexOf(s) >= 0, s + '\n' + env.widgetTree(w))
       }
+      if (family === 'small' || family === 'medium' || family === 'large') {
+        // 「今日あと h:mm:ss」：今日の24:00を指す日付表示がある
+        const midnight = new Date()
+        midnight.setHours(24, 0, 0, 0)
+        assert.ok(env.widgetTree(w).indexOf('Date ' + midnight.toISOString()) >= 0, '今日あと の表示\n' + env.widgetTree(w))
+        assert.ok(texts.indexOf('今日あと') >= 0)
+      }
       if (sample && (family === 'medium' || family === 'large')) {
         // 各TODOの行に「完了にする」タップ先が付いている
         const urls = []

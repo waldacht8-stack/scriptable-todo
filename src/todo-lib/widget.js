@@ -84,6 +84,25 @@ function overduePill(parent, count, C) {
   return p
 }
 
+// 今日の終わり（24:00）までの残り時間。数字は iOS が秒単位で減らすので、ウィジェットの更新を待たない
+function addTodayLeft(parent, now, model, size, labelColor, timeColor, stacked) {
+  const end = model.addDays(model.startOfDay(now), 1)
+  const s = parent.addStack()
+  if (stacked) s.layoutVertically()
+  else {
+    s.layoutHorizontally()
+    s.centerAlignContent()
+    s.spacing = 4
+  }
+  text(s, '今日あと', size - 2, labelColor)
+  const d = s.addDate(end)
+  d.applyTimerStyle()
+  d.font = Font.boldSystemFont(size)
+  d.textColor = timeColor
+  d.lineLimit = 1
+  return s
+}
+
 function buildSmall(w, g, now, model, C) {
   w.setPadding(16, 16, 16, 16)
   text(w, '今日の残り', 13, C.sub)
@@ -100,6 +119,8 @@ function buildSmall(w, g, now, model, C) {
     const next = model.nextItem(g, now)
     text(w, next ? model.fmtDue(next, now) + ' ' + next.title : 'すべて完了', 12, C.sub, { minScale: 0.8 })
   }
+  w.addSpacer(4)
+  addTodayLeft(w, now, model, 12, C.sub, C.text, false)
 }
 
 function buildMedium(w, g, now, model, C) {
@@ -115,6 +136,8 @@ function buildMedium(w, g, now, model, C) {
   left.addSpacer()
   text(left, g.stats.remaining, 44, C.accent, { weight: 'heavy' })
   text(left, '残り', 12, C.sub)
+  left.addSpacer(6)
+  addTodayLeft(left, now, model, 13, C.sub, C.text, true)
 
   const right = h.addStack()
   right.layoutVertically()
@@ -147,7 +170,11 @@ function buildLarge(w, g, now, model, C) {
   const ratio = g.stats.total ? g.stats.done / g.stats.total : 0
   const bar = w.addImage(progressBar(320, 6, ratio))
   bar.imageSize = new Size(320, 6)
-  w.addSpacer(12)
+  w.addSpacer(6)
+  const leftRow = w.addStack()
+  leftRow.addSpacer()
+  addTodayLeft(leftRow, now, model, 12, C.sub, C.text, false)
+  w.addSpacer(8)
 
   let rows = 0
   const max = 8
