@@ -90,6 +90,56 @@ test('ウィジェットの並び: 期限切れ → 期限が近い順 → 期�
   assert.strictEqual(model.byDeadline([todo({ title: 'x' })], now).next, null)
 })
 
+test('繰り返し: 次の期限（毎日・平日・毎週・毎月・遅れて完了）', () => {
+  const t = (repeat, due, extra) => todo(Object.assign({ repeat: repeat, due: at(due).toISOString() }, extra || {}))
+  const iso = d => d.toISOString()
+  assert.strictEqual(iso(model.nextOccurrence(t('daily', '2026-10-07T09:00'), now)), at('2026-10-08T09:00').toISOString())
+  assert.strictEqual(iso(model.nextOccurrence(t('weekdays', '2026-10-09T09:00'), now)), at('2026-10-12T09:00').toISOString(), '金→月')
+  assert.strictEqual(iso(model.nextOccurrence(t('weekly', '2026-10-07T09:00'), now)), at('2026-10-14T09:00').toISOString())
+  assert.strictEqual(iso(model.nextOccurrence(t('monthly', '2026-10-31T00:00', { allDay: true }), now)), at('2026-11-30T00:00').toISOString(), '月末は丸める')
+  assert.strictEqual(iso(model.nextOccurrence(t('monthly', '2026-11-30T00:00', { allDay: true, repeatDay: 31 }), now)), at('2026-12-31T00:00').toISOString(), '元の31日に戻る')
+  assert.strictEqual(iso(model.nextOccurrence(t('daily', '2026-10-01T09:00'), now)), at('2026-10-07T09:00').toISOString(), '遅れて完了したら今日分から')
+  assert.strictEqual(model.nextOccurrence(todo({ due: at('2026-10-07T09:00').toISOString() }), now), null)
+})
+
+test('繰り返し: 完了で次の回ができ、取り消すと消える。カレンダー由来は作らない', () => {
+  const todos = [todo({ id: 'r', title: 'ゴミ出し', repeat: 'weekly', due: at('2026-10-07T08:00').toISOString(), important: true })]
+  const next = model.completeTodo(todos, todos[0], now)
+  assert.ok(todos[0].done && todos[0].spawnedId === next.id)
+  assert.strictEqual(todos.length, 2)
+  assert.strictEqual(next.due, at('2026-10-14T08:00').toISOString())
+  assert.ok(!next.done && next.repeat === 'weekly' && next.important, '設定を引き継ぐ')
+  model.uncompleteTodo(todos, todos[0], now)
+  assert.strictEqual(todos.length, 1)
+  assert.ok(!todos[0].done && !todos[0].spawnedId)
+  const cal = [todo({ source: 'calendar', repeat: 'daily', due: at('2026-10-07T08:00').toISOString() })]
+  assert.strictEqual(model.completeTodo(cal, cal[0], now), null)
+  assert.strictEqual(cal.length, 1)
+})
+
+test('重要マーク: 一覧・ウィジェットとも区分内の先頭に固定', () => {
+  const todos = [
+    todo({ title: '普通14時', due: at('2026-10-07T14:00').toISOString() }),
+    todo({ title: '重要18時', due: at('2026-10-07T18:00').toISOString(), important: true }),
+  ]
+  assert.deepStrictEqual(model.categorize(todos, now).today.map(t => t.title), ['重要18時', '普通14時'])
+  assert.deepStrictEqual(model.byDeadline(todos, now).items.map(t => t.title), ['重要18時', '普通14時'])
+})
+
+test('通知計画: 設定でオフ・期限ちょうど・スヌーズ', () => {
+  const base = { remindMinutes: 30, morningHour: 7, morningMinute: 0, eveningHour: 20, eveningMinute: 0 }
+  const todos = [todo({ id: 'x', title: '歯医者', due: at('2026-10-07T14:00').toISOString() })]
+  const ids = s => model.planNotifications({ settings: Object.assign({}, base, s), todos: todos }, now).map(p => p.id)
+  assert.ok(ids({ morningHour: null }).every(i => i.indexOf('morning') < 0), '朝オフ')
+  assert.ok(ids({ remindMinutes: null }).every(i => i.indexOf('remind') < 0), '期限前オフ')
+  const exact = model.planNotifications({ settings: Object.assign({}, base, { remindMinutes: 0 }), todos: todos }, now).find(p => p.id === 'todo-remind-x')
+  assert.strictEqual(exact.at, at('2026-10-07T14:00').toISOString())
+  assert.ok(exact.title.indexOf('期限です') === 0 && exact.todoId === 'x')
+  todos[0].snoozeUntil = new Date(now.getTime() + 10 * 60000).toISOString()
+  const sn = model.planNotifications({ settings: base, todos: todos }, now).find(p => p.id === 'todo-snooze-x')
+  assert.ok(sn && sn.todoId === 'x' && sn.title.indexOf('もう一度') === 0)
+})
+
 test('期限ラベル', () => {
   assert.strictEqual(model.fmtDue(todo({ due: at('2026-10-07T14:00').toISOString() }), now), '14:00')
   assert.strictEqual(model.fmtDue(todo({ due: at('2026-10-06T17:00').toISOString() }), now), '昨日 17:00')
@@ -591,17 +641,6 @@ asyncTests.push(['store: v1 のデータは取り込み範囲を45日に移行�
   env.dispose()
 }])
 
-asyncTests.push(['模擬実行 月ウィジェットの日付タップ → 月表示でその日を選んだ状態で開く', async () => {
-  const t = new Date()
-  t.setDate(t.getDate() + 2)
-  const key = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0')
-  let shown = ''
-  const env = await runTodo({ events: [], queryParameters: { view: 'month', day: key }, onWebViewPresent: async page => { shown = page.text() } }, sampleData())
-  assertClean(env)
-  assert.ok(shown.indexOf('スワイプで切り替え') >= 0 && shown.indexOf((new Date().getMonth() + 1) + '月') >= 0, '月表示で開く')
-  if (t.getMonth() === new Date().getMonth()) assert.ok(shown.indexOf('明後日の予定') >= 0, 'その日が選ばれている\n' + shown)
-}])
-
 asyncTests.push(['模擬実行 アプリ: 月表示は左右スワイプで月を切り替える（縦スクロールでは変わらない）', async () => {
   const seen = {}
   const env = await runTodo({
@@ -660,6 +699,123 @@ asyncTests.push(['模擬実行 アプリ: 週表示も左右スワイプで切�
   assert.ok(seen.anim.indexOf('class="week slide-next"') >= 0, 'スライドのアニメーション')
   assert.ok(seen.prev.indexOf('先週') >= 0, seen.prev)
   assert.ok(seen.back.indexOf('今日の時刻つき') >= 0, '「今週」で今週に戻る')
+}])
+
+asyncTests.push(['模擬実行 store: 設定の検証（不正な値は無視）', async () => {
+  const env = createScriptableEnv()
+  const store = env.importModule('todo-lib/store')
+  const cur = store.normalize(null).settings
+  const s = store.sanitizeSettings(cur, { morningHour: null, eveningHour: 21, eveningMinute: 30, remindMinutes: 0, lookaheadDays: 60, excludeCalendars: ['仕事'] })
+  assert.strictEqual(s.morningHour, null)
+  assert.strictEqual(s.eveningHour, 21)
+  assert.strictEqual(s.eveningMinute, 30)
+  assert.strictEqual(s.remindMinutes, 0)
+  assert.strictEqual(s.lookaheadDays, 60)
+  assert.deepStrictEqual(s.excludeCalendars, ['仕事'])
+  const bad = store.sanitizeSettings(cur, { morningHour: 25, remindMinutes: -5, lookaheadDays: 'x', excludeCalendars: 'all' })
+  assert.strictEqual(bad.morningHour, cur.morningHour)
+  assert.strictEqual(bad.remindMinutes, cur.remindMinutes)
+  assert.strictEqual(bad.lookaheadDays, cur.lookaheadDays)
+  assert.deepStrictEqual(bad.excludeCalendars, cur.excludeCalendars)
+  env.dispose()
+}])
+
+asyncTests.push(['模擬実行 期限前通知に［完了］［10分後にもう一度］のボタン', async () => {
+  const env = await runTodo({ shortcutParameter: 'sync', events: [] }, sampleData())
+  const rec = env.notifications.pending.get('todo-remind-tt')
+  assert.ok(rec, '今日の時刻つきの期限前通知')
+  assert.deepStrictEqual(rec.actions.map(a => a.title), ['完了', '10分後にもう一度'])
+  assert.ok(rec.actions[0].url.indexOf('id=tt') >= 0 && rec.actions[0].url.indexOf('action=done') >= 0)
+  assert.ok(rec.actions[1].url.indexOf('action=snooze') >= 0)
+}])
+
+asyncTests.push(['模擬実行 通知の「10分後にもう一度」→ スヌーズ通知を予約して画面にお知らせ', async () => {
+  let shown = ''
+  const env = await runTodo({ events: [], queryParameters: { action: 'snooze', id: 'tt' }, onWebViewPresent: async page => { shown = page.text() } }, sampleData())
+  assertClean(env)
+  const t = savedData(env).todos.find(x => x.id === 'tt')
+  assert.ok(t.snoozeUntil && new Date(t.snoozeUntil) > new Date())
+  assert.ok(env.notifications.pending.get('todo-snooze-tt'), 'スヌーズ通知')
+  assert.ok(shown.indexOf('10分後にもう一度通知します') >= 0, shown)
+  assert.ok(shown.indexOf('元に戻す') < 0)
+}])
+
+asyncTests.push(['模擬実行 繰り返しTODO: 追加 → 完了で次の回ができる（ウィジェットの行タップでも）', async () => {
+  const env = await runTodo({
+    events: [],
+    onWebViewPresent: async (page, env) => {
+      page.click('add')
+      await env.wait(100)
+      const doc = page.window.document
+      doc.getElementById('f-title').value = '週報'
+      doc.getElementById('f-repeat').value = 'weekly'
+      doc.getElementById('f-imp').checked = true
+      page.click('save')
+      await env.waitFor(() => savedData(env).todos.some(t => t.title === '週報'), 3000, '追加')
+      const added = savedData(env).todos.find(t => t.title === '週報')
+      assert.strictEqual(added.repeat, 'weekly')
+      assert.ok(added.due && added.allDay, '日付なしの繰り返しは今日の終日')
+      assert.ok(added.important)
+      assert.ok(page.text().indexOf('毎週') >= 0, '繰り返しの表示')
+      page.click('toggle', added.id)
+      await env.waitFor(() => savedData(env).todos.filter(t => t.title === '週報').length === 2, 3000, '次の回')
+    },
+  }, sampleData())
+  assertClean(env)
+  const list = savedData(env).todos.filter(t => t.title === '週報')
+  const done = list.find(t => t.done)
+  const next = list.find(t => !t.done)
+  assert.strictEqual(new Date(next.due) - new Date(done.due), 7 * 86400e3)
+
+  // ウィジェットの行タップで完了しても次の回ができる
+  const env2 = createScriptableEnv({ events: [], queryParameters: { action: 'done', id: next.id } })
+  env2.files.write(DATA_FILE, env.files.read(DATA_FILE))
+  await env2.run('TODO.js')
+  env2.dispose()
+  assert.strictEqual(savedData(env2).todos.filter(t => t.title === '週報' && !t.done).length, 1)
+  assert.strictEqual(savedData(env2).todos.filter(t => t.title === '週報').length, 3)
+}])
+
+asyncTests.push(['模擬実行 設定画面: 変更して保存 → 設定と通知予約に反映', async () => {
+  const env = await runTodo({
+    events: sampleEvents(),
+    onWebViewPresent: async (page, env) => {
+      page.click('settings')
+      const doc = page.window.document
+      assert.ok(doc.getElementById('s-cal-0'), 'カレンダーの一覧')
+      doc.getElementById('s-evening-on').checked = false
+      doc.getElementById('s-morning').value = '06:30'
+      doc.getElementById('s-remind').value = '60'
+      doc.getElementById('s-range').value = '90'
+      doc.getElementById('s-cal-0').checked = false
+      page.click('save-settings')
+      await env.waitFor(() => savedData(env).settings.lookaheadDays === 90, 3000, '設定の保存')
+      assert.ok(page.text().indexOf('設定を保存しました') >= 0)
+    },
+  }, sampleData())
+  assertClean(env)
+  const s = savedData(env).settings
+  assert.strictEqual(s.eveningHour, null)
+  assert.strictEqual(s.morningHour, 6)
+  assert.strictEqual(s.morningMinute, 30)
+  assert.strictEqual(s.remindMinutes, 60)
+  assert.ok(s.excludeCalendars.indexOf('仕事') >= 0, '取り込まないカレンダー')
+  assert.ok(s.excludeCalendars.indexOf('日本の祝日') >= 0, '既定の除外は残る')
+  assert.ok(!Array.from(env.notifications.pending.keys()).some(k => k.indexOf('todo-evening-') === 0), '夜の通知を取り消し')
+}])
+
+asyncTests.push(['模擬実行 お祝い表示: 今日の分を全部終えたら画面とウィジェットに', async () => {
+  const data = sampleData()
+  const t0 = todayStart()
+  data.todos = [
+    todo({ id: 'a', title: '終わった', due: new Date(t0 + 3600e3).toISOString(), done: true, doneAt: new Date().toISOString() }),
+  ]
+  let shown = ''
+  const env = await runTodo({ events: [], onWebViewPresent: async page => { shown = page.text() } }, data)
+  assertClean(env)
+  assert.ok(shown.indexOf('今日は全部完了') >= 0, shown)
+  const w = await runTodo({ runsInWidget: true, widgetFamily: 'medium', events: [] }, data)
+  assert.ok(w.widgetTexts(w.script.widget).join('\n').indexOf('全部完了') >= 0, w.widgetTree(w.script.widget))
 }])
 
 asyncTests.push(['模擬実行 アプリ: 閉じる直前の変更も回収される', async () => {

@@ -21,6 +21,12 @@ async function reschedule(data, now, model) {
     n.title = p.title
     n.body = p.body
     n.openURL = openURL()
+    if (p.todoId) {
+      // 通知を長押しすると出るボタン（押すと Scriptable が開いて処理する）
+      const base = openURL() + '?id=' + encodeURIComponent(p.todoId) + '&action='
+      n.addAction('完了', base + 'done')
+      n.addAction('10分後にもう一度', base + 'snooze')
+    }
     n.setTriggerDate(new Date(p.at))
     await n.schedule()
   }

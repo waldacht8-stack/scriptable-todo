@@ -27,6 +27,33 @@ h1{margin:2px 0 0;font-size:34px;font-weight:800;letter-spacing:.02em}
 .bar{height:8px;border-radius:4px;background:var(--track);overflow:hidden}
 .bar i{display:block;height:8px;border-radius:4px;background:var(--accent);transition:width .3s}
 .ratio{font-size:13px;color:var(--sub)}
+.topbar{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.topbar .tabs{flex:1;margin-bottom:0}
+.gear{width:46px;height:46px;flex-shrink:0;border:none;border-radius:12px;background:var(--track);color:var(--sub);display:flex;align-items:center;justify-content:center}
+.tag{display:flex;align-items:center;gap:3px}
+.title .star{color:#E0A100;vertical-align:-2px;margin-right:4px}
+.imp-label{display:flex;align-items:center;gap:6px}
+.imp-label .star{color:#E0A100}
+.celebrate{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--accent-bg);color:var(--accent);border-radius:16px;padding:18px 12px;margin-bottom:20px;animation:pop .5s ease-out}
+.celebrate b{font-size:20px;font-weight:800}
+.celebrate span{font-size:13px;color:var(--sub)}
+.confetti{position:absolute;inset:0;pointer-events:none}
+.confetti i{position:absolute;top:-10px;width:7px;height:11px;border-radius:2px;opacity:.9;animation:fall 1.8s ease-in forwards}
+.confetti i:nth-child(1){left:8%;background:#1D4ED8;animation-delay:0s}
+.confetti i:nth-child(2){left:20%;background:#E0A100;animation-delay:.15s}
+.confetti i:nth-child(3){left:33%;background:#C2410C;animation-delay:.3s}
+.confetti i:nth-child(4){left:46%;background:#0F766E;animation-delay:.05s}
+.confetti i:nth-child(5){left:59%;background:#1D4ED8;animation-delay:.25s}
+.confetti i:nth-child(6){left:72%;background:#E0A100;animation-delay:.1s}
+.confetti i:nth-child(7){left:84%;background:#C2410C;animation-delay:.35s}
+.confetti i:nth-child(8){left:93%;background:#0F766E;animation-delay:.2s}
+@keyframes fall{to{transform:translateY(110px) rotate(320deg);opacity:0}}
+@keyframes pop{0%{transform:scale(.92);opacity:0}60%{transform:scale(1.03);opacity:1}100%{transform:none}}
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.set-row input[type=time]{width:120px}
+.set-group{display:flex;flex-direction:column;gap:2px}
+.set-title{font-size:13px;font-weight:700;color:var(--sub)}
+.sheet{max-height:88vh;overflow-y:auto}
 .tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;background:var(--track);border-radius:12px;padding:4px;margin-bottom:18px}
 .tab{border:none;background:none;border-radius:9px;min-height:38px;font-size:15px;font-weight:700;color:var(--sub)}
 .tab.on{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
@@ -119,7 +146,10 @@ section{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 // 画面側で動くコード。toString() で HTML に埋め込むため、外の変数は参照しない
 // （categorize などの model 関数は同じ <script> 内に埋め込まれる）
 function clientMain(DATA) {
-  const state = { todos: DATA.todos, dismissed: [], showDone: false, sheet: null, toast: DATA.toast, view: (DATA.start && DATA.start.view) || 'today', weekOffset: 0, monthOffset: 0, selectedDay: (DATA.start && DATA.start.day) || null }
+  const state = {
+    todos: DATA.todos, dismissed: [], settings: DATA.settings || {}, showDone: false, sheet: null, toast: DATA.toast,
+    view: 'today', weekOffset: 0, monthOffset: 0, selectedDay: null,
+  }
   const queue = []
   let waiter = null
 
@@ -145,7 +175,7 @@ function clientMain(DATA) {
     return last ? JSON.stringify(last) : ''
   }
   function persist() {
-    send({ type: 'save', todos: state.todos, dismissed: state.dismissed })
+    send({ type: 'save', todos: state.todos, dismissed: state.dismissed, settings: state.settings })
     // 予備経路：ナビゲーション要求で Scriptable 側に「回収して」と知らせる（shouldAllowRequest で止められる）
     setTimeout(() => { try { window.location.href = 'todoapp://flush' } catch (e) {} }, 0)
   }
@@ -157,14 +187,19 @@ function clientMain(DATA) {
   const CAL = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'
   const PLUS = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
 
+  const STAR = '<svg class="star" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-label="重要"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>'
+  const REPEAT = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 013-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 01-3 3H3"/></svg>'
+  const GEAR = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>'
+
   function itemHTML(t, now, small) {
     const label = fmtDue(t, now)
-    const cal = t.source === 'calendar' || t.pendingEvent ? '<span style="display:flex;align-items:center;gap:4px">' + CAL + 'カレンダー</span>' : ''
-    return '<div class="item' + (small ? ' small' : '') + (t.done ? ' done' : '') + '">' +
+    const cal = t.source === 'calendar' || t.pendingEvent ? '<span class="tag">' + CAL + 'カレンダー</span>' : ''
+    const rep = t.repeat ? '<span class="tag">' + REPEAT + esc(repeatLabel(t.repeat)) + '</span>' : ''
+    return '<div class="item' + (small ? ' small' : '') + (t.done ? ' done' : '') + (t.important ? ' important' : '') + '">' +
       '<button class="check' + (t.done ? ' on' : '') + '" data-act="toggle" data-id="' + esc(t.id) + '" aria-label="' + (t.done ? '未完了に戻す' : '完了にする') + '">' + CHECK + '</button>' +
       '<button class="body" data-act="edit" data-id="' + esc(t.id) + '">' +
-      '<div class="title">' + esc(t.title) + '</div>' +
-      '<div class="meta"><span class="time' + (t.due ? '' : ' none') + '">' + esc(label) + '</span>' + cal + '</div>' +
+      '<div class="title">' + (t.important ? STAR : '') + esc(t.title) + '</div>' +
+      '<div class="meta"><span class="time' + (t.due ? '' : ' none') + '">' + esc(label) + '</span>' + cal + rep + '</div>' +
       '</button></div>'
   }
 
@@ -198,9 +233,10 @@ function clientMain(DATA) {
   }
 
   function tabsHTML() {
-    return '<div class="tabs" role="tablist">' + [['today', '今日'], ['week', '週'], ['month', '月']].map(v =>
+    return '<div class="topbar"><div class="tabs" role="tablist">' + [['today', '今日'], ['week', '週'], ['month', '月']].map(v =>
       '<button role="tab" aria-selected="' + (state.view === v[0]) + '" class="tab' + (state.view === v[0] ? ' on' : '') +
-      '" data-act="view" data-id="' + v[0] + '">' + v[1] + '</button>').join('') + '</div>'
+      '" data-act="view" data-id="' + v[0] + '">' + v[1] + '</button>').join('') + '</div>' +
+      '<button class="gear" data-act="settings" aria-label="設定">' + GEAR + '</button></div>'
   }
 
   // 週・月の見出し。期間の切り替えは左右スワイプ。別の期間を見ているときだけ「今週／今月」に戻るボタンを出す
@@ -225,6 +261,12 @@ function clientMain(DATA) {
       '<div class="count">残り<b>' + g.stats.remaining + '</b>件</div></div>' +
       '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
       '<div class="ratio">' + g.stats.done + ' / ' + g.stats.total + ' 件 完了</div></div>'
+    if (g.stats.total > 0 && g.stats.remaining === 0) {
+      // 今日の分をすべて終えたらお祝い
+      html += '<div class="celebrate" role="status">' +
+        '<span class="confetti" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>' +
+        '<b>今日は全部完了！</b><span>おつかれさまでした</span></div>'
+    }
     html += sectionHTML('c-overdue', '期限切れ', g.overdue, now, { groupClass: 'overdue' })
     html += sectionHTML('c-today', '今日', g.today, now, { showEmpty: '今日のTODOはありません' })
     html += sectionHTML('c-up', '今後', g.upcoming, now, { small: true })
@@ -301,7 +343,13 @@ function clientMain(DATA) {
     const now = new Date()
     let html = ''
     if (DATA.error) html += '<div class="error">' + esc(DATA.error) + '</div>'
-    if (state.toast) html += '<div class="toast"><span>「' + esc(state.toast.title) + '」を完了しました</span><button data-act="undo-toast">元に戻す</button></div>'
+    if (state.toast) {
+      const k = state.toast.kind || 'done'
+      const msg = k === 'snooze' ? '「' + esc(state.toast.title) + '」を10分後にもう一度通知します'
+        : k === 'info' ? esc(state.toast.title)
+        : '「' + esc(state.toast.title) + '」を完了しました'
+      html += '<div class="toast"><span>' + msg + '</span>' + (k === 'done' ? '<button data-act="undo-toast">元に戻す</button>' : '') + '</div>'
+    }
     html += tabsHTML()
     html += state.view === 'week' ? renderWeek(now) : state.view === 'month' ? renderMonth(now) : renderToday(now)
     html += '<button class="add" data-act="add">' + PLUS + 'TODOを追加</button>'
@@ -332,7 +380,13 @@ function clientMain(DATA) {
           '<label id="f-calrow" style="display:none">登録先カレンダー<select id="f-calname">' +
           DATA.calendars.map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('') + '</select></label>'
       }
+      const rep = (t && t.repeat) || ''
+      html += '<label>繰り返し<select id="f-repeat">' +
+        [['', 'なし'], ['daily', '毎日'], ['weekdays', '平日（月〜金）'], ['weekly', '毎週'], ['monthly', '毎月']].map(o =>
+          '<option value="' + o[0] + '"' + (o[0] === rep ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>'
     }
+    html += '<label class="check-row"><input id="f-imp" type="checkbox"' + (t && t.important ? ' checked' : '') + '>' +
+      '<span class="imp-label">' + STAR + '重要（一覧とウィジェットの先頭に固定）</span></label>'
     html += '<label>メモ<textarea id="f-note">' + esc(t ? t.note : '') + '</textarea></label>'
     html += '<div class="actions">' +
       (t ? '<button type="button" class="btn-del" data-act="delete">削除</button>' : '') +
@@ -352,8 +406,11 @@ function clientMain(DATA) {
     const stamp = new Date().toISOString()
     const existing = state.sheet.id ? state.todos.find(x => x.id === state.sheet.id) : null
     const note = document.getElementById('f-note').value
+    const impEl = document.getElementById('f-imp')
+    const important = !!(impEl && impEl.checked)
     if (existing && (existing.source === 'calendar' || existing.pendingEvent)) {
       existing.note = note
+      existing.important = important
       existing.updatedAt = stamp
     } else {
       const titleEl = document.getElementById('f-title')
@@ -377,7 +434,17 @@ function clientMain(DATA) {
         due = new Date(toInputDate(new Date()) + 'T00:00')
         allDay = true
       }
-      const fields = { title: title, due: due ? due.toISOString() : null, allDay: allDay, note: note, updatedAt: stamp }
+      const repEl = document.getElementById('f-repeat')
+      const repeat = (repEl && repEl.value) || null
+      if (repeat && !due) {
+        // 繰り返しには起点の日付が要るので、日付なしなら今日の終日にする
+        due = new Date(toInputDate(new Date()) + 'T00:00')
+        allDay = true
+      }
+      const fields = {
+        title: title, due: due ? due.toISOString() : null, allDay: allDay, note: note, updatedAt: stamp,
+        repeat: repeat, repeatDay: repeat && due ? due.getDate() : null, important: important,
+      }
       if (existing) Object.assign(existing, fields)
       else {
         const todo = Object.assign({ id: newId(), done: false, doneAt: null, source: 'manual', createdAt: stamp }, fields)
@@ -387,6 +454,72 @@ function clientMain(DATA) {
       }
     }
     closeSheet()
+    render()
+    persist()
+  }
+
+  function showToast(toast) {
+    state.toast = toast
+    setTimeout(() => { if (state.toast === toast) { state.toast = null; if (!state.sheet) render() } }, 6000)
+  }
+
+  // ===== 設定 =====
+  function timeValue(h, m) {
+    return pad2(h) + ':' + pad2(m || 0)
+  }
+
+  function options(list, cur) {
+    return list.map(o => '<option value="' + o[0] + '"' + (String(o[0]) === String(cur) ? ' selected' : '') + '>' + o[1] + '</option>').join('')
+  }
+
+  function openSettings() {
+    const s = state.settings
+    state.sheet = { settings: true }
+    let html = '<div class="backdrop" data-act="close"></div><form class="sheet" onsubmit="return false"><h3>設定</h3>'
+    html += '<div class="set-row"><label class="check-row"><input id="s-morning-on" type="checkbox"' + (s.morningHour != null ? ' checked' : '') + '>朝の一覧通知</label>' +
+      '<input id="s-morning" type="time" value="' + timeValue(s.morningHour == null ? 7 : s.morningHour, s.morningMinute) + '"></div>'
+    html += '<div class="set-row"><label class="check-row"><input id="s-evening-on" type="checkbox"' + (s.eveningHour != null ? ' checked' : '') + '>夜の残りタスク通知</label>' +
+      '<input id="s-evening" type="time" value="' + timeValue(s.eveningHour == null ? 20 : s.eveningHour, s.eveningMinute) + '"></div>'
+    html += '<label>期限前の通知<select id="s-remind">' + options([['off', '通知しない'], [0, '期限ちょうど'], [10, '10分前'], [15, '15分前'],
+      [30, '30分前'], [60, '1時間前'], [120, '2時間前']], s.remindMinutes == null ? 'off' : s.remindMinutes) + '</select></label>'
+    html += '<label>カレンダーから取り込む範囲<select id="s-range">' + options([[14, '2週間先まで'], [30, '30日先まで'], [45, '45日先まで'],
+      [60, '60日先まで'], [90, '90日先まで']], s.lookaheadDays) + '</select></label>'
+    const cals = DATA.allCalendars || []
+    if (cals.length) {
+      const ex = s.excludeCalendars || []
+      html += '<div class="set-group"><div class="set-title">取り込むカレンダー</div>' + cals.map((c, i) =>
+        '<label class="check-row"><input id="s-cal-' + i + '" type="checkbox"' + (ex.indexOf(c) < 0 ? ' checked' : '') + '>' + esc(c) + '</label>').join('') + '</div>'
+    }
+    html += '<div class="actions"><button type="button" class="btn-cancel" data-act="close">キャンセル</button>' +
+      '<button type="button" class="btn-save" data-act="save-settings">保存</button></div></form>'
+    document.getElementById('sheet').innerHTML = html
+  }
+
+  function saveSettings() {
+    const get = id => document.getElementById(id)
+    const hm = (onId, timeId) => {
+      const m = /^(\d{1,2}):(\d{2})/.exec(get(timeId).value || '')
+      return get(onId).checked && m ? [Number(m[1]), Number(m[2])] : [null, 0]
+    }
+    const cur = state.settings
+    const morning = hm('s-morning-on', 's-morning')
+    const evening = hm('s-evening-on', 's-evening')
+    const remind = get('s-remind').value
+    const range = Number(get('s-range').value)
+    const s = Object.assign({}, cur, {
+      morningHour: morning[0], morningMinute: morning[1], eveningHour: evening[0], eveningMinute: evening[1],
+      remindMinutes: remind === '' ? cur.remindMinutes : remind === 'off' ? null : Number(remind),
+      lookaheadDays: range || cur.lookaheadDays,
+    })
+    const cals = DATA.allCalendars || []
+    if (cals.length) {
+      // 一覧に出ていない除外（既定の祝日など）は残し、一覧に出ているものはチェックの状態に合わせる
+      const keep = (cur.excludeCalendars || []).filter(c => cals.indexOf(c) < 0)
+      s.excludeCalendars = keep.concat(cals.filter((c, i) => !get('s-cal-' + i).checked))
+    }
+    state.settings = s
+    closeSheet()
+    showToast({ kind: 'info', title: '設定を保存しました' })
     render()
     persist()
   }
@@ -436,22 +569,21 @@ function clientMain(DATA) {
     const t = id ? state.todos.find(x => x.id === id) : null
     if (act === 'toggle' && t) {
       if (t.done) {
-        t.done = false
-        t.doneAt = null
-        t.updatedAt = new Date().toISOString()
+        uncompleteTodo(state.todos, t, new Date())
         render()
         persist()
       } else {
         el.classList.add('on')
         setTimeout(() => {
-          t.done = true
-          t.doneAt = new Date().toISOString()
-          t.updatedAt = t.doneAt
+          // 繰り返しなら次の回が追加される
+          completeTodo(state.todos, t, new Date())
           render()
           persist()
         }, 350)
       }
     } else if (act === 'edit' && t) openSheet(t)
+    else if (act === 'settings') openSettings()
+    else if (act === 'save-settings') saveSettings()
     else if (act === 'add') openSheet(null)
     else if (act === 'show-done') { state.showDone = !state.showDone; render() }
     else if (act === 'close') closeSheet()
@@ -477,9 +609,7 @@ function clientMain(DATA) {
     else if (act === 'undo-toast') {
       const u = state.toast && state.todos.find(x => x.id === state.toast.id)
       if (u) {
-        u.done = false
-        u.doneAt = null
-        u.updatedAt = new Date().toISOString()
+        uncompleteTodo(state.todos, u, new Date())
         persist()
       }
       state.toast = null
@@ -497,13 +627,15 @@ function clientMain(DATA) {
 
   render()
   setInterval(() => { if (!state.sheet) render() }, 60000) // 時間経過で「期限切れ」へ移るのを反映
-  if (state.toast) setTimeout(() => { state.toast = null; if (!state.sheet) render() }, 6000) // 完了のお知らせは6秒で消す
+  if (DATA.toast) showToast(DATA.toast) // ウィジェット・通知から開いたときのお知らせは6秒で消す
 }
 
-function buildHTML(data, model, error, calendars, toast, start) {
-  const helpers = ['startOfDay', 'addDays', 'pad2', 'fmtTime', 'fmtDate', 'fmtDue', 'compareDue', 'categorize', 'newId']
+function buildHTML(data, model, error, calendars, toast, allCalendars) {
+  const helpers = ['startOfDay', 'addDays', 'pad2', 'fmtTime', 'fmtDate', 'fmtDue', 'compareDue', 'compareTodo', 'categorize', 'newId',
+    'repeatLabel', 'nextOccurrence', 'completeTodo', 'uncompleteTodo']
     .map(name => model[name].toString()).join('\n')
-  const payload = JSON.stringify({ todos: data.todos, error: error || null, calendars: calendars || [], toast: toast || null, start: start || null }).replace(/</g, '\\u003c')
+  const payload = JSON.stringify({ todos: data.todos, error: error || null, calendars: calendars || [], toast: toast || null,
+    settings: data.settings || {}, allCalendars: allCalendars || [] }).replace(/</g, '\\u003c')
   return '<!doctype html><html lang="ja"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">' +
     '<style>' + CSS + '</style></head><body><div id="app"></div><div id="sheet"></div>' +
@@ -551,7 +683,7 @@ async function present(data, ctx) {
     return true
   }
   console.log('画面: HTML生成')
-  const html = buildHTML(data, ctx.model, ctx.error, ctx.calendars, ctx.toast, ctx.start)
+  const html = buildHTML(data, ctx.model, ctx.error, ctx.calendars, ctx.toast, ctx.allCalendars)
   console.log('画面: HTML読み込み (' + html.length + '文字)')
   await wv.loadHTML(html)
   console.log('画面: 表示開始')

@@ -102,4 +102,9 @@ async function saveEvent(t) {
   return { eventKey: ev.identifier + '@' + start.toISOString(), calendarTitle: calendarTitle, due: t.due }
 }
 
-module.exports = { syncCalendar, writableCalendars, createPendingEvents }
+// 設定画面の「取り込むカレンダー」用：予定のカレンダー名をすべて
+async function allCalendarTitles() {
+  return (await Calendar.forEvents()).map(c => c.title)
+}
+
+module.exports = { syncCalendar, writableCalendars, createPendingEvents, allCalendarTitles }

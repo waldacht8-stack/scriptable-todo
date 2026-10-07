@@ -124,14 +124,14 @@ async function runApp() {
   // ウィジェットの行タップ（?action=done&id=…）で起動されたら、そのTODOを完了にしてから画面を開く
   let toast = null
   const q = args.queryParameters || {}
-  if (q.action === 'done' && q.id) {
-    const t = data.todos.find(x => x.id === q.id)
-    if (t && !t.done) {
-      t.done = true
-      t.doneAt = now.toISOString()
-      t.updatedAt = t.doneAt
-      toast = { id: t.id, title: t.title }
-    }
+  // ウィジェットの行タップ・通知のボタン（?action=done|snooze&id=…）で起動されたら、先に処理してから画面を開く
+  const target = q.id ? data.todos.find(x => x.id === q.id) : null
+  if (target && !target.done && q.action === 'done') {
+    model.completeTodo(data.todos, target, now) // 繰り返しなら次の回もできる
+    toast = { kind: 'done', id: target.id, title: target.title }
+  } else if (target && !target.done && q.action === 'snooze') {
+    target.snoozeUntil = new Date(now.getTime() + 10 * 60000).toISOString()
+    toast = { kind: 'snooze', id: target.id, title: target.title }
   }
   step = 'カレンダー同期・通知予約'
   console.log(step)
@@ -145,6 +145,12 @@ async function runApp() {
   } catch (e) {
     // 一覧が取れなければ「カレンダーにも登録」を出さないだけ
   }
+  let allCalendars = []
+  try {
+    allCalendars = await withTimeout(sync.allCalendarTitles(), 5000, 'カレンダー一覧')
+  } catch (e) {
+    // 取れなければ設定画面に「取り込むカレンダー」を出さないだけ
+  }
   step = '画面表示'
   console.log(step)
   await ui.present(data, {
@@ -152,12 +158,12 @@ async function runApp() {
     error: error,
     calendars: calendars,
     toast: toast,
-    // ウィジェット（週・月）から開かれたら、その表示で始める
-    start: { view: ['week', 'month'].indexOf(q.view) >= 0 ? q.view : 'today', day: /^\d{4}-\d{2}-\d{2}$/.test(q.day || '') ? q.day : null },
+    allCalendars: allCalendars,
     onMessage: async msg => {
       if (msg.type !== 'save') return
       data.todos = msg.todos
       for (const d of msg.dismissed) data.dismissed[d.key] = d.due
+      if (msg.settings) data.settings = store.sanitizeSettings(data.settings, msg.settings)
       // 作れなかった予定は pendingEvent のまま残り、次回の同期で再試行される
       let r
       try {

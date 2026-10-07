@@ -42,6 +42,22 @@ function normalize(raw) {
   }
 }
 
+// 画面から届いた設定を検証して取り込む（不正な値は今の値のまま）
+function sanitizeSettings(current, incoming) {
+  const s = Object.assign({}, current)
+  const v = incoming || {}
+  const hour = x => x === null || (Number.isInteger(x) && x >= 0 && x <= 23)
+  const minute = x => Number.isInteger(x) && x >= 0 && x <= 59
+  if ('morningHour' in v && hour(v.morningHour)) s.morningHour = v.morningHour
+  if (minute(v.morningMinute)) s.morningMinute = v.morningMinute
+  if ('eveningHour' in v && hour(v.eveningHour)) s.eveningHour = v.eveningHour
+  if (minute(v.eveningMinute)) s.eveningMinute = v.eveningMinute
+  if ('remindMinutes' in v && (v.remindMinutes === null || (Number.isInteger(v.remindMinutes) && v.remindMinutes >= 0 && v.remindMinutes <= 1440))) s.remindMinutes = v.remindMinutes
+  if (Number.isInteger(v.lookaheadDays) && v.lookaheadDays >= 1 && v.lookaheadDays <= 180) s.lookaheadDays = v.lookaheadDays
+  if (Array.isArray(v.excludeCalendars) && v.excludeCalendars.every(c => typeof c === 'string')) s.excludeCalendars = v.excludeCalendars.slice(0, 100)
+  return s
+}
+
 async function load() {
   const fm = files()
   const path = dataPath()
@@ -76,4 +92,4 @@ function save(data) {
   fm.writeString(path, JSON.stringify(data, null, 1))
 }
 
-module.exports = { load, save, normalize, DEFAULT_SETTINGS }
+module.exports = { load, save, normalize, sanitizeSettings, DEFAULT_SETTINGS }

@@ -101,9 +101,14 @@ function countHead(parent, d, size, C) {
   text(n, '件', Math.round(size / 3.2), C.sub)
 }
 
-function emptyLine(parent, C) {
+function emptyLine(parent, d, C) {
   parent.addSpacer()
-  text(parent, '未完了のTODOはありません', 15, C.sub)
+  if (d.celebrate) {
+    text(parent, '全部完了！', 20, C.accent, { weight: 'heavy' })
+    text(parent, 'おつかれさまでした', 12, C.sub)
+  } else {
+    text(parent, '未完了のTODOはありません', 15, C.sub)
+  }
   parent.addSpacer()
 }
 
@@ -113,7 +118,8 @@ function buildSmall(w, d, now, model, C) {
   w.addSpacer()
   countHead(w, d, 56, C)
   w.addSpacer()
-  if (d.overdue) overduePill(w, d.overdue, C)
+  if (d.celebrate) text(w, d.items.length ? '今日の分は全部完了！' : '全部完了！', 12, C.accent, { minScale: 0.8 })
+  else if (d.overdue) overduePill(w, d.overdue, C)
   else {
     const first = d.items[0]
     text(w, first ? dueLabel(first, now, model) + ' ' + first.title : 'すべて完了', 12, C.sub, { minScale: 0.8 })
@@ -136,7 +142,8 @@ function buildMedium(w, d, now, model, C) {
   text(left, '未完了', 12, C.sub)
   left.addSpacer()
   text(left, d.items.length, 44, C.accent, { weight: 'heavy' })
-  text(left, d.overdue ? '期限切れ ' + d.overdue : '件', 12, d.overdue ? C.overdue : C.sub)
+  if (d.celebrate) text(left, '今日の分は完了', 11, C.accent, { minScale: 0.8 })
+  else text(left, d.overdue ? '期限切れ ' + d.overdue : '件', 12, d.overdue ? C.overdue : C.sub)
   if (d.next) {
     left.addSpacer(6)
     addNextLeft(left, d.next, 13, C.sub, C.text, true)
@@ -145,7 +152,7 @@ function buildMedium(w, d, now, model, C) {
   const right = h.addStack()
   right.layoutVertically()
   right.spacing = 8
-  if (!d.items.length) return emptyLine(right, C)
+  if (!d.items.length) return emptyLine(right, d, C)
   for (const t of d.items.slice(0, 3)) {
     const c = dueColor(t, now, model, C)
     row(right, t, c, dueLabel(t, now, model), c, 15, C)
@@ -165,12 +172,13 @@ function buildLarge(w, d, now, model, C) {
   w.addSpacer(6)
   const info = w.addStack()
   info.centerAlignContent()
-  if (d.overdue) overduePill(info, d.overdue, C)
+  if (d.celebrate) text(info, '今日の分は全部完了！', 13, C.accent)
+  else if (d.overdue) overduePill(info, d.overdue, C)
   info.addSpacer()
   if (d.next) addNextLeft(info, d.next, 12, C.sub, C.text, false)
   w.addSpacer(10)
 
-  if (!d.items.length) return emptyLine(w, C)
+  if (!d.items.length) return emptyLine(w, d, C)
   const max = 8
   for (const t of d.items.slice(0, max)) {
     const c = dueColor(t, now, model, C)
@@ -215,6 +223,8 @@ function buildInline(w, d, now, model) {
 function build(data, family, now, model, errorMessage) {
   const C = palette()
   const d = model.byDeadline(data.todos, now)
+  const g = model.categorize(data.todos, now)
+  d.celebrate = g.stats.total > 0 && g.stats.remaining === 0 // 今日の分をすべて終えた
   const w = new ListWidget()
   w.url = URLScheme.forRunningScript()
   w.refreshAfterDate = new Date(now.getTime() + 15 * 60000)

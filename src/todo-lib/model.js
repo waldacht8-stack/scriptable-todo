@@ -52,6 +52,12 @@ function compareDue(a, b) {
   return ca < cb ? -1 : ca > cb ? 1 : 0
 }
 
+// 一覧・ウィジェットの並び：重要マーク付きを先頭に固定、その中は期限が近い順
+function compareTodo(a, b) {
+  if (!!a.important !== !!b.important) return a.important ? -1 : 1
+  return compareDue(a, b)
+}
+
 // 期限切れ / 今日 / 今後 / 今日完了 に振り分ける。期限なしのTODOは「今日」に置く。
 function categorize(todos, now) {
   const today = startOfDay(now)
@@ -72,9 +78,9 @@ function categorize(todos, now) {
     else if (d < tomorrow) g.today.push(t)
     else g.upcoming.push(t)
   }
-  g.overdue.sort(compareDue)
-  g.today.sort(compareDue)
-  g.upcoming.sort(compareDue)
+  g.overdue.sort(compareTodo)
+  g.today.sort(compareTodo)
+  g.upcoming.sort(compareTodo)
   g.doneToday.sort((a, b) => (a.doneAt < b.doneAt ? 1 : -1))
   const remaining = g.overdue.length + g.today.length
   g.stats = { remaining: remaining, done: g.doneToday.length, total: remaining + g.doneToday.length }
@@ -96,7 +102,7 @@ function isOverdue(t, now) {
 // ウィジェット用：未完了を期限が近い順（期限切れ → 近い順 → 期限なし）に並べる。
 // next は「次の期限まで」のカウントダウン対象（時刻つきで、まだ来ていない一番近いもの）
 function byDeadline(todos, now) {
-  const items = todos.filter(t => !t.done).sort(compareDue)
+  const items = todos.filter(t => !t.done).sort(compareTodo)
   return {
     items: items,
     overdue: items.filter(t => isOverdue(t, now)).length,
@@ -166,13 +172,14 @@ function pruneDone(data, now) {
   data.todos = data.todos.filter(t => !(t.done && t.doneAt && new Date(t.doneAt) < limit))
 }
 
-// 予約する通知の一覧を作る（朝の一覧 × 3日分 + 期限前リマインド）。iOSの上限64件に収める。
+// 予約する通知の一覧を作る（朝の一覧・夜の残り 各3日分 + 期限前リマインド + スヌーズ）。iOSの上限64件に収める。
+// morningHour / eveningHour / remindMinutes が null の通知は送らない
 function planNotifications(data, now) {
   const s = data.settings
   const plans = []
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 3 && s.morningHour != null; i++) {
     const at = addDays(startOfDay(now), i)
-    at.setHours(s.morningHour, s.morningMinute, 0, 0)
+    at.setHours(s.morningHour, s.morningMinute || 0, 0, 0)
     if (at <= now) continue
     const g = categorize(data.todos, at)
     if (g.stats.remaining === 0) continue
@@ -188,7 +195,6 @@ function planNotifications(data, now) {
       body: parts.join(' / ') + (rest > 0 ? ' ほか' + rest + '件' : ''),
     })
   }
-  // 夜の残りタスク通知（eveningHour が null なら送らない）
   for (let i = 0; i < 3 && s.eveningHour != null; i++) {
     const at = addDays(startOfDay(now), i)
     at.setHours(s.eveningHour, s.eveningMinute || 0, 0, 0)
@@ -204,24 +210,96 @@ function planNotifications(data, now) {
       body: shown.join(' / ') + (items.length > shown.length ? ' ほか' + (items.length - shown.length) + '件' : ''),
     })
   }
-  const reminders = data.todos
+  // スヌーズ（「10分後にもう一度」）
+  for (const t of data.todos) {
+    if (t.done || !t.snoozeUntil || new Date(t.snoozeUntil) <= now) continue
+    plans.push({
+      id: 'todo-snooze-' + t.id,
+      todoId: t.id,
+      at: t.snoozeUntil,
+      title: 'もう一度：' + t.title,
+      body: t.due ? fmtDue(t, now) + '　長押しで完了・スヌーズ' : '長押しで完了・スヌーズ',
+    })
+  }
+  const room = 64 - plans.length - 2
+  const reminders = s.remindMinutes == null ? [] : data.todos
     .filter(t => !t.done && t.due && !t.allDay)
     .map(t => ({ t: t, at: new Date(new Date(t.due).getTime() - s.remindMinutes * 60000) }))
     .filter(x => x.at > now)
     .sort((a, b) => a.at - b.at)
-    .slice(0, 52) // 朝3 + 夜3 + リマインド52 で iOS の上限64件に収める
+    .slice(0, Math.max(0, room))
   for (const x of reminders) {
     plans.push({
       id: 'todo-remind-' + x.t.id,
+      todoId: x.t.id,
       at: x.at.toISOString(),
-      title: s.remindMinutes + '分後：' + x.t.title,
-      body: fmtTime(new Date(x.t.due)) + '〜　タップして完了チェック',
+      title: (s.remindMinutes ? s.remindMinutes + '分後：' : '期限です：') + x.t.title,
+      body: fmtTime(new Date(x.t.due)) + '〜　長押しで完了・スヌーズ',
     })
   }
   return plans
 }
 
+function repeatLabel(r) {
+  return ({ daily: '毎日', weekdays: '平日', weekly: '毎週', monthly: '毎月' })[r] || ''
+}
+
+// 繰り返しTODOの次の期限。今日より前にならないところまで進める（毎月は元の「日」を保つ、月末は丸める）
+function nextOccurrence(t, now) {
+  if (!t.repeat || !t.due) return null
+  const anchor = t.repeatDay || new Date(t.due).getDate()
+  const step = d => {
+    const x = new Date(d)
+    if (t.repeat === 'daily') x.setDate(x.getDate() + 1)
+    else if (t.repeat === 'weekdays') {
+      do { x.setDate(x.getDate() + 1) } while (x.getDay() === 0 || x.getDay() === 6)
+    } else if (t.repeat === 'weekly') x.setDate(x.getDate() + 7)
+    else if (t.repeat === 'monthly') {
+      x.setDate(1)
+      x.setMonth(x.getMonth() + 1)
+      x.setDate(Math.min(anchor, new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate()))
+    } else return null
+    return x
+  }
+  let d = step(new Date(t.due))
+  const today = startOfDay(now)
+  for (let i = 0; d && d < today && i < 1000; i++) d = step(d)
+  return d
+}
+
+// 完了にする。繰り返しなら次の回を todos に追加して返す（取り消し用に spawnedId を残す）
+function completeTodo(todos, t, now) {
+  const stamp = now.toISOString()
+  t.done = true
+  t.doneAt = stamp
+  t.updatedAt = stamp
+  delete t.snoozeUntil
+  const due = t.source === 'calendar' ? null : nextOccurrence(t, now)
+  if (!due) return null
+  const next = Object.assign({}, t, {
+    id: newId(), due: due.toISOString(), done: false, doneAt: null, createdAt: stamp, updatedAt: stamp,
+    repeatDay: t.repeatDay || new Date(t.due).getDate(),
+  })
+  delete next.spawnedId
+  t.spawnedId = next.id
+  todos.push(next)
+  return next
+}
+
+// 完了を取り消す。繰り返しで作られた次の回がまだ未完了なら消す
+function uncompleteTodo(todos, t, now) {
+  t.done = false
+  t.doneAt = null
+  t.updatedAt = now.toISOString()
+  if (t.spawnedId) {
+    const i = todos.findIndex(x => x.id === t.spawnedId && !x.done)
+    if (i >= 0) todos.splice(i, 1)
+    delete t.spawnedId
+  }
+}
+
 module.exports = {
-  startOfDay, addDays, pad2, fmtTime, fmtDate, fmtDue, compareDue, categorize, nextItem,
+  startOfDay, addDays, pad2, fmtTime, fmtDate, fmtDue, compareDue, compareTodo, categorize, nextItem,
   newId, mergeEvents, pruneDone, planNotifications, isOverdue, byDeadline,
+  repeatLabel, nextOccurrence, completeTodo, uncompleteTodo,
 }

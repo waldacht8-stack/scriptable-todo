@@ -658,6 +658,7 @@ function createScriptableEnv(opts) {
       const rec = {
         identifier: this.identifier, title: this.title, body: this.body, threadIdentifier: this.threadIdentifier,
         openURL: this.openURL, triggerDate: this.nextTriggerDate ? new Date(this.nextTriggerDate) : null,
+        actions: this.actions.slice(),
       }
       env.notifications.scheduled.push(rec)
       env.notifications.pending.delete(rec.identifier) // 同じ identifier は置き換え
