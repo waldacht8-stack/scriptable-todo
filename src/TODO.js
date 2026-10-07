@@ -62,7 +62,7 @@ async function runWidget() {
     const error = await refresh(data, now)
     if (error) await notify.error(data, error, now)
     store.save(data)
-    w = widget.build(data, config.widgetFamily, now, model, error)
+    w = widget.build(data, config.widgetFamily, now, model, error, model.widgetView(args.widgetParameter))
   } catch (e) {
     w = widget.buildError(messageOf(e))
   }
@@ -152,6 +152,8 @@ async function runApp() {
     error: error,
     calendars: calendars,
     toast: toast,
+    // ウィジェット（週・月）から開かれたら、その表示で始める
+    start: { view: ['week', 'month'].indexOf(q.view) >= 0 ? q.view : 'today', day: /^\d{4}-\d{2}-\d{2}$/.test(q.day || '') ? q.day : null },
     onMessage: async msg => {
       if (msg.type !== 'save') return
       data.todos = msg.todos

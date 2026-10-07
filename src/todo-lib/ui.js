@@ -114,7 +114,7 @@ section{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 // 画面側で動くコード。toString() で HTML に埋め込むため、外の変数は参照しない
 // （categorize などの model 関数は同じ <script> 内に埋め込まれる）
 function clientMain(DATA) {
-  const state = { todos: DATA.todos, dismissed: [], showDone: false, sheet: null, toast: DATA.toast, view: 'today', weekOffset: 0, monthOffset: 0, selectedDay: null }
+  const state = { todos: DATA.todos, dismissed: [], showDone: false, sheet: null, toast: DATA.toast, view: (DATA.start && DATA.start.view) || 'today', weekOffset: 0, monthOffset: 0, selectedDay: (DATA.start && DATA.start.day) || null }
   const queue = []
   let waiter = null
 
@@ -473,10 +473,10 @@ function clientMain(DATA) {
   if (state.toast) setTimeout(() => { state.toast = null; if (!state.sheet) render() }, 6000) // 完了のお知らせは6秒で消す
 }
 
-function buildHTML(data, model, error, calendars, toast) {
+function buildHTML(data, model, error, calendars, toast, start) {
   const helpers = ['startOfDay', 'addDays', 'pad2', 'fmtTime', 'fmtDate', 'fmtDue', 'compareDue', 'categorize', 'newId']
     .map(name => model[name].toString()).join('\n')
-  const payload = JSON.stringify({ todos: data.todos, error: error || null, calendars: calendars || [], toast: toast || null }).replace(/</g, '\\u003c')
+  const payload = JSON.stringify({ todos: data.todos, error: error || null, calendars: calendars || [], toast: toast || null, start: start || null }).replace(/</g, '\\u003c')
   return '<!doctype html><html lang="ja"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">' +
     '<style>' + CSS + '</style></head><body><div id="app"></div><div id="sheet"></div>' +
@@ -524,7 +524,7 @@ async function present(data, ctx) {
     return true
   }
   console.log('画面: HTML生成')
-  const html = buildHTML(data, ctx.model, ctx.error, ctx.calendars, ctx.toast)
+  const html = buildHTML(data, ctx.model, ctx.error, ctx.calendars, ctx.toast, ctx.start)
   console.log('画面: HTML読み込み (' + html.length + '文字)')
   await wv.loadHTML(html)
   console.log('画面: 表示開始')

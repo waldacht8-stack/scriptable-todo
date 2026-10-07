@@ -570,6 +570,55 @@ asyncTests.push(['store: v1 のデータは取り込み範囲を45日に移行�
   env.dispose()
 }])
 
+for (const param of ['週', '月']) {
+  for (const family of ['small', 'medium', 'large', 'extraLarge']) {
+    asyncTests.push(['模擬実行 ウィジェット（' + param + '）' + family, async () => {
+      const env = await runTodo({ runsInWidget: true, widgetFamily: family, widgetParameter: param, events: sampleEvents() }, sampleData())
+      assertClean(env)
+      const w = env.script.widget
+      const all = env.widgetTexts(w).join('\n')
+      assert.ok(!/同期エラー/.test(all), all)
+      const view = param === '週' ? 'week' : 'month'
+      assert.strictEqual(w.url, 'scriptable:///run/TODO?view=' + view)
+      if (family === 'small') {
+        assert.ok(all.indexOf(param === '週' ? '今週の残り' : '月の残り') >= 0, all)
+      } else {
+        assert.ok(all.indexOf(param === '週' ? '今週' : (new Date().getMonth() + 1) + '月') >= 0, all)
+        if (param === '月') {
+          // 日付のマスに、その日を開くタップ先がある
+          const urls = []
+          const walk = n => { if (n.__mockType !== 'ListWidget' && n.__mockType !== 'WidgetStack') return; if (n.url && n.url.indexOf('day=') >= 0) urls.push(n.url); n.children.forEach(walk) }
+          walk(w)
+          const days = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
+          assert.strictEqual(urls.length, days, '日数分のマス')
+        }
+        if (param === '週' && family !== 'medium') assert.ok(all.indexOf('今日の時刻つき') >= 0, '大は各日のTODOを表示\n' + all)
+      }
+    }])
+  }
+}
+
+test('ウィジェットの Parameter 解釈', () => {
+  assert.strictEqual(model.widgetView(''), 'day')
+  assert.strictEqual(model.widgetView(null), 'day')
+  assert.strictEqual(model.widgetView('週'), 'week')
+  assert.strictEqual(model.widgetView(' Week '), 'week')
+  assert.strictEqual(model.widgetView('月'), 'month')
+  assert.strictEqual(model.widgetView('month'), 'month')
+  assert.strictEqual(model.widgetView('日'), 'day')
+})
+
+asyncTests.push(['模擬実行 月ウィジェットの日付タップ → 月表示でその日を選んだ状態で開く', async () => {
+  const t = new Date()
+  t.setDate(t.getDate() + 2)
+  const key = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0')
+  let shown = ''
+  const env = await runTodo({ events: [], queryParameters: { view: 'month', day: key }, onWebViewPresent: async page => { shown = page.text() } }, sampleData())
+  assertClean(env)
+  assert.ok(shown.indexOf('今日に戻る') >= 0, '月表示で開く')
+  if (t.getMonth() === new Date().getMonth()) assert.ok(shown.indexOf('明後日の予定') >= 0, 'その日が選ばれている\n' + shown)
+}])
+
 asyncTests.push(['模擬実行 アプリ: 閉じる直前の変更も回収される', async () => {
   const env = await runTodo({
     onWebViewPresent: async (page, env) => {

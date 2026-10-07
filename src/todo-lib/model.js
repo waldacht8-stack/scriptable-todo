@@ -87,6 +87,31 @@ function nextItem(g, now) {
   return upcomingToday[0] || g.today[0] || g.overdue[0] || null
 }
 
+function dayKey(d) {
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
+}
+
+// 期限のある TODO を日付（YYYY-MM-DD）ごとにまとめる。各日は未完了が先、その中は時刻順
+function groupByDay(todos) {
+  const map = {}
+  for (const t of todos) {
+    if (!t.due) continue
+    const k = dayKey(new Date(t.due))
+    if (!map[k]) map[k] = []
+    map[k].push(t)
+  }
+  for (const k of Object.keys(map)) map[k].sort((a, b) => (a.done === b.done ? compareDue(a, b) : a.done ? 1 : -1))
+  return map
+}
+
+// ウィジェットの Parameter 欄 → 'day' | 'week' | 'month'
+function widgetView(param) {
+  const p = String(param || '').trim().toLowerCase()
+  if (p.indexOf('週') >= 0 || p.indexOf('week') === 0) return 'week'
+  if (p.indexOf('月') >= 0 || p.indexOf('month') === 0) return 'month'
+  return 'day'
+}
+
 function newId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
 }
@@ -206,5 +231,5 @@ function planNotifications(data, now) {
 
 module.exports = {
   startOfDay, addDays, pad2, fmtTime, fmtDate, fmtDue, compareDue, categorize, nextItem,
-  newId, mergeEvents, pruneDone, planNotifications,
+  newId, mergeEvents, pruneDone, planNotifications, dayKey, groupByDay, widgetView,
 }

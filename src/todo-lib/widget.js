@@ -11,6 +11,7 @@ function palette() {
     overdue: dyn('#C2410C', '#FB923C'),
     overdueText: dyn('#9A3412', '#FDBA74'),
     overdueBg: dyn('#FDEEE6', '#3A2214'),
+    accentBg: dyn('#E8EEFC', '#1E2A44'),
     line: dyn('#ECEEF1', '#2A2F38'),
   }
 }
@@ -236,7 +237,208 @@ function buildInline(w, g, now, model) {
   text(w, '残り' + g.stats.remaining + '件' + (next ? '・次 ' + (next.due ? model.fmtDue(next, now) + ' ' : '') + next.title : ''), 12, null)
 }
 
-function build(data, family, now, model, errorMessage) {
+// ===== 週・月のウィジェット（ウィジェットの Parameter 欄に「週」「月」） =====
+const WEEKDAY = ['日', '月', '火', '水', '木', '金', '土']
+
+function appURL(query) {
+  return URLScheme.forRunningScript() + '?' + query
+}
+
+// 横方向の中央に1行置く
+function centerLine(parent, value, size, color, opts) {
+  const s = parent.addStack()
+  s.addSpacer()
+  const t = text(s, value, size, color, opts)
+  s.addSpacer()
+  return t
+}
+
+function weekdayColor(d, C) {
+  return d.getDay() === 0 ? C.overdue : d.getDay() === 6 ? C.accent : C.sub
+}
+
+function dayInfo(map, d, today, model) {
+  const items = map[model.dayKey(d)] || []
+  return { d: d, items: items, open: items.filter(t => !t.done), past: d < today, isToday: model.dayKey(d) === model.dayKey(today) }
+}
+
+function periodHead(w, title, sub, remaining, big, C) {
+  const head = w.addStack()
+  head.centerAlignContent()
+  text(head, title, big ? 18 : 15, C.text, { weight: 'heavy' })
+  head.addSpacer(6)
+  text(head, sub, 12, C.sub)
+  head.addSpacer()
+  text(head, '残り ', 12, C.sub)
+  text(head, remaining, big ? 20 : 17, C.accent, { weight: 'heavy' })
+}
+
+function buildWeek(w, family, data, now, model, C) {
+  const today = model.startOfDay(now)
+  const mon = model.addDays(today, -((today.getDay() + 6) % 7))
+  const map = model.groupByDay(data.todos)
+  const days = []
+  for (let i = 0; i < 7; i++) days.push(dayInfo(map, model.addDays(mon, i), today, model))
+  const remaining = days.reduce((n, x) => n + x.open.length, 0)
+  const sun = days[6].d
+  const range = (mon.getMonth() + 1) + '/' + mon.getDate() + '〜' + (sun.getMonth() + 1) + '/' + sun.getDate()
+  w.url = appURL('view=week')
+
+  if (family === 'small') {
+    w.setPadding(16, 16, 16, 16)
+    text(w, '今週の残り', 13, C.sub)
+    w.addSpacer()
+    const n = w.addStack()
+    n.bottomAlignContent()
+    n.spacing = 4
+    text(n, remaining, 52, C.accent, { weight: 'heavy' })
+    text(n, '件', 16, C.sub)
+    w.addSpacer()
+    // 7日分の点（未完了あり＝青、過ぎて未完了＝オレンジ、なし＝灰。今日は大きく）
+    const dots = w.addStack()
+    dots.centerAlignContent()
+    dots.spacing = 5
+    for (const x of days) {
+      const dot = dots.addStack()
+      const s = x.isToday ? 14 : 10
+      dot.size = new Size(s, s)
+      dot.cornerRadius = s / 2
+      dot.backgroundColor = x.open.length ? (x.past ? C.overdue : C.accent) : C.line
+    }
+    w.addSpacer(4)
+    text(w, range, 11, C.sub)
+    return
+  }
+
+  const big = family !== 'medium'
+  w.setPadding(14, 14, 14, 14)
+  periodHead(w, '今週', range, remaining, big, C)
+  w.addSpacer(8)
+
+  if (!big) {
+    // 中：月〜日の7列（曜日・日付・未完了件数）
+    const row = w.addStack()
+    row.spacing = 4
+    for (const x of days) {
+      const col = row.addStack()
+      col.layoutVertically()
+      col.size = new Size(40, 60)
+      col.cornerRadius = 10
+      col.setPadding(4, 0, 4, 0)
+      if (x.isToday) col.backgroundColor = C.accentBg
+      col.url = appURL('view=week')
+      centerLine(col, WEEKDAY[x.d.getDay()], 10, weekdayColor(x.d, C))
+      centerLine(col, x.d.getDate(), 15, x.isToday ? C.accent : C.text, { weight: 'heavy' })
+      col.addSpacer()
+      centerLine(col, x.open.length ? x.open.length : '–', 12, x.open.length ? (x.past ? C.overdue : C.accent) : C.sub)
+    }
+    w.addSpacer()
+    // 今日以降の次の予定を2件
+    const next = []
+    for (const x of days) if (!x.past) for (const t of x.open) next.push(t)
+    for (const t of next.slice(0, 2)) {
+      const d = new Date(t.due)
+      text(w, (d.getMonth() + 1) + '/' + d.getDate() + (t.allDay ? '' : ' ' + model.fmtTime(d)) + '  ' + t.title, 11, C.sub)
+    }
+    if (!next.length) text(w, '今週の残りの予定はありません', 11, C.sub)
+    return
+  }
+
+  // 大：7日分を行で（日付と、その日の未完了TODO）
+  for (const x of days) {
+    const r = w.addStack()
+    r.centerAlignContent()
+    r.spacing = 10
+    r.setPadding(6, 8, 6, 8)
+    r.cornerRadius = 10
+    if (x.isToday) r.backgroundColor = C.accentBg
+    r.url = appURL('view=week')
+    const lab = r.addStack()
+    lab.size = new Size(66, 0)
+    text(lab, (x.d.getMonth() + 1) + '/' + x.d.getDate(), 14, x.isToday ? C.accent : C.text, { weight: 'heavy' })
+    text(lab, '（' + WEEKDAY[x.d.getDay()] + '）', 12, weekdayColor(x.d, C))
+    const titles = x.open.map(t => (t.due && !t.allDay ? model.fmtTime(new Date(t.due)) + ' ' : '') + t.title)
+    text(r, titles.length ? titles.slice(0, 2).join(' / ') + (titles.length > 2 ? ' ほか' + (titles.length - 2) : '') : (x.items.length ? '完了' : '—'), 13,
+      titles.length ? (x.past ? C.overdue : C.text) : C.sub, { minScale: 0.8 })
+    r.addSpacer()
+    w.addSpacer(2)
+  }
+}
+
+function buildMonth(w, family, data, now, model, C) {
+  const today = model.startOfDay(now)
+  const first = new Date(now.getFullYear(), now.getMonth(), 1)
+  const count = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate()
+  const lead = (first.getDay() + 6) % 7 // 月曜始まり
+  const map = model.groupByDay(data.todos)
+  let remaining = 0
+  let overdue = 0
+  for (let n = 1; n <= count; n++) {
+    const x = dayInfo(map, new Date(first.getFullYear(), first.getMonth(), n), today, model)
+    remaining += x.open.length
+    if (x.past) overdue += x.open.length
+  }
+  w.url = appURL('view=month')
+
+  if (family === 'small') {
+    w.setPadding(16, 16, 16, 16)
+    text(w, (first.getMonth() + 1) + '月の残り', 13, C.sub)
+    w.addSpacer()
+    const n = w.addStack()
+    n.bottomAlignContent()
+    n.spacing = 4
+    text(n, remaining, 52, C.accent, { weight: 'heavy' })
+    text(n, '件', 16, C.sub)
+    w.addSpacer()
+    if (overdue) overduePill(w, overdue, C)
+    else text(w, '期限切れなし', 12, C.sub)
+    return
+  }
+
+  const big = family !== 'medium'
+  const cellW = big ? 44 : 42
+  const cellH = big ? 40 : 15
+  w.setPadding(big ? 14 : 10, 12, big ? 14 : 10, 12)
+  periodHead(w, (first.getMonth() + 1) + '月', first.getFullYear() + '年', remaining, big, C)
+  w.addSpacer(big ? 8 : 4)
+  const wk = w.addStack()
+  ;['月', '火', '水', '木', '金', '土', '日'].forEach((label, i) => {
+    const c = wk.addStack()
+    c.size = new Size(cellW, 0)
+    c.addSpacer()
+    text(c, label, big ? 11 : 9, i === 5 ? C.accent : i === 6 ? C.overdue : C.sub)
+    c.addSpacer()
+  })
+  w.addSpacer(big ? 4 : 2)
+  const weeks = Math.ceil((lead + count) / 7)
+  for (let r = 0; r < weeks; r++) {
+    const row = w.addStack()
+    for (let c = 0; c < 7; c++) {
+      const n = r * 7 + c - lead + 1
+      const cell = row.addStack()
+      cell.size = new Size(cellW, cellH)
+      if (n < 1 || n > count) continue
+      const x = dayInfo(map, new Date(first.getFullYear(), first.getMonth(), n), today, model)
+      cell.url = appURL('view=month&day=' + model.dayKey(x.d))
+      cell.cornerRadius = big ? 10 : 7
+      const color = x.isToday ? C.bg : x.open.length ? (x.past ? C.overdue : C.accent) : C.sub
+      if (x.isToday) cell.backgroundColor = C.accent
+      if (big) {
+        cell.layoutVertically()
+        cell.setPadding(3, 0, 3, 0)
+        centerLine(cell, n, 14, color, { weight: x.open.length || x.isToday ? 'heavy' : 'regular' })
+        cell.addSpacer()
+        centerLine(cell, x.open.length ? x.open.length + '件' : ' ', 9, color)
+      } else {
+        cell.addSpacer()
+        text(cell, n, 10, color, { weight: x.open.length || x.isToday ? 'heavy' : 'regular' })
+        cell.addSpacer()
+      }
+    }
+  }
+}
+
+function build(data, family, now, model, errorMessage, view) {
   const C = palette()
   const g = model.categorize(data.todos, now)
   const w = new ListWidget()
@@ -248,7 +450,9 @@ function build(data, family, now, model, errorMessage) {
   else if (f === 'accessoryInline') buildInline(w, g, now, model)
   else {
     w.backgroundColor = C.bg
-    if (f === 'small') buildSmall(w, g, now, model, C)
+    if (view === 'week') buildWeek(w, f, data, now, model, C)
+    else if (view === 'month') buildMonth(w, f, data, now, model, C)
+    else if (f === 'small') buildSmall(w, g, now, model, C)
     else if (f === 'large' || f === 'extraLarge') buildLarge(w, g, now, model, C)
     else buildMedium(w, g, now, model, C)
     if (errorMessage) {
