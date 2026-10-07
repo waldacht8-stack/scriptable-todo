@@ -551,7 +551,7 @@ asyncTests.push(['模擬実行 アプリ: 今日／週／月の切り替えと�
   }, sampleData())
   assertClean(env)
   assert.ok(views.today.indexOf('期限切れ') >= 0)
-  assert.ok(views.week.indexOf('今週') >= 0 && views.week.indexOf('今日に戻る') >= 0, views.week)
+  assert.ok(views.week.indexOf('今週') >= 0 && views.week.indexOf('今日に戻る') < 0, views.week)
   assert.ok(views.week.indexOf('今日の時刻つき') >= 0, '今日のTODOが週に出る')
   assert.ok(views.week.indexOf('期限なしのTODO') >= 0, '期限なしの案内')
   assert.ok(views.nextWeek.indexOf('来週') >= 0)
@@ -615,7 +615,7 @@ asyncTests.push(['模擬実行 月ウィジェットの日付タップ → 月�
   let shown = ''
   const env = await runTodo({ events: [], queryParameters: { view: 'month', day: key }, onWebViewPresent: async page => { shown = page.text() } }, sampleData())
   assertClean(env)
-  assert.ok(shown.indexOf('今日に戻る') >= 0, '月表示で開く')
+  assert.ok(shown.indexOf('今月') >= 0 && shown.indexOf('今日に戻る') < 0, '月表示で開く')
   if (t.getMonth() === new Date().getMonth()) assert.ok(shown.indexOf('明後日の予定') >= 0, 'その日が選ばれている\n' + shown)
 }])
 
@@ -648,6 +648,35 @@ asyncTests.push(['模擬実行 アプリ: 月表示は左右スワイプで月�
   assert.ok(seen.anim.indexOf('slide-next') >= 0, 'スライドのアニメーション')
   assert.ok(seen.vertical.indexOf(m(next)) >= 0, '縦スクロールでは変わらない')
   assert.ok(seen.prev.indexOf(m(prev)) >= 0, seen.prev)
+}])
+
+asyncTests.push(['模擬実行 アプリ: 週表示も左右スワイプで切り替え・「今週」ボタンで戻る', async () => {
+  const seen = {}
+  const env = await runTodo({
+    events: [],
+    onWebViewPresent: async page => {
+      const swipe = (x1, x2) => {
+        page.listeners.touchstart.forEach(fn => fn({ changedTouches: [{ clientX: x1, clientY: 200 }] }))
+        page.listeners.touchend.forEach(fn => fn({ changedTouches: [{ clientX: x2, clientY: 205 }] }))
+      }
+      page.click('view', 'week')
+      seen.home = page.text()
+      swipe(300, 100) // 左へ → 来週
+      seen.next = page.text()
+      seen.anim = page.window.document.getElementById('app').innerHTML
+      swipe(100, 300)
+      swipe(100, 300) // 右へ2回 → 先週
+      seen.prev = page.text()
+      page.click('nav-today')
+      seen.back = page.text()
+    },
+  }, sampleData())
+  assertClean(env)
+  assert.ok(seen.home.indexOf('今週') >= 0)
+  assert.ok(seen.next.indexOf('来週') >= 0, seen.next)
+  assert.ok(seen.anim.indexOf('class="week slide-next"') >= 0, 'スライドのアニメーション')
+  assert.ok(seen.prev.indexOf('先週') >= 0, seen.prev)
+  assert.ok(seen.back.indexOf('今日の時刻つき') >= 0, '「今週」で今週に戻る')
 }])
 
 asyncTests.push(['模擬実行 アプリ: 閉じる直前の変更も回収される', async () => {

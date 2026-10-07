@@ -38,6 +38,7 @@ section.day{margin-bottom:14px;gap:6px}
 .is-today .group{border:2px solid var(--accent)}
 .empty-day{padding:0 4px;font-size:13px;color:var(--muted)}
 .cal{background:var(--card);border-radius:16px;padding:10px 8px;margin-bottom:18px;touch-action:pan-y}
+.week{touch-action:pan-y}
 .slide-next{animation:slideNext .25s ease-out}
 .slide-prev{animation:slidePrev .25s ease-out}
 @keyframes slideNext{from{transform:translateX(40%);opacity:0}to{transform:none;opacity:1}}
@@ -202,12 +203,12 @@ function clientMain(DATA) {
       '" data-act="view" data-id="' + v[0] + '">' + v[1] + '</button>').join('') + '</div>'
   }
 
-  // 週・月の見出し（‹ 今日に戻る › と、その期間の残り件数）
-  function periodHeadHTML(sub, title, remaining) {
+  // 週・月の見出し（‹ 今週／今月 › と、その期間の残り件数）
+  function periodHeadHTML(sub, title, remaining, homeLabel) {
     return '<div class="head"><div class="head-row"><div><div class="date">' + esc(sub) + '</div><h1>' + esc(title) + '</h1></div>' +
       '<div class="count">残り<b>' + remaining + '</b>件</div></div>' +
       '<div class="nav"><button data-act="nav" data-id="-1" aria-label="前へ">‹</button>' +
-      '<button class="nav-today" data-act="nav-today">今日に戻る</button>' +
+      '<button class="nav-today" data-act="nav-today">' + homeLabel + '</button>' +
       '<button data-act="nav" data-id="1" aria-label="次へ">›</button></div></div>'
   }
 
@@ -255,7 +256,8 @@ function clientMain(DATA) {
     }
     const names = { '-1': '先週', '0': '今週', '1': '来週' }
     const range = (mon.getMonth() + 1) + '/' + mon.getDate() + '〜' + (sun.getMonth() + 1) + '/' + sun.getDate()
-    return periodHeadHTML(range, names[state.weekOffset] || range, remaining) + undatedNoteHTML() + body
+    return periodHeadHTML(range, names[state.weekOffset] || range, remaining, '今週') + undatedNoteHTML() +
+      '<div class="week' + (state.slide ? ' slide-' + state.slide : '') + '">' + body + '</div>'
   }
 
   // 月：カレンダー＋選んだ日のTODO
@@ -285,7 +287,7 @@ function clientMain(DATA) {
     }
     const selDate = new Date(sel + 'T00:00')
     const selItems = map[sel] || []
-    let html = periodHeadHTML(first.getFullYear() + '年', (first.getMonth() + 1) + '月', remaining) + undatedNoteHTML()
+    let html = periodHeadHTML(first.getFullYear() + '年', (first.getMonth() + 1) + '月', remaining, '今月') + undatedNoteHTML()
     html += '<div class="cal' + (state.slide ? ' slide-' + state.slide : '') + '"><div class="cal-week">' + ['月', '火', '水', '木', '金', '土', '日'].map((w, i) =>
       '<span class="' + (i === 5 ? 'sat' : i === 6 ? 'sun' : '') + '">' + w + '</span>').join('') + '</div>' +
       '<div class="cal-grid">' + cells + '</div></div>'
@@ -403,16 +405,18 @@ function clientMain(DATA) {
     persist()
   }
 
-  // 月表示：左右スワイプで前後の月へ（縦スクロールと区別するため、横にはっきり動いたときだけ）
-  function moveMonth(step) {
-    state.monthOffset += step
+  // 週・月表示：左右スワイプ（または ‹ ›）で前後の期間へ。縦スクロールと区別するため、横にはっきり動いたときだけ
+  function movePeriod(step) {
+    if (state.view === 'week') state.weekOffset += step
+    else if (state.view === 'month') state.monthOffset += step
+    else return
     state.slide = step > 0 ? 'next' : 'prev'
     render()
   }
   let touch = null
   document.addEventListener('touchstart', e => {
     const p = e.changedTouches && e.changedTouches[0]
-    touch = state.view === 'month' && !state.sheet && p ? { x: p.clientX, y: p.clientY } : null
+    touch = (state.view === 'month' || state.view === 'week') && !state.sheet && p ? { x: p.clientX, y: p.clientY } : null
   })
   document.addEventListener('touchend', e => {
     const p = e.changedTouches && e.changedTouches[0]
@@ -420,7 +424,7 @@ function clientMain(DATA) {
     const dx = p.clientX - touch.x
     const dy = p.clientY - touch.y
     touch = null
-    if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5) moveMonth(dx < 0 ? 1 : -1)
+    if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5) movePeriod(dx < 0 ? 1 : -1)
   })
 
   document.addEventListener('click', e => {
@@ -457,10 +461,7 @@ function clientMain(DATA) {
       render()
     }
     else if (act === 'nav') {
-      const step = Number(id)
-      if (state.view === 'month') return moveMonth(step)
-      if (state.view === 'week') state.weekOffset += step
-      render()
+      movePeriod(Number(id))
     }
     else if (act === 'nav-today') {
       state.weekOffset = 0
