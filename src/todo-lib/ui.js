@@ -232,9 +232,9 @@ function clientMain(DATA) {
       const calEl = document.getElementById('f-cal')
       const toCalendar = !existing && calEl && calEl.checked
       if (toCalendar && !due) {
-        // カレンダーに入れるには日付が必要
-        document.getElementById('f-date').focus()
-        return
+        // 日時なしでカレンダー登録を選んだら、今日の終日予定にする
+        due = new Date(toInputDate(new Date()) + 'T00:00')
+        allDay = true
       }
       const fields = { title: title, due: due ? due.toISOString() : null, allDay: allDay, note: note, updatedAt: stamp }
       if (existing) Object.assign(existing, fields)

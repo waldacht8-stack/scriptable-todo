@@ -45,28 +45,23 @@ async function writableCalendars(settings) {
 // 画面で「カレンダーにも登録」した TODO（pendingEvent）を iOS カレンダーに予定として作り、
 // カレンダー由来の TODO に切り替える。画面は保存のたびに全 TODO を送ってくる（pendingEvent が残ったまま）ので、
 // 作成済みかどうかは meta.eventLinks（TODO id → 予定）で判定して二重に作らない。
+// 戻り値: { created: [{ title, calendarTitle }], failed: [{ title, message }] }（失敗分は pendingEvent のまま残り再試行される）
 async function createPendingEvents(data) {
   const links = data.meta.eventLinks = data.meta.eventLinks || {}
-  let created = 0
+  const result = { created: [], failed: [] }
   for (const t of data.todos) {
     if (!t.pendingEvent) continue
     let link = links[t.id]
     if (!link) {
       if (!t.due) { delete t.pendingEvent; continue }
-      const start = new Date(t.due)
-      const ev = new CalendarEvent()
-      ev.title = t.title
-      ev.startDate = start
-      ev.endDate = t.allDay ? start : new Date(start.getTime() + 3600 * 1000)
-      ev.isAllDay = !!t.allDay
-      if (t.note) ev.notes = t.note
-      const cals = await Calendar.forEvents()
-      const want = typeof t.pendingEvent === 'string' ? t.pendingEvent : null
-      ev.calendar = cals.find(c => c.title === want && c.allowsContentModifications) || await Calendar.defaultForEvents()
-      await ev.save()
-      link = { eventKey: ev.identifier + '@' + start.toISOString(), calendarTitle: ev.calendar.title, due: t.due }
+      try {
+        link = await saveEvent(t)
+      } catch (e) {
+        result.failed.push({ title: t.title, message: e && e.message ? e.message : String(e) })
+        continue
+      }
       links[t.id] = link
-      created++
+      result.created.push({ title: t.title, calendarTitle: link.calendarTitle })
     }
     t.source = 'calendar'
     t.eventKey = link.eventKey
@@ -81,7 +76,30 @@ async function createPendingEvents(data) {
     data.dismissed[links[id].eventKey] = links[id].due
     delete links[id]
   }
-  return created
+  return result
+}
+
+async function saveEvent(t) {
+  const start = new Date(t.due)
+  const ev = new CalendarEvent()
+  ev.title = t.title
+  ev.startDate = start
+  ev.endDate = t.allDay ? start : new Date(start.getTime() + 3600 * 1000)
+  ev.isAllDay = !!t.allDay
+  if (t.note) ev.notes = t.note
+  // calendar はドキュメント上「読み取り専用」なので、代入できなくても既定のカレンダーに保存する
+  const want = typeof t.pendingEvent === 'string' ? t.pendingEvent : null
+  if (want) {
+    try {
+      const cal = (await Calendar.forEvents()).find(c => c.title === want && c.allowsContentModifications)
+      if (cal) ev.calendar = cal
+    } catch (e) {
+      console.warn('登録先カレンダーを指定できませんでした: ' + e)
+    }
+  }
+  await ev.save()
+  const calendarTitle = ev.calendar ? ev.calendar.title : 'カレンダー'
+  return { eventKey: ev.identifier + '@' + start.toISOString(), calendarTitle: calendarTitle, due: t.due }
 }
 
 module.exports = { syncCalendar, writableCalendars, createPendingEvents }

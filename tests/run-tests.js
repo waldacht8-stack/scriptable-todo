@@ -537,6 +537,28 @@ asyncTests.push(['模擬実行 アプリ: 「カレンダーにも登録」で�
   assert.strictEqual(env2.savedEvents.length, 0)
 }])
 
+asyncTests.push(['模擬実行 アプリ: 日時なしで「カレンダーにも登録」→ 今日の終日予定・成功を通知', async () => {
+  const env = await runTodo({
+    events: [],
+    onWebViewPresent: async (page, env) => {
+      page.click('add')
+      await env.wait(100)
+      const doc = page.window.document
+      doc.getElementById('f-title').value = '買い物'
+      doc.getElementById('f-cal').checked = true
+      doc.getElementById('f-calname').value = '仕事'
+      page.click('save')
+      await env.waitFor(() => env.savedEvents.length === 1, 3000, '予定の作成')
+    },
+  }, sampleData())
+  assertClean(env)
+  const ev = env.savedEvents[0]
+  assert.strictEqual(ev.isAllDay, true)
+  assert.strictEqual(ev.startDate.toDateString(), new Date().toDateString())
+  assert.ok(env.notifications.delivered.some(n => n.title === 'カレンダーに登録しました' && n.body.indexOf('買い物') >= 0), '成功を通知')
+  assert.ok(env.logs.some(l => l.text.indexOf('登録先カレンダーを指定できませんでした') >= 0), 'calendar 代入不可でも保存は続く')
+}])
+
 asyncTests.push(['模擬実行 アプリ: 閉じる直前の変更も回収される', async () => {
   const env = await runTodo({
     onWebViewPresent: async (page, env) => {

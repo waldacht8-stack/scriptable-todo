@@ -33,7 +33,8 @@ async function refresh(data, now) {
   let error = null
   try {
     // 画面で「カレンダーにも登録」したのに作れていない予定があれば、同期の前に作る
-    await withTimeout(sync.createPendingEvents(data), 10000, '予定の登録')
+    const r = await withTimeout(sync.createPendingEvents(data), 10000, '予定の登録')
+    if (r.failed.length) throw new Error(r.failed[0].message)
   } catch (e) {
     error = 'カレンダーに予定を登録できませんでした（' + messageOf(e) + '）。次回また試します。'
   }
@@ -87,6 +88,17 @@ async function runBackground() {
   }
 }
 
+async function notifyNow(title, body) {
+  try {
+    const n = new Notification()
+    n.title = title
+    n.body = body
+    await n.schedule()
+  } catch (e) {
+    console.error('通知できませんでした: ' + e)
+  }
+}
+
 async function showError(title, e) {
   // 画面を出せない実行環境（ショートカット・Siri）ではアラートが使えないので通知で知らせる
   if (!config.runsInApp) {
@@ -132,11 +144,15 @@ async function runApp() {
       if (msg.type !== 'save') return
       data.todos = msg.todos
       for (const d of msg.dismissed) data.dismissed[d.key] = d.due
+      // 作れなかった予定は pendingEvent のまま残り、次回の同期で再試行される
+      let r
       try {
-        await withTimeout(sync.createPendingEvents(data), 10000, '予定の登録')
+        r = await withTimeout(sync.createPendingEvents(data), 10000, '予定の登録')
       } catch (e) {
-        // 作れなかった予定は pendingEvent のまま残り、次回の同期で再試行される
+        r = { created: [], failed: [{ title: '', message: messageOf(e) }] }
       }
+      for (const c of r.created) await notifyNow('カレンダーに登録しました', c.title + '（' + c.calendarTitle + '）')
+      for (const f of r.failed) await notifyNow('カレンダーに登録できませんでした', (f.title ? f.title + '：' : '') + f.message)
       store.save(data)
       try {
         await withTimeout(notify.reschedule(data, new Date(), model), 10000, '通知予約')

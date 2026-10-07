@@ -65,7 +65,7 @@ function strict(target, cls, types) {
     set(t, p, v) {
       if (typeof p === 'symbol') { t[p] = v; return true }
       const f = findDescriptor(t, p)
-      if (!f || (!f.own && !f.d.set) || (f.own && typeof f.d.value === 'function' && !(p in ty))) {
+      if (!f || (!f.own && !f.d.set) || (f.d.get && !f.d.set) || (f.own && typeof f.d.value === 'function' && !(p in ty))) {
         throw new MockError(cls + '.' + p + ' は代入できるプロパティではありません')
       }
       if (ty[p]) checkType(cls, p, ty[p], v)
@@ -583,7 +583,8 @@ function createScriptableEnv(opts) {
   function CalendarEvent() {
     const ev = {
       identifier: null, title: '', notes: null, location: null, url: null,
-      startDate: null, endDate: null, isAllDay: false, calendar: null,
+      startDate: null, endDate: null, isAllDay: false,
+      get calendar() { return calendarObjs[0] }, // ドキュメント上 read-only（代入は例外）
       attendees: null, availability: 'busy', timeZone: 'Asia/Tokyo', __mockType: 'CalendarEvent',
       save() {
         if (typeof ev.title !== 'string' || !ev.title) return Promise.reject(new MockError('CalendarEvent.save: title が空'))
