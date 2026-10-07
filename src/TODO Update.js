@@ -30,7 +30,18 @@ async function main() {
     fm.writeString(dest, text)
     written.push(f.dest)
   }
-  return '版: ' + commit.sha.slice(0, 7) + '\n' + (commit.commit.message || '').split('\n')[0] + '\n\n' + written.length + 'ファイルを更新しました'
+  // 配信をやめたスクリプトは削除する（データフォルダは対象外）
+  const removed = []
+  for (const name of manifest.remove || []) {
+    if (name.indexOf('todo-data') === 0) continue
+    const p = fm.joinPath(dir, name)
+    if (fm.fileExists(p)) {
+      fm.remove(p)
+      removed.push(name)
+    }
+  }
+  return '版: ' + commit.sha.slice(0, 7) + '\n' + (commit.commit.message || '').split('\n')[0] + '\n\n' + written.length + 'ファイルを更新しました' +
+    (removed.length ? '\n不要なスクリプトを削除: ' + removed.join('、') : '')
 }
 
 const a = new Alert()

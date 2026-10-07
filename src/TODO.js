@@ -11,8 +11,7 @@ const model = importModule('todo-lib/model')
 const sync = importModule('todo-lib/sync')
 const notify = importModule('todo-lib/notify')
 const widget = importModule('todo-lib/widget')
-// 「TODO Lite」という名前で実行されたら、WebView を使わない予備画面（UITable）を使う
-const ui = Script.name().indexOf('Lite') >= 0 ? importModule('todo-lib/ui-table') : importModule('todo-lib/ui')
+const ui = importModule('todo-lib/ui')
 
 function messageOf(e) {
   return e && e.message ? e.message : String(e)

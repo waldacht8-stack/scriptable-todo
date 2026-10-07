@@ -32,7 +32,7 @@ function test(name, fn) {
 
 // --- 構文チェック（トップレベル await があるので async 関数として包む） ---
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
-for (const f of ['TODO.js', 'TODO Diag.js', 'TODO Update.js', 'todo-lib/model.js', 'todo-lib/store.js', 'todo-lib/sync.js', 'todo-lib/notify.js', 'todo-lib/widget.js', 'todo-lib/ui.js', 'todo-lib/ui-table.js']) {
+for (const f of ['TODO.js', 'TODO Diag.js', 'TODO Update.js', 'todo-lib/model.js', 'todo-lib/store.js', 'todo-lib/sync.js', 'todo-lib/notify.js', 'todo-lib/widget.js', 'todo-lib/ui.js']) {
   test('構文: ' + f, () => { new AsyncFunction('module', fs.readFileSync(path.join(SRC, f), 'utf8')) })
 }
 
@@ -43,6 +43,16 @@ const now = at('2026-10-07T12:00')
 function todo(over) {
   return Object.assign({ id: model.newId(), title: 't', due: null, allDay: false, note: '', done: false, doneAt: null, source: 'manual', createdAt: '2026-10-01T00:00:00.000Z' }, over)
 }
+
+test('manifest: 配信ファイルはすべて存在し、削除対象と重ならない', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(SRC, 'manifest.json'), 'utf8'))
+  for (const f of m.files) assert.ok(fs.existsSync(path.join(SRC, f.src)), f.src)
+  const dests = m.files.map(f => f.dest)
+  for (const r of m.remove || []) {
+    assert.ok(dests.indexOf(r) < 0, '配信と削除が重複: ' + r)
+    assert.ok(r.indexOf('todo-data') !== 0, 'データは削除対象にしない')
+  }
+})
 
 test('分類: 期限切れ/今日/今後/期限なし/完了', () => {
   const todos = [
@@ -207,109 +217,6 @@ test('画面の動作: 描画/追加/完了/削除', () => {
   assert.strictEqual(saved.todos.length, 1)
   assert.deepStrictEqual(saved.dismissed.map(d => d.key), ['ev1'])
 })
-
-// UITable 版の予備画面：Scriptable の UI クラスを最小限モックして行の組み立てと操作を確認する
-function tableMocks(script) {
-  const log = { presented: false, alerts: [] }
-  const queue = script.slice() // Alert の応答を順に返す: { index, fields }
-  class Color { constructor(hex) { this.hex = hex } static dynamic(a) { return a } }
-  const Font = { systemFont: s => ({ s }), boldSystemFont: s => ({ s }), semiboldSystemFont: s => ({ s }) }
-  class UITableCell {
-    static text(title, subtitle) { const c = new UITableCell(); c.type = 'text'; c.title = title; c.subtitle = subtitle; return c }
-    static button(title) { const c = new UITableCell(); c.type = 'button'; c.title = title; return c }
-    leftAligned() {} centerAligned() {} rightAligned() {}
-  }
-  class UITableRow { constructor() { this.cells = [] } addCell(c) { this.cells.push(c) } }
-  class UITable {
-    constructor() { this.rows = []; log.table = this }
-    addRow(r) { this.rows.push(r) }
-    removeAllRows() { this.rows = [] }
-    reload() { log.reloaded = (log.reloaded || 0) + 1 }
-    async present() { log.presented = true }
-  }
-  class Alert {
-    constructor() { this.fields = []; this.actions = [] }
-    addTextField(p, v) { this.fields.push(v || '') }
-    addAction(a) { this.actions.push(a) }
-    addDestructiveAction(a) { this.actions.push(a) }
-    addCancelAction() {}
-    textFieldValue(i) { return this.fields[i] }
-    async answer() {
-      log.alerts.push(this.title)
-      const r = queue.shift() || { index: -1 }
-      if (r.fields) this.fields = r.fields
-      return r.index
-    }
-    presentAlert() { return this.answer() }
-    presentSheet() { return this.answer() }
-    present() { return this.answer() }
-  }
-  class DatePicker { async pickDate() { return new Date(2026, 9, 10, 15, 30) } async pickDateAndTime() { return new Date(2026, 9, 10, 15, 30) } }
-  const SFSymbol = { named: () => ({ image: {} }) }
-  return { log, queue, globals: { Color, Font, UITableCell, UITableRow, UITable, Alert, DatePicker, SFSymbol } }
-}
-const flush = () => new Promise(r => setTimeout(r, 0))
-const texts = table => table.rows.map(r => r.cells.map(c => c.title + (c.subtitle ? '|' + c.subtitle : '')).join(' ')).join('\n')
-
-asyncTests.push(['UITable画面: 行の組み立て/追加/完了/削除', async () => {
-  const m = tableMocks([])
-  const ui = loadModule('todo-lib/ui-table.js', m.globals)
-  const t0 = Date.now()
-  const data = {
-    todos: [
-      todo({ id: 'o', title: '期限切れ', due: new Date(t0 - 86400e3 * 2).toISOString() }),
-      todo({ id: 'n', title: '期限なし' }),
-      todo({ id: 'u', title: '来週', due: new Date(t0 + 86400e3 * 7).toISOString() }),
-      todo({ id: 'cal1', title: '歯医者', due: new Date(t0 + 86400e3 * 3).toISOString(), source: 'calendar', eventKey: 'ev1' }),
-      todo({ id: 'd', title: '済み', done: true, doneAt: new Date().toISOString() }),
-    ],
-  }
-  const saves = []
-  await ui.present(data, { model: model, error: 'テストエラー', onMessage: async msg => { saves.push(JSON.parse(JSON.stringify(msg))) } })
-  const table = m.log.table
-  assert.ok(m.log.presented, 'present された')
-  let s = texts(table)
-  for (const w of ['今日 残り2件', '1 / 3 件 完了', 'テストエラー', '期限切れ', '今後', 'カレンダー', '完了済み 1件を表示', '＋ TODOを追加']) assert.ok(s.indexOf(w) >= 0, w + '\n' + s)
-  const rowOf = title => table.rows.find(r => r.cells.some(c => c.title === title))
-
-  // 完了済みの開閉
-  table.rows.find(r => r.cells[0].title.indexOf('完了済み') >= 0).onSelect(0)
-  assert.ok(texts(table).indexOf('完了済みを隠す') >= 0)
-
-  // 完了トグル
-  rowOf('期限なし').cells[0].onTap()
-  await flush(); await flush()
-  assert.strictEqual(saves.length, 1)
-  assert.ok(saves[0].todos.find(t => t.id === 'n').doneAt)
-  assert.ok(m.log.reloaded >= 1)
-
-  // 追加：タイトル入力 → 日付と時刻を選ぶ
-  m.queue.push({ index: 0, fields: ['牛乳を買う', ''] }, { index: 2 })
-  rowOf('＋ TODOを追加').onSelect(0)
-  for (let i = 0; i < 5; i++) await flush()
-  const milk = saves[saves.length - 1].todos.find(t => t.title === '牛乳を買う')
-  assert.ok(milk, '追加された')
-  assert.strictEqual(milk.source, 'manual')
-  assert.strictEqual(new Date(milk.due).getHours(), 15)
-  assert.strictEqual(milk.allDay, false)
-
-  // カレンダー由来の削除：メニュー → 削除 → 確認
-  m.queue.push({ index: 1 }, { index: 0 })
-  rowOf('歯医者').onSelect(0)
-  for (let i = 0; i < 5; i++) await flush()
-  const last = saves[saves.length - 1]
-  assert.ok(!last.todos.some(t => t.id === 'cal1'))
-  assert.deepStrictEqual(last.dismissed.map(d => d.key), ['ev1'])
-
-  // 手動TODOの編集：タイトル変更 → 期限なし
-  m.queue.push({ index: 0 }, { index: 0, fields: ['来週（改）', 'メモ'] }, { index: 0 })
-  rowOf('来週').onSelect(0)
-  for (let i = 0; i < 6; i++) await flush()
-  const ed = saves[saves.length - 1].todos.find(t => t.id === 'u')
-  assert.strictEqual(ed.title, '来週（改）')
-  assert.strictEqual(ed.due, null)
-  assert.strictEqual(ed.note, 'メモ')
-}])
 
 // ===== Scriptable 模擬環境で TODO.js を丸ごと実行する（tests/scriptable-mock.js） =====
 const { createScriptableEnv } = require('./scriptable-mock')
@@ -585,14 +492,6 @@ asyncTests.push(['模擬実行 アプリ: カレンダー失敗は画面のエ�
   assertClean(env)
   assert.ok(seen.indexOf('カレンダーを読み込めませんでした') >= 0, seen)
   assert.ok(env.files.exists(DATA_FILE), '空データでも保存される')
-}])
-
-asyncTests.push(['模擬実行 アプリ（TODO Lite / UITable）', async () => {
-  let rows = 0
-  const env = await runTodo({ scriptName: 'TODO Lite', events: sampleEvents(), onTablePresent: async table => { rows = table.rows.length } }, sampleData())
-  assertClean(env)
-  assert.strictEqual(env.webViews.length, 0)
-  assert.ok(rows > 5, String(rows))
 }])
 
 asyncTests.push(['模擬実行 store: ファイルなし → 既定値 / 壊れたJSON → 退避して例外', async () => {
