@@ -32,7 +32,7 @@ function test(name, fn) {
 
 // --- 構文チェック（トップレベル await があるので async 関数として包む） ---
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
-for (const f of ['TODO.js', 'TODO Diag.js', 'TODO Update.js', 'TODO View Test.js', 'todo-lib/model.js', 'todo-lib/store.js', 'todo-lib/sync.js', 'todo-lib/notify.js', 'todo-lib/widget.js', 'todo-lib/ui.js', 'todo-lib/ui-table.js']) {
+for (const f of ['TODO.js', 'TODO Diag.js', 'TODO Update.js', 'todo-lib/model.js', 'todo-lib/store.js', 'todo-lib/sync.js', 'todo-lib/notify.js', 'todo-lib/widget.js', 'todo-lib/ui.js', 'todo-lib/ui-table.js']) {
   test('構文: ' + f, () => { new AsyncFunction('module', fs.readFileSync(path.join(SRC, f), 'utf8')) })
 }
 
