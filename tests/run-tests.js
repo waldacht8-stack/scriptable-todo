@@ -525,6 +525,51 @@ asyncTests.push(['模擬実行 ウィジェットの行タップ: 存在しな�
   assert.ok(env.pages[0].text().indexOf('を完了しました') < 0)
 }])
 
+asyncTests.push(['模擬実行 アプリ: 今日／週／月の切り替えと前後移動', async () => {
+  const views = {}
+  const env = await runTodo({
+    events: sampleEvents(),
+    onWebViewPresent: async page => {
+      views.today = page.text()
+      page.click('view', 'week')
+      views.week = page.text()
+      page.click('nav', '1')
+      views.nextWeek = page.text()
+      page.click('nav-today')
+      page.click('view', 'month')
+      views.month = page.text()
+      // 予定がある日（明後日）を選ぶ
+      const t = new Date()
+      t.setDate(t.getDate() + 2)
+      const key = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0')
+      if (t.getMonth() !== new Date().getMonth()) page.click('nav', '1')
+      page.click('pick-day', key)
+      views.picked = page.text()
+      // 週表示の行から完了にできる
+      page.click('view', 'week')
+    },
+  }, sampleData())
+  assertClean(env)
+  assert.ok(views.today.indexOf('期限切れ') >= 0)
+  assert.ok(views.week.indexOf('今週') >= 0 && views.week.indexOf('今日に戻る') >= 0, views.week)
+  assert.ok(views.week.indexOf('今日の時刻つき') >= 0, '今日のTODOが週に出る')
+  assert.ok(views.week.indexOf('期限なしのTODO') >= 0, '期限なしの案内')
+  assert.ok(views.nextWeek.indexOf('来週') >= 0)
+  const m = new Date().getMonth() + 1
+  assert.ok(views.month.indexOf(m + '月') >= 0, views.month)
+  assert.ok(views.picked.indexOf('明後日の予定') >= 0, '選んだ日のTODO\n' + views.picked)
+}])
+
+asyncTests.push(['store: v1 のデータは取り込み範囲を45日に移行（ユーザーが広げた値は維持）', async () => {
+  const env = createScriptableEnv()
+  const store = env.importModule('todo-lib/store')
+  assert.strictEqual(store.normalize({ settings: { lookaheadDays: 14 } }).settings.lookaheadDays, 45)
+  assert.strictEqual(store.normalize({ settings: { lookaheadDays: 60 } }).settings.lookaheadDays, 60)
+  assert.strictEqual(store.normalize({ version: 2, settings: { lookaheadDays: 14 } }).settings.lookaheadDays, 14, 'v2 で自分で設定した値は変えない')
+  assert.strictEqual(store.normalize(null).version, 2)
+  env.dispose()
+}])
+
 asyncTests.push(['模擬実行 アプリ: 閉じる直前の変更も回収される', async () => {
   const env = await runTodo({
     onWebViewPresent: async (page, env) => {

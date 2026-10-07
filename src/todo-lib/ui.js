@@ -27,6 +27,31 @@ h1{margin:2px 0 0;font-size:34px;font-weight:800;letter-spacing:.02em}
 .bar{height:8px;border-radius:4px;background:var(--track);overflow:hidden}
 .bar i{display:block;height:8px;border-radius:4px;background:var(--accent);transition:width .3s}
 .ratio{font-size:13px;color:var(--sub)}
+.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;background:var(--track);border-radius:12px;padding:4px;margin-bottom:18px}
+.tab{border:none;background:none;border-radius:9px;min-height:38px;font-size:15px;font-weight:700;color:var(--sub)}
+.tab.on{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.nav{display:flex;gap:8px}
+.nav button{border:none;background:var(--card);border-radius:10px;min-height:44px;min-width:48px;font-size:20px;font-weight:700;color:var(--text)}
+.nav .nav-today{flex:1;font-size:14px}
+.note{margin:0 4px 14px;font-size:12px;color:var(--sub)}
+section.day{margin-bottom:14px;gap:6px}
+.is-today .group{border:2px solid var(--accent)}
+.empty-day{padding:0 4px;font-size:13px;color:var(--muted)}
+.cal{background:var(--card);border-radius:16px;padding:10px 8px;margin-bottom:18px}
+.cal-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));text-align:center;font-size:12px;font-weight:700;color:var(--sub);margin-bottom:6px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
+.cell{border:none;background:none;border-radius:10px;min-height:52px;padding:4px 0;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:15px;font-weight:600;color:var(--text)}
+.cell.blank{visibility:hidden}
+.cell .num{width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center}
+.cell.today .num{background:var(--accent);color:#fff}
+.cell.sel{background:var(--bg);box-shadow:inset 0 0 0 2px var(--accent)}
+.badge{min-width:18px;height:18px;border-radius:9px;padding:0 5px;font-size:11px;font-weight:700;line-height:18px;background:var(--accent);color:#fff}
+.badge.od{background:var(--overdue)}
+.badge.done{background:var(--track);color:var(--sub)}
+.badge.none{background:none}
+.sun{color:var(--overdue)}
+.sat{color:var(--accent)}
+.cell.today .num.sun,.cell.today .num.sat{color:#fff}
 .toast{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--btn);color:var(--btn-text);border-radius:14px;padding:10px 10px 10px 16px;font-size:14px;font-weight:600;margin-bottom:16px}
 .toast button{background:none;border:1px solid currentColor;color:inherit;border-radius:10px;padding:8px 12px;font-size:14px;font-weight:700;min-height:40px;flex-shrink:0}
 .error{background:var(--overdue-bg);color:var(--overdue);border-radius:14px;padding:12px 14px;font-size:13px;font-weight:600;margin-bottom:16px;line-height:1.5}
@@ -89,7 +114,7 @@ section{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 // 画面側で動くコード。toString() で HTML に埋め込むため、外の変数は参照しない
 // （categorize などの model 関数は同じ <script> 内に埋め込まれる）
 function clientMain(DATA) {
-  const state = { todos: DATA.todos, dismissed: [], showDone: false, sheet: null, toast: DATA.toast }
+  const state = { todos: DATA.todos, dismissed: [], showDone: false, sheet: null, toast: DATA.toast, view: 'today', weekOffset: 0, monthOffset: 0, selectedDay: null }
   const queue = []
   let waiter = null
 
@@ -148,14 +173,49 @@ function clientMain(DATA) {
       '<div class="group' + (o.groupClass ? ' ' + o.groupClass : '') + '">' + body + '</div></section>'
   }
 
-  function render() {
-    const now = new Date()
+  const WEEK = ['日', '月', '火', '水', '木', '金', '土']
+
+  function dayKey(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
+  }
+
+  // 期限のある TODO を日付ごとにまとめる（未完了が先、その中は時刻順）
+  function byDay() {
+    const map = {}
+    for (const t of state.todos) {
+      if (!t.due) continue
+      const k = dayKey(new Date(t.due))
+      if (!map[k]) map[k] = []
+      map[k].push(t)
+    }
+    for (const k of Object.keys(map)) map[k].sort((a, b) => (a.done === b.done ? compareDue(a, b) : a.done ? 1 : -1))
+    return map
+  }
+
+  function tabsHTML() {
+    return '<div class="tabs" role="tablist">' + [['today', '今日'], ['week', '週'], ['month', '月']].map(v =>
+      '<button role="tab" aria-selected="' + (state.view === v[0]) + '" class="tab' + (state.view === v[0] ? ' on' : '') +
+      '" data-act="view" data-id="' + v[0] + '">' + v[1] + '</button>').join('') + '</div>'
+  }
+
+  // 週・月の見出し（‹ 今日に戻る › と、その期間の残り件数）
+  function periodHeadHTML(sub, title, remaining) {
+    return '<div class="head"><div class="head-row"><div><div class="date">' + esc(sub) + '</div><h1>' + esc(title) + '</h1></div>' +
+      '<div class="count">残り<b>' + remaining + '</b>件</div></div>' +
+      '<div class="nav"><button data-act="nav" data-id="-1" aria-label="前へ">‹</button>' +
+      '<button class="nav-today" data-act="nav-today">今日に戻る</button>' +
+      '<button data-act="nav" data-id="1" aria-label="次へ">›</button></div></div>'
+  }
+
+  function undatedNoteHTML() {
+    const n = state.todos.filter(t => !t.done && !t.due).length
+    return n ? '<p class="note">期限なしのTODO ' + n + '件は「今日」に表示しています</p>' : ''
+  }
+
+  function renderToday(now) {
     const g = categorize(state.todos, now)
     const pct = g.stats.total ? Math.round(g.stats.done / g.stats.total * 100) : 0
-    let html = ''
-    if (DATA.error) html += '<div class="error">' + esc(DATA.error) + '</div>'
-    if (state.toast) html += '<div class="toast"><span>「' + esc(state.toast.title) + '」を完了しました</span><button data-act="undo-toast">元に戻す</button></div>'
-    html += '<div class="head"><div class="head-row"><div><div class="date">' + fmtDate(now) + '</div><h1>今日</h1></div>' +
+    let html = '<div class="head"><div class="head-row"><div><div class="date">' + fmtDate(now) + '</div><h1>今日</h1></div>' +
       '<div class="count">残り<b>' + g.stats.remaining + '</b>件</div></div>' +
       '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
       '<div class="ratio">' + g.stats.done + ' / ' + g.stats.total + ' 件 完了</div></div>'
@@ -167,6 +227,76 @@ function clientMain(DATA) {
         (state.showDone ? '完了済みを隠す' : '完了済み ' + g.doneToday.length + '件を表示') + '</button>'
       if (state.showDone) html += '<div class="group">' + g.doneToday.map(t => itemHTML(t, now, true)).join('') + '</div>'
     }
+    return html
+  }
+
+  // 週：月曜〜日曜の7日分を日付ごとに
+  function renderWeek(now) {
+    const today = startOfDay(now)
+    const mon = addDays(today, -((today.getDay() + 6) % 7) + 7 * state.weekOffset)
+    const sun = addDays(mon, 6)
+    const map = byDay()
+    let remaining = 0
+    let body = ''
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(mon, i)
+      const items = map[dayKey(d)] || []
+      remaining += items.filter(t => !t.done).length
+      const isToday = dayKey(d) === dayKey(today)
+      body += '<section class="day' + (isToday ? ' is-today' : '') + '"><div class="sec-head ' + (isToday ? 'c-today' : 'c-up') + '">' +
+        '<span class="dot"></span><h2>' + (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）' + (isToday ? '・今日' : '') + '</h2>' +
+        '<span>' + items.length + '</span></div>' +
+        (items.length ? '<div class="group">' + items.map(t => itemHTML(t, now, true)).join('') + '</div>' : '<div class="empty-day">予定なし</div>') +
+        '</section>'
+    }
+    const names = { '-1': '先週', '0': '今週', '1': '来週' }
+    const range = (mon.getMonth() + 1) + '/' + mon.getDate() + '〜' + (sun.getMonth() + 1) + '/' + sun.getDate()
+    return periodHeadHTML(range, names[state.weekOffset] || range, remaining) + undatedNoteHTML() + body
+  }
+
+  // 月：カレンダー＋選んだ日のTODO
+  function renderMonth(now) {
+    const today = startOfDay(now)
+    const first = new Date(now.getFullYear(), now.getMonth() + state.monthOffset, 1)
+    const days = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate()
+    const lead = (first.getDay() + 6) % 7 // 月曜始まり
+    const map = byDay()
+    const sel = state.selectedDay && state.selectedDay.indexOf(dayKey(first).slice(0, 7)) === 0
+      ? state.selectedDay
+      : (state.monthOffset === 0 ? dayKey(today) : dayKey(first))
+    let remaining = 0
+    let cells = ''
+    for (let i = 0; i < lead; i++) cells += '<span class="cell blank"></span>'
+    for (let n = 1; n <= days; n++) {
+      const d = new Date(first.getFullYear(), first.getMonth(), n)
+      const k = dayKey(d)
+      const items = map[k] || []
+      const open = items.filter(t => !t.done).length
+      remaining += open
+      const badge = open
+        ? '<span class="badge' + (d < today ? ' od' : '') + '">' + open + '</span>'
+        : items.length ? '<span class="badge done">✓</span>' : '<span class="badge none"></span>'
+      cells += '<button class="cell' + (k === dayKey(today) ? ' today' : '') + (k === sel ? ' sel' : '') + '" data-act="pick-day" data-id="' + k + '">' +
+        '<span class="num' + (d.getDay() === 0 ? ' sun' : d.getDay() === 6 ? ' sat' : '') + '">' + n + '</span>' + badge + '</button>'
+    }
+    const selDate = new Date(sel + 'T00:00')
+    const selItems = map[sel] || []
+    let html = periodHeadHTML(first.getFullYear() + '年', (first.getMonth() + 1) + '月', remaining) + undatedNoteHTML()
+    html += '<div class="cal"><div class="cal-week">' + ['月', '火', '水', '木', '金', '土', '日'].map((w, i) =>
+      '<span class="' + (i === 5 ? 'sat' : i === 6 ? 'sun' : '') + '">' + w + '</span>').join('') + '</div>' +
+      '<div class="cal-grid">' + cells + '</div></div>'
+    html += sectionHTML('c-today', (selDate.getMonth() + 1) + '/' + selDate.getDate() + '（' + WEEK[selDate.getDay()] + '）', selItems, now,
+      { small: true, showEmpty: '予定なし' })
+    return html
+  }
+
+  function render() {
+    const now = new Date()
+    let html = ''
+    if (DATA.error) html += '<div class="error">' + esc(DATA.error) + '</div>'
+    if (state.toast) html += '<div class="toast"><span>「' + esc(state.toast.title) + '」を完了しました</span><button data-act="undo-toast">元に戻す</button></div>'
+    html += tabsHTML()
+    html += state.view === 'week' ? renderWeek(now) : state.view === 'month' ? renderMonth(now) : renderToday(now)
     html += '<button class="add" data-act="add">' + PLUS + 'TODOを追加</button>'
     document.getElementById('app').innerHTML = html
   }
@@ -297,6 +427,26 @@ function clientMain(DATA) {
     else if (act === 'close') closeSheet()
     else if (act === 'save') saveSheet()
     else if (act === 'delete') deleteFromSheet(el)
+    else if (act === 'view') {
+      state.view = id
+      render()
+    }
+    else if (act === 'nav') {
+      const step = Number(id)
+      if (state.view === 'week') state.weekOffset += step
+      else if (state.view === 'month') state.monthOffset += step
+      render()
+    }
+    else if (act === 'nav-today') {
+      state.weekOffset = 0
+      state.monthOffset = 0
+      state.selectedDay = null
+      render()
+    }
+    else if (act === 'pick-day') {
+      state.selectedDay = id
+      render()
+    }
     else if (act === 'undo-toast') {
       const u = state.toast && state.todos.find(x => x.id === state.toast.id)
       if (u) {

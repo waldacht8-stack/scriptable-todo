@@ -7,7 +7,7 @@ const DEFAULT_SETTINGS = {
   morningMinute: 0,
   eveningHour: 20,          // 夜の残りタスク通知の時刻（null で送らない）
   eveningMinute: 0,
-  lookaheadDays: 14,        // 今日から何日先までカレンダーを取り込むか
+  lookaheadDays: 45,        // 今日から何日先までカレンダーを取り込むか（月表示のため約1か月半）
   excludeCalendars: ['日本の祝日', '祝日', '誕生日', 'Birthdays', 'Japanese Holidays', 'Holidays in Japan'],
 }
 
@@ -26,13 +26,18 @@ function dataPath() {
   return files().joinPath(dataDir(), 'todo-data.json')
 }
 
+const DATA_VERSION = 2
+
 function normalize(raw) {
   const data = raw || {}
+  const settings = Object.assign({}, DEFAULT_SETTINGS, data.settings || {})
+  // v1 → v2: 月表示のためにカレンダー取り込み範囲を 14日 → 45日 に広げる（保存済みの古い既定値を上書き）
+  if ((data.version || 1) < 2 && settings.lookaheadDays < DEFAULT_SETTINGS.lookaheadDays) settings.lookaheadDays = DEFAULT_SETTINGS.lookaheadDays
   return {
-    version: 1,
+    version: DATA_VERSION,
     todos: Array.isArray(data.todos) ? data.todos : [],
     dismissed: data.dismissed && typeof data.dismissed === 'object' ? data.dismissed : {},
-    settings: Object.assign({}, DEFAULT_SETTINGS, data.settings || {}),
+    settings: settings,
     meta: Object.assign({ lastSync: null, lastErrorAt: null }, data.meta || {}),
   }
 }
