@@ -619,6 +619,37 @@ asyncTests.push(['模擬実行 月ウィジェットの日付タップ → 月�
   if (t.getMonth() === new Date().getMonth()) assert.ok(shown.indexOf('明後日の予定') >= 0, 'その日が選ばれている\n' + shown)
 }])
 
+asyncTests.push(['模擬実行 アプリ: 月表示は左右スワイプで月を切り替える（縦スクロールでは変わらない）', async () => {
+  const seen = {}
+  const env = await runTodo({
+    events: [],
+    onWebViewPresent: async page => {
+      const swipe = (x1, y1, x2, y2) => {
+        page.listeners.touchstart.forEach(fn => fn({ changedTouches: [{ clientX: x1, clientY: y1 }] }))
+        page.listeners.touchend.forEach(fn => fn({ changedTouches: [{ clientX: x2, clientY: y2 }] }))
+      }
+      page.click('view', 'month')
+      swipe(300, 200, 120, 215) // 左へ → 次の月
+      seen.next = page.text()
+      seen.anim = page.window.document.getElementById('app').innerHTML
+      swipe(200, 100, 190, 400) // ほぼ縦 → 変わらない
+      seen.vertical = page.text()
+      swipe(80, 200, 300, 190) // 右へ → 戻る
+      swipe(80, 200, 300, 190) // さらに右へ → 前の月
+      seen.prev = page.text()
+    },
+  }, sampleData())
+  assertClean(env)
+  const m = d => (d.getMonth() + 1) + '月'
+  const now = new Date()
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  assert.ok(seen.next.indexOf(m(next)) >= 0, seen.next)
+  assert.ok(seen.anim.indexOf('slide-next') >= 0, 'スライドのアニメーション')
+  assert.ok(seen.vertical.indexOf(m(next)) >= 0, '縦スクロールでは変わらない')
+  assert.ok(seen.prev.indexOf(m(prev)) >= 0, seen.prev)
+}])
+
 asyncTests.push(['模擬実行 アプリ: 閉じる直前の変更も回収される', async () => {
   const env = await runTodo({
     onWebViewPresent: async (page, env) => {

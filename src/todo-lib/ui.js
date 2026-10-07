@@ -37,7 +37,11 @@ h1{margin:2px 0 0;font-size:34px;font-weight:800;letter-spacing:.02em}
 section.day{margin-bottom:14px;gap:6px}
 .is-today .group{border:2px solid var(--accent)}
 .empty-day{padding:0 4px;font-size:13px;color:var(--muted)}
-.cal{background:var(--card);border-radius:16px;padding:10px 8px;margin-bottom:18px}
+.cal{background:var(--card);border-radius:16px;padding:10px 8px;margin-bottom:18px;touch-action:pan-y}
+.slide-next{animation:slideNext .25s ease-out}
+.slide-prev{animation:slidePrev .25s ease-out}
+@keyframes slideNext{from{transform:translateX(40%);opacity:0}to{transform:none;opacity:1}}
+@keyframes slidePrev{from{transform:translateX(-40%);opacity:0}to{transform:none;opacity:1}}
 .cal-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));text-align:center;font-size:12px;font-weight:700;color:var(--sub);margin-bottom:6px}
 .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
 .cell{border:none;background:none;border-radius:10px;min-height:52px;padding:4px 0;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:15px;font-weight:600;color:var(--text)}
@@ -282,7 +286,7 @@ function clientMain(DATA) {
     const selDate = new Date(sel + 'T00:00')
     const selItems = map[sel] || []
     let html = periodHeadHTML(first.getFullYear() + '年', (first.getMonth() + 1) + '月', remaining) + undatedNoteHTML()
-    html += '<div class="cal"><div class="cal-week">' + ['月', '火', '水', '木', '金', '土', '日'].map((w, i) =>
+    html += '<div class="cal' + (state.slide ? ' slide-' + state.slide : '') + '"><div class="cal-week">' + ['月', '火', '水', '木', '金', '土', '日'].map((w, i) =>
       '<span class="' + (i === 5 ? 'sat' : i === 6 ? 'sun' : '') + '">' + w + '</span>').join('') + '</div>' +
       '<div class="cal-grid">' + cells + '</div></div>'
     html += sectionHTML('c-today', (selDate.getMonth() + 1) + '/' + selDate.getDate() + '（' + WEEK[selDate.getDay()] + '）', selItems, now,
@@ -299,6 +303,7 @@ function clientMain(DATA) {
     html += state.view === 'week' ? renderWeek(now) : state.view === 'month' ? renderMonth(now) : renderToday(now)
     html += '<button class="add" data-act="add">' + PLUS + 'TODOを追加</button>'
     document.getElementById('app').innerHTML = html
+    state.slide = null // スライドのアニメーションは切り替えた直後の1回だけ
   }
 
   function toInputDate(d) {
@@ -398,6 +403,26 @@ function clientMain(DATA) {
     persist()
   }
 
+  // 月表示：左右スワイプで前後の月へ（縦スクロールと区別するため、横にはっきり動いたときだけ）
+  function moveMonth(step) {
+    state.monthOffset += step
+    state.slide = step > 0 ? 'next' : 'prev'
+    render()
+  }
+  let touch = null
+  document.addEventListener('touchstart', e => {
+    const p = e.changedTouches && e.changedTouches[0]
+    touch = state.view === 'month' && !state.sheet && p ? { x: p.clientX, y: p.clientY } : null
+  })
+  document.addEventListener('touchend', e => {
+    const p = e.changedTouches && e.changedTouches[0]
+    if (!touch || !p) return
+    const dx = p.clientX - touch.x
+    const dy = p.clientY - touch.y
+    touch = null
+    if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5) moveMonth(dx < 0 ? 1 : -1)
+  })
+
   document.addEventListener('click', e => {
     const el = e.target.closest('[data-act]')
     if (!el) return
@@ -433,8 +458,8 @@ function clientMain(DATA) {
     }
     else if (act === 'nav') {
       const step = Number(id)
+      if (state.view === 'month') return moveMonth(step)
       if (state.view === 'week') state.weekOffset += step
-      else if (state.view === 'month') state.monthOffset += step
       render()
     }
     else if (act === 'nav-today') {
