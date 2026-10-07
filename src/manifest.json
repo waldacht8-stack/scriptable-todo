@@ -4,6 +4,7 @@
     { "src": "TODO.js", "dest": "TODO Lite.js" },
     { "src": "TODO Diag.js", "dest": "TODO Diag.js" },
     { "src": "TODO Update.js", "dest": "TODO Update.js" },
+    { "src": "TODO View Test.js", "dest": "TODO View Test.js" },
     { "src": "todo-lib/model.js", "dest": "todo-lib/model.js" },
     { "src": "todo-lib/store.js", "dest": "todo-lib/store.js" },
     { "src": "todo-lib/sync.js", "dest": "todo-lib/sync.js" },
