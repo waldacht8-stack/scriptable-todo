@@ -87,6 +87,9 @@ jobs:
           sleep 6
           xcrun simctl io "$UDID" screenshot "shots/settings.png"
           # ウィジェットの見本（構成 × 大きさ × 色合い）
+          # カレンダーの許可の確認が見本に重ならないよう、先に許可しておく
+          xcrun simctl privacy "$UDID" grant calendar com.todoapp.TodoApp || true
+          xcrun simctl terminate "$UDID" com.todoapp.TodoApp || true
           SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -widgetpreview -theme focus -AppleLanguages "(ja)" -AppleLocale ja_JP
           sleep 7
           xcrun simctl io "$UDID" screenshot "shots/widgets.png"
