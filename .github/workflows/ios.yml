@@ -7,7 +7,7 @@ name: iOS app
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]   # エージェントの作業ブランチでもビルドして確かめる（リリースは main のみ）
     paths: ['ios/**', '.github/workflows/ios.yml']
   workflow_dispatch:
 
@@ -63,7 +63,7 @@ jobs:
             sleep 7
             xcrun simctl io "$UDID" screenshot "shots/home-$layout-$theme.png"
           done
-          SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -tab 2 -AppleLanguages "(ja)" -AppleLocale ja_JP
+          SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -tab 4 -AppleLanguages "(ja)" -AppleLocale ja_JP
           sleep 6
           xcrun simctl io "$UDID" screenshot "shots/settings.png"
 

@@ -28,8 +28,10 @@ struct RootView: View {
         let p = store.theme.palette
         TabView(selection: $tab) {
             HomeView().tabItem { Label("今日", systemImage: "sun.horizon") }.tag(0)
-            WakeTab().tabItem { Label("起床", systemImage: "alarm") }.tag(1)
-            SettingsView().tabItem { Label("設定", systemImage: "gearshape") }.tag(2)
+            WakeRootView().tabItem { Label("起床", systemImage: "alarm") }.tag(1)
+            HabitRootView().tabItem { Label("習慣", systemImage: "leaf") }.tag(2)
+            FocusTimerRootView().tabItem { Label("集中", systemImage: "timer") }.tag(3)
+            SettingsView().tabItem { Label("設定", systemImage: "gearshape") }.tag(4)
         }
         // デザイン（色合い）をすべての画面に渡す
         .environment(\.palette, p)
@@ -39,39 +41,3 @@ struct RootView: View {
     }
 }
 
-// MARK: - 起床（段階0：チェックインと AlarmKit のテスト。段階3で作り込む）
-
-struct WakeTab: View {
-    @State private var state = WakeData.state()
-    @State private var alarmMessage = ""
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("チェックイン") {
-                    if let at = state.checkedInAt {
-                        Text("最後のチェックイン：\(at.formatted(date: .abbreviated, time: .shortened))")
-                    } else {
-                        Text("まだチェックインしていません")
-                    }
-                    Button("起きた！（チェックイン）") {
-                        WakeData.checkIn()
-                        state = WakeData.state()
-                    }
-                }
-                Section {
-                    Button("1分後にテストアラーム") {
-                        Task { alarmMessage = await AlarmTest.scheduleInOneMinute() }
-                    }
-                    if !alarmMessage.isEmpty { Text(alarmMessage).font(.footnote) }
-                } header: {
-                    Text("アラーム（AlarmKit）")
-                } footer: {
-                    Text("マナーモード・画面ロック中でも鳴るかを確かめます。")
-                }
-            }
-            .navigationTitle("起床")
-            .onAppear { state = WakeData.state() }
-        }
-    }
-}
