@@ -14,6 +14,11 @@ on:
 permissions:
   contents: write
 
+# 同じブランチで新しいビルドが始まったら古いものは止める（リリースの差し替えがぶつからないように）
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-15-intel
@@ -128,6 +133,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete ios-latest --yes --cleanup-tag || true
-          gh release create ios-latest TodoApp.ipa shots/*.png --title "アプリ版（最新ビルド）" \
-            --notes "GitHub Actions が自動で作ったビルド。iPhone の Safari で TodoApp.ipa をダウンロードし、SideStore で開いてインストール。" --prerelease
+          # 消して作り直すと、その間リンクが 404 になったり下書きのまま残ったりするので、ファイルの差し替えにする
+          if gh release view ios-latest >/dev/null 2>&1; then
+            gh release upload ios-latest TodoApp.ipa shots/*.png --clobber
+            gh release edit ios-latest --draft=false --prerelease
+          else
+            gh release create ios-latest TodoApp.ipa shots/*.png --title "アプリ版（最新ビルド）" \
+              --notes "GitHub Actions が自動で作ったビルド。iPhone の Safari で TodoApp.ipa をダウンロードし、SideStore で開いてインストール。" --prerelease
+          fi
