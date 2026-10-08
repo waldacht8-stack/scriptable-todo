@@ -1,2 +1,3 @@
 todo-data/
 *.broken-*
+.claude/scheduled_tasks.lock
