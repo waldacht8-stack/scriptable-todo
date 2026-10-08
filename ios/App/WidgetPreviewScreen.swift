@@ -14,11 +14,13 @@ struct WidgetPreviewScreen: View {
                 Text(large ? "ウィジェットの見本（大）" : "ウィジェットの見本（小・中）")
                     .font(.title3.weight(.bold)).foregroundStyle(p.text)
                 if large {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 10) {
-                        ForEach(TodayLayout.allCases) { layout in
-                            VStack(alignment: .leading, spacing: 4) {
-                                caption(layout)
-                                widget(Self.data(items, layout: layout, palette: p), .systemLarge, CGSize(width: 364, height: 382), scale: 0.47)
+                    ForEach([[TodayLayout.focus, TodayLayout.board], [TodayLayout.thumb, TodayLayout.timeline]], id: \.self) { pair in
+                        HStack(alignment: .top, spacing: 8) {
+                            ForEach(pair) { layout in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    caption(layout)
+                                    widget(Self.data(items, layout: layout, palette: p), .systemLarge, CGSize(width: 364, height: 382), scale: 0.47)
+                                }
                             }
                         }
                     }

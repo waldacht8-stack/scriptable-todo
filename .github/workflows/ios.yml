@@ -94,7 +94,7 @@ jobs:
           sleep 7
           xcrun simctl io "$UDID" screenshot "shots/widgets.png"
           SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -widgetpreview -widgetsize large -theme night -AppleLanguages "(ja)" -AppleLocale ja_JP
-          sleep 7
+          sleep 12
           xcrun simctl io "$UDID" screenshot "shots/widgets-large.png"
 
       - name: 実機用にビルド（署名なし）して IPA を作る
