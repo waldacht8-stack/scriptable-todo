@@ -104,7 +104,7 @@ struct UndoToast: View {
                 .padding(.horizontal, 16).padding(.top, 6)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .task(id: u.id) {
-                    try? await Task.sleep(for: .seconds(UndoInfo.seconds))
+                    try? await Task.sleep(for: .seconds(ProcessInfo.processInfo.arguments.contains("-shotundo") ? 120 : UndoInfo.seconds))
                     if store.undo?.id == u.id { withAnimation(.snappy) { store.undo = nil } }
                 }
             }
