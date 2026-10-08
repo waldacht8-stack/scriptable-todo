@@ -25,6 +25,9 @@ struct AddSheet: View {
             Form {
                 Section {
                     TextField("やること", text: $title).focused($focused).submitLabel(.done)
+                    if editing == nil, !hasDue, let preview = QuickParse.summary(QuickParse.parse(title)) {
+                        Label(preview, systemImage: "wand.and.stars").font(.footnote.weight(.semibold)).foregroundStyle(.tint)
+                    }
                     Toggle(isOn: $important) { Label("重要（先頭に固定）", systemImage: "star") }
                 }
                 Section {
@@ -68,6 +71,12 @@ struct AddSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(editing == nil ? "追加" : "保存") {
+                        let q = QuickParse.parse(title)
+                        if editing == nil && !hasDue && q.hasSchedule { // 期限を手で決めていなければ、文から読み取った期限を使う
+                            store.add(q.title, due: q.due, allDay: q.allDay, note: note, repeatRule: q.repeatRule, important: important)
+                            dismiss()
+                            return
+                        }
                         let d = allDay ? Calendar.current.startOfDay(for: due) : due
                         if var item = editing {
                             item.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
