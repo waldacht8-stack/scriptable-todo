@@ -8,7 +8,7 @@ struct WidgetPreviewScreen: View {
     private let large: Bool = ProcessInfo.processInfo.arguments.contains("large")
 
     var body: some View {
-        let items: [TodoItem] = TodoData.demo()
+        let items: [TodoItem] = Self.sampleItems()
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 Text(large ? "ウィジェットの見本（大）" : "ウィジェットの見本（小・中）")
@@ -54,6 +54,32 @@ struct WidgetPreviewScreen: View {
             .clipShape(shape)
             .scaleEffect(scale)
             .frame(width: size.width * scale, height: size.height * scale)
+    }
+
+    /// 見本：長めの題名で、切れ方や折り返しが見えるようにする（一般的な内容のみ）
+    private static func sampleItems() -> [TodoItem] {
+        let cal = Calendar.current
+        let now = Date.now
+        let today = cal.startOfDay(for: now)
+        func day(_ offset: Int, _ h: Int, _ m: Int = 0) -> Date {
+            let d: Date = cal.date(byAdding: .day, value: offset, to: today) ?? today
+            return cal.date(bySettingHour: h, minute: m, second: 0, of: d) ?? d
+        }
+        func later(_ minutes: Int) -> Date {
+            let d: Date = cal.date(byAdding: .minute, value: minutes, to: now) ?? now
+            return min(max(d, today), day(0, 23, 50))
+        }
+        return [
+            TodoItem(title: "図書館に本を返却する", due: day(-1, 17)),
+            TodoItem(title: "朝のストレッチを10分", done: true, due: later(-50), doneAt: later(-50)),
+            TodoItem(title: "ゴミ出し（燃えるゴミ）", done: true, due: later(-20), doneAt: later(-20)),
+            TodoItem(title: "牛乳と卵とパンを買う", due: later(60), important: true),
+            TodoItem(title: "部屋の掃除と洗濯をする", due: today, allDay: true),
+            TodoItem(title: "請求書の内容を確認する", due: later(180)),
+            TodoItem(title: "美容院に電話して予約する", due: day(1, 11)),
+            TodoItem(title: "車検の見積もりをもらう", due: day(5, 0), allDay: true),
+            TodoItem(title: "旅行の持ち物リストを作る"),
+        ]
     }
 
     private static func data(_ all: [TodoItem], layout: TodayLayout, palette: Palette) -> TodoWidgetData {

@@ -186,12 +186,22 @@ struct TodoWidgetView: View {
     /// 1行：丸を押すと完了（どの構成でも共通）
     private func itemLine(_ item: TodoItem, color: Color) -> some View {
         let clock: String = JP.clock(item, none: "")
+        let small: Bool = family == .systemSmall
+        let clockFont: Font = small ? Font.system(size: 10, weight: .bold).monospacedDigit() : Font.caption2.weight(.semibold).monospacedDigit()
+        let titleFont: Font = small ? Font.system(size: 12, weight: .semibold) : Font.caption.weight(.semibold)
+        let circleSize: CGFloat = small ? 11 : 13
         return Button(intent: ToggleTodoIntent(id: item.id)) {
-            HStack(spacing: 6) {
-                Image(systemName: "circle").font(.system(size: 13, weight: .semibold)).foregroundStyle(color)
-                Text(item.title).font(.caption.weight(.semibold)).foregroundStyle(p.text).lineLimit(1)
+            HStack(alignment: .firstTextBaseline, spacing: small ? 4 : 6) {
+                Image(systemName: "circle").font(.system(size: circleSize, weight: .semibold)).foregroundStyle(color)
+                if small && !clock.isEmpty {
+                    // 小さいサイズは時刻を左に（折り返さない）
+                    Text(clock).font(clockFont).foregroundStyle(color).lineLimit(1).fixedSize()
+                }
+                Text(item.title).font(titleFont).foregroundStyle(p.text).lineLimit(small ? 2 : 1)
                 Spacer(minLength: 0)
-                Text(clock).font(.caption2.monospacedDigit().weight(.semibold)).foregroundStyle(p.sub)
+                if !small && !clock.isEmpty {
+                    Text(clock).font(clockFont).foregroundStyle(p.sub).lineLimit(1).fixedSize()
+                }
             }
         }
         .buttonStyle(.plain)
@@ -209,15 +219,18 @@ struct TodoWidgetView: View {
         let cal = Calendar.current
         let today = cal.startOfDay(for: .now)
         let todays: [TodoItem] = todayItems
-        let limit: Int = family == .systemLarge ? 9 : (family == .systemMedium ? 3 : 2)
+        let limit: Int = family == .systemLarge ? 9 : 3
         let chipGap: CGFloat = family == .systemSmall ? 2 : 4
-        return VStack(alignment: .leading, spacing: 5) {
+        let gap: CGFloat = family == .systemSmall ? 4 : 5
+        return VStack(alignment: .leading, spacing: gap) {
             HStack(spacing: chipGap) {
                 ForEach(0..<7, id: \.self) { i in
                     dayChip(cal.date(byAdding: .day, value: i, to: today) ?? today, selected: i == 0)
                 }
             }
-            Text("今日のやること \(todays.count)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+            if family != .systemSmall {
+                Text("今日のやること \(todays.count)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+            }
             ForEach(todays.prefix(limit)) { item in
                 itemLine(item, color: item.isOverdue() ? p.overdue : p.accent)
             }
@@ -259,7 +272,8 @@ struct TodoWidgetView: View {
 
     // MARK: ながれ（1本の線と「いま」の印）
 
-    private var flowTimeWidth: CGFloat { 34 }
+    /// 時刻の列の幅（「00:00」が入る幅。文字は fixedSize で折り返さない）
+    private var flowTimeWidth: CGFloat { family == .systemSmall ? 30 : 38 }
 
     private var timeline: some View {
         let now = Date.now
@@ -272,7 +286,9 @@ struct TodoWidgetView: View {
         let markerAt: Int = nowIndex - start
         let lineX: CGFloat = flowTimeWidth + 6 + 6
         return VStack(alignment: .leading, spacing: 5) {
-            Text("のこり \(data.items.count) 件 ・ 完了 \(data.doneToday)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+            if family != .systemSmall {
+                Text("のこり \(data.items.count) 件 ・ 完了 \(data.doneToday)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+            }
             ZStack(alignment: .topLeading) {
                 Rectangle().fill(p.sub.opacity(0.35)).frame(width: 2).padding(.leading, lineX).padding(.vertical, 4)
                 VStack(alignment: .leading, spacing: 5) {
@@ -321,15 +337,19 @@ struct TodoWidgetView: View {
         let titleColor: Color = item.done ? p.sub : p.text
         let symbol: String = item.done ? "checkmark.circle.fill" : "circle"
         let dotBack: Color = p.background.first ?? p.card
-        return HStack(spacing: 6) {
-            Text(flowTime(item)).font(.caption2.monospacedDigit().weight(.bold)).foregroundStyle(timeColor)
-                .lineLimit(1).minimumScaleFactor(0.7)
+        let small: Bool = family == .systemSmall
+        let timeFont: Font = small ? Font.system(size: 10, weight: .bold).monospacedDigit() : Font.caption2.weight(.bold).monospacedDigit()
+        let titleFont: Font = small ? Font.system(size: 12, weight: .semibold) : Font.caption.weight(.semibold)
+        return HStack(alignment: .top, spacing: 6) {
+            Text(flowTime(item)).font(timeFont).foregroundStyle(timeColor)
+                .lineLimit(1).fixedSize()
                 .frame(width: flowTimeWidth, alignment: .leading)
+                .padding(.top, 1)
             Image(systemName: symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(timeColor)
                 .frame(width: 14, height: 14)
                 .background(Circle().fill(dotBack))
-            Text(item.title).strikethrough(item.done).font(.caption.weight(.semibold)).foregroundStyle(titleColor)
-                .lineLimit(1)
+            Text(item.title).strikethrough(item.done).font(titleFont).foregroundStyle(titleColor)
+                .lineLimit(small ? 2 : 1)
             Spacer(minLength: 0)
         }
     }
@@ -337,6 +357,7 @@ struct TodoWidgetView: View {
     private var nowMarker: some View {
         HStack(spacing: 6) {
             Text("いま").font(.caption2.weight(.heavy)).foregroundStyle(p.overdue)
+                .lineLimit(1).fixedSize()
                 .frame(width: flowTimeWidth, alignment: .leading)
             Circle().fill(p.overdue).frame(width: 8, height: 8).frame(width: 14)
             Rectangle().fill(p.overdue).frame(height: 1.5)
