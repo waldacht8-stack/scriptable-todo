@@ -18,7 +18,11 @@ function palette() {
 function text(stack, value, size, color, opts) {
   const o = opts || {}
   const t = stack.addText(String(value))
-  t.font = o.weight === 'heavy' ? Font.heavySystemFont(size) : o.weight === 'regular' ? Font.systemFont(size) : Font.boldSystemFont(size)
+  t.font = o.weight === 'heavy' ? Font.heavySystemFont(size)
+    : o.weight === 'regular' ? Font.systemFont(size)
+    : o.weight === 'semibold' ? Font.semiboldSystemFont(size)
+    : o.weight === 'medium' ? Font.mediumSystemFont(size)
+    : Font.boldSystemFont(size)
   if (color) t.textColor = color
   t.lineLimit = o.lines || 1
   if (o.minScale) t.minimumScaleFactor = o.minScale
@@ -33,15 +37,23 @@ function circle(stack, color, size) {
 }
 
 
+function star(stack, size) {
+  const img = stack.addImage(SFSymbol.named('star.fill').image)
+  img.imageSize = new Size(size, size)
+  img.tintColor = new Color('#E0A100')
+  return img
+}
+
 function row(parent, t, color, label, labelColor, size, C) {
   const r = parent.addStack()
   r.layoutHorizontally()
   r.centerAlignContent()
   r.spacing = 7
   circle(r, color, size - 2)
-  text(r, t.title, size, C.text)
+  if (t.important) star(r, size - 4)
+  text(r, t.title, size, C.text, { weight: 'semibold' })
   r.addSpacer()
-  if (label) text(r, label, size - 3, labelColor)
+  if (label) text(r, label, size - 3, labelColor, { weight: 'medium' })
   // 行をタップ → そのTODOを完了にしてアプリを開く（中・大サイズのみ有効。小・ロック画面は全体の url）
   r.url = doneURL(t)
   return r
@@ -59,7 +71,7 @@ function overduePill(parent, count, C) {
   p.centerAlignContent()
   p.spacing = 5
   circle(p, C.overdue, 8)
-  text(p, '期限切れ ' + count + '件', 12, C.overdueText)
+  text(p, '期限切れ ' + count + '件', 12, C.overdueText, { weight: 'semibold' })
   return p
 }
 
@@ -96,7 +108,7 @@ function dueLabel(t, now, model) {
 function countHead(parent, d, size, C) {
   const n = parent.addStack()
   n.bottomAlignContent()
-  n.spacing = 4
+  n.spacing = 3
   text(n, d.items.length, size, C.accent, { weight: 'heavy' })
   text(n, '件', Math.round(size / 3.2), C.sub)
 }
@@ -105,24 +117,32 @@ function emptyLine(parent, d, C) {
   parent.addSpacer()
   if (d.celebrate) {
     text(parent, '全部完了！', 20, C.accent, { weight: 'heavy' })
-    text(parent, 'おつかれさまでした', 12, C.sub)
+    text(parent, 'おつかれさまでした', 12, C.sub, { weight: 'medium' })
   } else {
-    text(parent, '未完了のTODOはありません', 15, C.sub)
+    text(parent, 'やることはありません', 15, C.sub, { weight: 'medium' })
   }
   parent.addSpacer()
 }
 
+// 小：件数を大きく、その下に一番近いTODOを1件
 function buildSmall(w, d, now, model, C) {
-  w.setPadding(16, 16, 16, 16)
-  text(w, '未完了', 13, C.sub)
+  w.setPadding(14, 16, 14, 16)
+  const top = w.addStack()
+  top.centerAlignContent()
+  text(top, '未完了', 13, C.sub, { weight: 'semibold' })
+  top.addSpacer()
+  if (d.overdue) text(top, '⚠︎ ' + d.overdue, 13, C.overdue)
+  countHead(w, d, 44, C)
   w.addSpacer()
-  countHead(w, d, 56, C)
-  w.addSpacer()
-  if (d.celebrate) text(w, d.items.length ? '今日の分は全部完了！' : '全部完了！', 12, C.accent, { minScale: 0.8 })
-  else if (d.overdue) overduePill(w, d.overdue, C)
+  const first = d.items[0]
+  if (d.celebrate && !first) text(w, '全部完了！', 15, C.accent, { weight: 'heavy' })
+  else if (d.celebrate) text(w, '今日の分は完了！', 13, C.accent, { minScale: 0.8 })
+  else if (!first) text(w, 'やることはありません', 12, C.sub, { weight: 'medium', minScale: 0.8 })
   else {
-    const first = d.items[0]
-    text(w, first ? dueLabel(first, now, model) + ' ' + first.title : 'すべて完了', 12, C.sub, { minScale: 0.8 })
+    // カウントダウンを出すときは高さが足りないのでタイトルは1行
+    text(w, first.title, 14, C.text, { weight: 'semibold', lines: d.next ? 1 : 2, minScale: 0.85 })
+    w.addSpacer(2)
+    text(w, dueLabel(first, now, model), 12, dueColor(first, now, model, C), { weight: 'medium' })
   }
   if (d.next) {
     w.addSpacer(4)
@@ -139,11 +159,11 @@ function buildMedium(w, d, now, model, C) {
   const left = h.addStack()
   left.layoutVertically()
   left.size = new Size(76, 0)
-  text(left, '未完了', 12, C.sub)
+  text(left, '未完了', 12, C.sub, { weight: 'semibold' })
   left.addSpacer()
-  text(left, d.items.length, 44, C.accent, { weight: 'heavy' })
+  countHead(left, d, 40, C)
   if (d.celebrate) text(left, '今日の分は完了', 11, C.accent, { minScale: 0.8 })
-  else text(left, d.overdue ? '期限切れ ' + d.overdue : '件', 12, d.overdue ? C.overdue : C.sub)
+  else if (d.overdue) text(left, '⚠︎ 期限切れ ' + d.overdue, 11, C.overdue, { minScale: 0.8 })
   if (d.next) {
     left.addSpacer(6)
     addNextLeft(left, d.next, 13, C.sub, C.text, true)
@@ -158,17 +178,20 @@ function buildMedium(w, d, now, model, C) {
     row(right, t, c, dueLabel(t, now, model), c, 15, C)
   }
   right.addSpacer()
-  if (d.items.length > 3) text(right, 'ほか ' + (d.items.length - 3) + '件', 11, C.sub)
+  if (d.items.length > 3) text(right, 'ほか ' + (d.items.length - 3) + '件 ›', 11, C.sub, { weight: 'medium' })
 }
 
 function buildLarge(w, d, now, model, C) {
   w.setPadding(18, 18, 18, 18)
   const head = w.addStack()
   head.bottomAlignContent()
-  text(head, '期限が近い順', 20, C.text, { weight: 'heavy' })
+  const title = head.addStack()
+  title.layoutVertically()
+  text(title, model.fmtDate(now) + '・期限が近い順', 12, C.sub, { weight: 'semibold' })
+  text(title, 'やること', 20, C.text, { weight: 'heavy' })
   head.addSpacer()
-  text(head, '未完了 ', 14, C.sub)
-  text(head, d.items.length, 22, C.accent, { weight: 'heavy' })
+  text(head, '未完了 ', 13, C.sub, { weight: 'medium' })
+  countHead(head, d, 24, C)
   w.addSpacer(6)
   const info = w.addStack()
   info.centerAlignContent()
@@ -189,7 +212,7 @@ function buildLarge(w, d, now, model, C) {
     row(box, t, c, dueLabel(t, now, model), model.isOverdue(t, now) ? C.overdueText : c, 15, C)
     w.addSpacer(3)
   }
-  if (d.items.length > max) text(w, '　ほか ' + (d.items.length - max) + '件', 11, C.sub)
+  if (d.items.length > max) text(w, '　ほか ' + (d.items.length - max) + '件 ›', 11, C.sub, { weight: 'medium' })
   w.addSpacer()
 }
 
@@ -210,14 +233,14 @@ function buildCircular(w, d) {
 
 function buildRectangular(w, d, now, model) {
   const first = d.items[0]
-  text(w, '期限が近いTODO', 11, null)
-  text(w, first ? dueLabel(first, now, model) + ' ' + first.title : 'なし', 15, null, { weight: 'heavy', minScale: 0.7 })
-  text(w, d.overdue ? '期限切れ ' + d.overdue + '件' : '未完了 ' + d.items.length + '件', 11, null)
+  text(w, first ? '次のTODO・' + dueLabel(first, now, model) : 'TODO', 11, null, { weight: 'semibold' })
+  text(w, first ? first.title : 'やることはありません', 15, null, { weight: 'heavy', minScale: 0.7 })
+  text(w, (d.overdue ? '⚠︎ 期限切れ ' + d.overdue + '件・' : '') + '未完了 ' + d.items.length + '件', 11, null, { weight: 'medium' })
 }
 
 function buildInline(w, d, now, model) {
   const first = d.items[0]
-  text(w, '未完了' + d.items.length + '件' + (first ? '・' + dueLabel(first, now, model) + ' ' + first.title : ''), 12, null)
+  text(w, first ? dueLabel(first, now, model) + ' ' + first.title + '（残り' + d.items.length + '）' : 'やることはありません', 12, null)
 }
 
 function build(data, family, now, model, errorMessage) {
@@ -225,6 +248,8 @@ function build(data, family, now, model, errorMessage) {
   const d = model.byDeadline(data.todos, now)
   const g = model.categorize(data.todos, now)
   d.celebrate = g.stats.total > 0 && g.stats.remaining === 0 // 今日の分をすべて終えた
+  // 24時間より先のカウントダウンは「49:12:03」のように読みにくいので出さない（行の期限ラベルで足りる）
+  if (d.next && new Date(d.next.due) - now > 24 * 3600e3) d.next = null
   const w = new ListWidget()
   w.url = URLScheme.forRunningScript()
   w.refreshAfterDate = new Date(now.getTime() + 15 * 60000)
@@ -239,7 +264,7 @@ function build(data, family, now, model, errorMessage) {
     else buildMedium(w, d, now, model, C)
     if (errorMessage) {
       w.addSpacer(2)
-      text(w, '同期エラー：アプリを開いて確認', 9, C.overdue)
+      text(w, '⚠︎ 同期できませんでした（タップして確認）', 9, C.overdue)
     }
   }
   return w

@@ -141,6 +141,27 @@ section{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 .sheet select{font:inherit;font-size:17px;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;width:100%;min-height:48px}
 .sheet .check-row{flex-direction:row;align-items:center;gap:10px;font-size:16px;font-weight:600;color:var(--text);min-height:44px}
 .sheet .check-row input{width:24px;height:24px;min-height:0;padding:0;flex-shrink:0;accent-color:var(--accent)}
+/* 押したときの手応え */
+button{transition:transform .12s,opacity .12s}
+button:active{transform:scale(.96);opacity:.75}
+.body:active,.cell:active{transform:none;opacity:.55}
+.add:active{transform:scale(.97);opacity:1}
+/* 完了にした行は少し残してから消す */
+.item.leaving{animation:leave .35s ease-in forwards}
+.item.leaving .title{text-decoration:line-through;color:var(--sub)}
+@keyframes leave{60%{opacity:.6;transform:none}100%{opacity:0;transform:translateX(24px)}}
+/* お知らせは追加ボタンの上に浮かせる */
+.toast{position:fixed;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 88px);z-index:5;margin:0;
+  box-shadow:0 8px 24px rgba(0,0,0,.22);animation:rise .25s ease-out}
+@keyframes rise{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+/* シート */
+.backdrop{animation:fade .2s ease-out}
+.sheet{animation:up .25s ease-out}
+.grab{align-self:center;width:40px;height:5px;border-radius:3px;background:var(--track);margin:-10px 0 -4px}
+@keyframes fade{from{opacity:0}}
+@keyframes up{from{transform:translateY(40px);opacity:.4}}
+.sheet input::placeholder,.sheet textarea::placeholder{color:var(--muted)}
+.sub-hint{font-size:12px;font-weight:400;color:var(--sub)}
 `
 
 // 画面側で動くコード。toString() で HTML に埋め込むため、外の変数は参照しない
@@ -195,7 +216,7 @@ function clientMain(DATA) {
     const label = fmtDue(t, now)
     const cal = t.source === 'calendar' || t.pendingEvent ? '<span class="tag">' + CAL + 'カレンダー</span>' : ''
     const rep = t.repeat ? '<span class="tag">' + REPEAT + esc(repeatLabel(t.repeat)) + '</span>' : ''
-    return '<div class="item' + (small ? ' small' : '') + (t.done ? ' done' : '') + (t.important ? ' important' : '') + '">' +
+    return '<div data-row class="item' + (small ? ' small' : '') + (t.done ? ' done' : '') + (t.important ? ' important' : '') + '">' +
       '<button class="check' + (t.done ? ' on' : '') + '" data-act="toggle" data-id="' + esc(t.id) + '" aria-label="' + (t.done ? '未完了に戻す' : '完了にする') + '">' + CHECK + '</button>' +
       '<button class="body" data-act="edit" data-id="' + esc(t.id) + '">' +
       '<div class="title">' + (t.important ? STAR : '') + esc(t.title) + '</div>' +
@@ -241,12 +262,12 @@ function clientMain(DATA) {
 
   // 週・月の見出し。期間の切り替えは左右スワイプ。別の期間を見ているときだけ「今週／今月」に戻るボタンを出す
   const BACK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg>'
-  function periodHeadHTML(sub, title, remaining, homeLabel, away) {
+  function periodHeadHTML(sub, title, remaining, homeLabel, away, unit) {
     return '<div class="head"><div class="head-row"><div><div class="date">' + esc(sub) + '</div>' +
       '<div class="title-row"><h1>' + esc(title) + '</h1>' +
       (away ? '<button class="home" data-act="nav-today">' + BACK + homeLabel + '</button>' : '') + '</div></div>' +
       '<div class="count">残り<b>' + remaining + '</b>件</div></div>' +
-      '<div class="swipe-hint">‹ 左右にスワイプで切り替え ›</div></div>'
+      '<div class="swipe-hint">‹ 左右にスワイプで前後の' + unit + 'へ ›</div></div>'
   }
 
   function undatedNoteHTML() {
@@ -260,7 +281,7 @@ function clientMain(DATA) {
     let html = '<div class="head"><div class="head-row"><div><div class="date">' + fmtDate(now) + '</div><h1>今日</h1></div>' +
       '<div class="count">残り<b>' + g.stats.remaining + '</b>件</div></div>' +
       '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
-      '<div class="ratio">' + g.stats.done + ' / ' + g.stats.total + ' 件 完了</div></div>'
+      '<div class="ratio">' + (g.stats.total ? g.stats.total + '件中 ' + g.stats.done + '件 完了' : '今日のTODOはまだありません') + '</div></div>'
     if (g.stats.total > 0 && g.stats.remaining === 0) {
       // 今日の分をすべて終えたらお祝い
       html += '<div class="celebrate" role="status">' +
@@ -268,7 +289,7 @@ function clientMain(DATA) {
         '<b>今日は全部完了！</b><span>おつかれさまでした</span></div>'
     }
     html += sectionHTML('c-overdue', '期限切れ', g.overdue, now, { groupClass: 'overdue' })
-    html += sectionHTML('c-today', '今日', g.today, now, { showEmpty: '今日のTODOはありません' })
+    html += sectionHTML('c-today', '今日', g.today, now, { showEmpty: '今日のTODOはありません。下のボタンから追加できます' })
     html += sectionHTML('c-up', '今後', g.upcoming, now, { small: true })
     if (g.doneToday.length) {
       html += '<button class="toggle-done" data-act="show-done">' + CHECK.replace('#fff', 'currentColor') +
@@ -294,12 +315,12 @@ function clientMain(DATA) {
       body += '<section class="day' + (isToday ? ' is-today' : '') + '"><div class="sec-head ' + (isToday ? 'c-today' : 'c-up') + '">' +
         '<span class="dot"></span><h2>' + (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）' + (isToday ? '・今日' : '') + '</h2>' +
         '<span>' + items.length + '</span></div>' +
-        (items.length ? '<div class="group">' + items.map(t => itemHTML(t, now, true)).join('') + '</div>' : '<div class="empty-day">予定なし</div>') +
+        (items.length ? '<div class="group">' + items.map(t => itemHTML(t, now, true)).join('') + '</div>' : '<div class="empty-day">TODOなし</div>') +
         '</section>'
     }
     const names = { '-1': '先週', '0': '今週', '1': '来週' }
     const range = (mon.getMonth() + 1) + '/' + mon.getDate() + '〜' + (sun.getMonth() + 1) + '/' + sun.getDate()
-    return periodHeadHTML(range, names[state.weekOffset] || range, remaining, '今週', state.weekOffset !== 0) + undatedNoteHTML() +
+    return periodHeadHTML(range, names[state.weekOffset] || range, remaining, '今週', state.weekOffset !== 0, '週') + undatedNoteHTML() +
       '<div class="week' + (state.slide ? ' slide-' + state.slide : '') + '">' + body + '</div>'
   }
 
@@ -330,12 +351,12 @@ function clientMain(DATA) {
     }
     const selDate = new Date(sel + 'T00:00')
     const selItems = map[sel] || []
-    let html = periodHeadHTML(first.getFullYear() + '年', (first.getMonth() + 1) + '月', remaining, '今月', state.monthOffset !== 0) + undatedNoteHTML()
+    let html = periodHeadHTML(first.getFullYear() + '年', (first.getMonth() + 1) + '月', remaining, '今月', state.monthOffset !== 0, '月') + undatedNoteHTML()
     html += '<div class="cal' + (state.slide ? ' slide-' + state.slide : '') + '"><div class="cal-week">' + ['月', '火', '水', '木', '金', '土', '日'].map((w, i) =>
       '<span class="' + (i === 5 ? 'sat' : i === 6 ? 'sun' : '') + '">' + w + '</span>').join('') + '</div>' +
       '<div class="cal-grid">' + cells + '</div></div>'
     html += sectionHTML('c-today', (selDate.getMonth() + 1) + '/' + selDate.getDate() + '（' + WEEK[selDate.getDay()] + '）', selItems, now,
-      { small: true, showEmpty: '予定なし' })
+      { small: true, showEmpty: 'この日のTODOはありません' })
     return html
   }
 
@@ -366,12 +387,12 @@ function clientMain(DATA) {
     const isCal = t && (t.source === 'calendar' || t.pendingEvent)
     const d = t && t.due ? new Date(t.due) : null
     let html = '<div class="backdrop" data-act="close"></div><form class="sheet" onsubmit="return false">'
-    html += '<h3>' + (t ? 'TODOを編集' : 'TODOを追加') + '</h3>'
+    html += '<div class="grab"></div><h3>' + (t ? 'TODOを編集' : 'TODOを追加') + '</h3>'
     if (isCal) {
       html += '<div class="ro">' + esc(t.title) + '<small>' + esc(fmtDue(t, new Date())) + '・' + esc(t.calendarTitle || 'カレンダー') + '</small></div>' +
         '<p class="hint">タイトルや日時の変更はカレンダーアプリで行ってください（自動で反映されます）</p>'
     } else {
-      html += '<label>タイトル<input id="f-title" type="text" enterkeyhint="done" value="' + esc(t ? t.title : '') + '"></label>' +
+      html += '<label>タイトル<input id="f-title" type="text" enterkeyhint="done" placeholder="例：牛乳を買う" value="' + esc(t ? t.title : '') + '"></label>' +
         '<div class="row2"><label>日付<input id="f-date" type="date" value="' + (d ? toInputDate(d) : '') + '"></label>' +
         '<label>時刻<input id="f-time" type="time" value="' + (d && !t.allDay ? pad2(d.getHours()) + ':' + pad2(d.getMinutes()) : '') + '"></label></div>' +
         '<button type="button" class="link" data-act="clear-date">期限なしにする</button>'
@@ -386,8 +407,8 @@ function clientMain(DATA) {
           '<option value="' + o[0] + '"' + (o[0] === rep ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>'
     }
     html += '<label class="check-row"><input id="f-imp" type="checkbox"' + (t && t.important ? ' checked' : '') + '>' +
-      '<span class="imp-label">' + STAR + '重要（一覧とウィジェットの先頭に固定）</span></label>'
-    html += '<label>メモ<textarea id="f-note">' + esc(t ? t.note : '') + '</textarea></label>'
+      '<span class="imp-label">' + STAR + '重要<span class="sub-hint">一覧とウィジェットの先頭に固定</span></span></label>'
+    html += '<label>メモ<textarea id="f-note" placeholder="任意">' + esc(t ? t.note : '') + '</textarea></label>'
     html += '<div class="actions">' +
       (t ? '<button type="button" class="btn-del" data-act="delete">削除</button>' : '') +
       '<button type="button" class="btn-cancel" data-act="close">キャンセル</button>' +
@@ -475,14 +496,14 @@ function clientMain(DATA) {
   function openSettings() {
     const s = state.settings
     state.sheet = { settings: true }
-    let html = '<div class="backdrop" data-act="close"></div><form class="sheet" onsubmit="return false"><h3>設定</h3>'
-    html += '<div class="set-row"><label class="check-row"><input id="s-morning-on" type="checkbox"' + (s.morningHour != null ? ' checked' : '') + '>朝の一覧通知</label>' +
+    let html = '<div class="backdrop" data-act="close"></div><form class="sheet" onsubmit="return false"><div class="grab"></div><h3>設定</h3><div class="set-title">通知</div>'
+    html += '<div class="set-row"><label class="check-row"><input id="s-morning-on" type="checkbox"' + (s.morningHour != null ? ' checked' : '') + '>朝の通知（今日のTODO）</label>' +
       '<input id="s-morning" type="time" value="' + timeValue(s.morningHour == null ? 7 : s.morningHour, s.morningMinute) + '"></div>'
-    html += '<div class="set-row"><label class="check-row"><input id="s-evening-on" type="checkbox"' + (s.eveningHour != null ? ' checked' : '') + '>夜の残りタスク通知</label>' +
+    html += '<div class="set-row"><label class="check-row"><input id="s-evening-on" type="checkbox"' + (s.eveningHour != null ? ' checked' : '') + '>夜の通知（残りのTODO）</label>' +
       '<input id="s-evening" type="time" value="' + timeValue(s.eveningHour == null ? 20 : s.eveningHour, s.eveningMinute) + '"></div>'
-    html += '<label>期限前の通知<select id="s-remind">' + options([['off', '通知しない'], [0, '期限ちょうど'], [10, '10分前'], [15, '15分前'],
+    html += '<label>期限前のリマインド<select id="s-remind">' + options([['off', '通知しない'], [0, '期限ちょうど'], [10, '10分前'], [15, '15分前'],
       [30, '30分前'], [60, '1時間前'], [120, '2時間前']], s.remindMinutes == null ? 'off' : s.remindMinutes) + '</select></label>'
-    html += '<label>カレンダーから取り込む範囲<select id="s-range">' + options([[14, '2週間先まで'], [30, '30日先まで'], [45, '45日先まで'],
+    html += '<div class="set-title">カレンダー</div><label>取り込む範囲<select id="s-range">' + options([[14, '2週間先まで'], [30, '30日先まで'], [45, '45日先まで'],
       [60, '60日先まで'], [90, '90日先まで']], s.lookaheadDays) + '</select></label>'
     const cals = DATA.allCalendars || []
     if (cals.length) {
@@ -528,7 +549,7 @@ function clientMain(DATA) {
     if (!state.sheet.armed) {
       state.sheet.armed = true
       btn.classList.add('armed')
-      btn.textContent = '本当に削除'
+      btn.textContent = 'もう一度押すと削除'
       return
     }
     const t = state.todos.find(x => x.id === state.sheet.id)
@@ -574,6 +595,8 @@ function clientMain(DATA) {
         persist()
       } else {
         el.classList.add('on')
+        const row = el.closest && el.closest('[data-row]')
+        if (row) row.classList.add('leaving')
         setTimeout(() => {
           // 繰り返しなら次の回が追加される
           completeTodo(state.todos, t, new Date())

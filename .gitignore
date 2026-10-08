@@ -1,3 +1,4 @@
 todo-data/
 *.broken-*
 .claude/scheduled_tasks.lock
+.claude/settings.local.json

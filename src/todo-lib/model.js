@@ -28,9 +28,9 @@ function fmtDate(d) {
   return (d.getMonth() + 1) + '月' + d.getDate() + '日（' + w + '）'
 }
 
-// 一覧やウィジェットに出す期限ラベル（例: "14:00" / "昨日 17:00" / "10/12（月）" / "時間指定なし"）
+// 一覧やウィジェットに出す期限ラベル（例: "14:00" / "昨日 17:00" / "10/12（月）" / "期限なし"）
 function fmtDue(t, now) {
-  if (!t.due) return '時間指定なし'
+  if (!t.due) return '期限なし'
   const d = new Date(t.due)
   const diff = Math.round((startOfDay(d) - startOfDay(now)) / 86400000)
   const w = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()]
@@ -183,16 +183,18 @@ function planNotifications(data, now) {
     if (at <= now) continue
     const g = categorize(data.todos, at)
     if (g.stats.remaining === 0) continue
-    const parts = []
-    if (g.overdue.length) parts.push('期限切れ ' + g.overdue.length + '件')
+    // 本文は1件1行（通知を広げると一覧として読める）
+    const lines = []
+    if (g.overdue.length) lines.push('⚠︎ 期限切れ ' + g.overdue.length + '件')
     const shown = g.today.slice(0, 3)
-    for (const t of shown) parts.push((t.due && !t.allDay ? fmtTime(new Date(t.due)) + ' ' : '') + t.title)
+    for (const t of shown) lines.push('・' + (t.due && !t.allDay ? fmtTime(new Date(t.due)) + ' ' : '') + t.title)
     const rest = g.today.length - shown.length
+    if (rest > 0) lines.push('ほか ' + rest + '件')
     plans.push({
       id: 'todo-morning-' + i,
       at: at.toISOString(),
       title: '今日のTODO ' + g.stats.remaining + '件',
-      body: parts.join(' / ') + (rest > 0 ? ' ほか' + rest + '件' : ''),
+      body: lines.join('\n'),
     })
   }
   for (let i = 0; i < 3 && s.eveningHour != null; i++) {
@@ -202,12 +204,13 @@ function planNotifications(data, now) {
     const g = categorize(data.todos, at)
     if (g.stats.remaining === 0) continue
     const items = g.overdue.concat(g.today)
-    const shown = items.slice(0, 3).map(t => t.title)
+    const lines = items.slice(0, 3).map(t => '・' + t.title)
+    if (items.length > 3) lines.push('ほか ' + (items.length - 3) + '件')
     plans.push({
       id: 'todo-evening-' + i,
       at: at.toISOString(),
       title: '今日の残り ' + g.stats.remaining + '件',
-      body: shown.join(' / ') + (items.length > shown.length ? ' ほか' + (items.length - shown.length) + '件' : ''),
+      body: lines.join('\n'),
     })
   }
   // スヌーズ（「10分後にもう一度」）
@@ -218,7 +221,7 @@ function planNotifications(data, now) {
       todoId: t.id,
       at: t.snoozeUntil,
       title: 'もう一度：' + t.title,
-      body: t.due ? fmtDue(t, now) + '　長押しで完了・スヌーズ' : '長押しで完了・スヌーズ',
+      body: (t.due ? '期限 ' + fmtDue(t, new Date(t.snoozeUntil)) + '\n' : '') + ACTION_HINT,
     })
   }
   const room = 64 - plans.length - 2
@@ -233,11 +236,20 @@ function planNotifications(data, now) {
       id: 'todo-remind-' + x.t.id,
       todoId: x.t.id,
       at: x.at.toISOString(),
-      title: (s.remindMinutes ? s.remindMinutes + '分後：' : '期限です：') + x.t.title,
-      body: fmtTime(new Date(x.t.due)) + '〜　長押しで完了・スヌーズ',
+      title: (s.remindMinutes ? 'あと' + durationLabel(s.remindMinutes) + '：' : '期限です：') + x.t.title,
+      body: fmtTime(new Date(x.t.due)) + (x.t.source === 'calendar' ? ' 開始' : ' 期限') + '\n' + ACTION_HINT,
     })
   }
   return plans
+}
+
+const ACTION_HINT = '長押しで「完了」「10分後に再通知」'
+
+// 30 → "30分" / 60 → "1時間" / 90 → "1時間30分"
+function durationLabel(min) {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return (h ? h + '時間' : '') + (m || !h ? m + '分' : '')
 }
 
 function repeatLabel(r) {
@@ -301,5 +313,5 @@ function uncompleteTodo(todos, t, now) {
 module.exports = {
   startOfDay, addDays, pad2, fmtTime, fmtDate, fmtDue, compareDue, compareTodo, categorize, nextItem,
   newId, mergeEvents, pruneDone, planNotifications, isOverdue, byDeadline,
-  repeatLabel, nextOccurrence, completeTodo, uncompleteTodo,
+  repeatLabel, durationLabel, nextOccurrence, completeTodo, uncompleteTodo,
 }
