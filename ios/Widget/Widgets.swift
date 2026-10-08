@@ -9,6 +9,7 @@ struct AppWidgets: WidgetBundle {
         TodoWidget()
         WakeWidget()
         HabitWidget()
+        FocusTimerLiveActivity()
     }
 }
 

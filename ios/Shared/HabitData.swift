@@ -27,6 +27,15 @@ enum HabitColor: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// この色で塗った上に載せる文字・記号の色。明るい色に白は読みにくいので濃い色にする
+    func onColor(_ p: Palette) -> Color {
+        switch self {
+        case .accent: p.onAccent
+        case .indigo: Color.white
+        default: Color(red: 0.10, green: 0.09, blue: 0.10)
+        }
+    }
+
     var name: String {
         switch self {
         case .accent: "テーマの色"
@@ -278,12 +287,16 @@ struct HabitRing: View {
     var lineWidth: CGFloat = 8
 
     var body: some View {
-        ZStack {
+        // 0 のときは丸い線端だけの点が出ないよう、線そのものを隠す
+        let shown: Double = max(0, min(1, fraction))
+        let style: StrokeStyle = StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+        return ZStack {
             Circle().stroke((track ?? color.opacity(0.18)), lineWidth: lineWidth)
             Circle()
-                .trim(from: 0, to: max(0.001, min(1, fraction)))
-                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .trim(from: 0, to: shown)
+                .stroke(color, style: style)
                 .rotationEffect(.degrees(-90))
+                .opacity(shown > 0 ? 1 : 0)
         }
     }
 }

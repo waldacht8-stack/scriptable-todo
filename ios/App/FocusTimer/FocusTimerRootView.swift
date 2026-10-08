@@ -37,6 +37,7 @@ final class FocusTimerModel: ObservableObject {
             state = r.state
             sessions = FocusTimerData.sessions()
             finishCount += 1
+            live()
             if f.phase == .focus, f.todoID != nil { finishedTodo = f }
         } else {
             let s = FocusTimerData.state()   // ほかの場所（ウィジェットなど）で変わった分も反映
@@ -44,25 +45,37 @@ final class FocusTimerModel: ObservableObject {
         }
     }
 
-    var remaining: Double { state.remaining(at: now) ?? settings.seconds(state.phase) }
+    var remaining: Double { state.left(at: now) ?? settings.seconds(state.phase) }
     var total: Double { state.isRunning ? max(1, state.total) : settings.seconds(state.phase) }
     var progress: Double { 1 - remaining / total }
 
     func start(title: String, todoID: String?) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         state = FocusTimerEngine.start(title: title, todoID: todoID)
+        live()
     }
 
-    func togglePause() { state = FocusTimerEngine.togglePause() }
+    func togglePause() {
+        state = FocusTimerEngine.togglePause()
+        live()
+    }
 
     func stop() {
         state = FocusTimerEngine.stop()
         sessions = FocusTimerData.sessions()
+        live()
     }
 
     func skip() {
         state = FocusTimerEngine.skip()
         sessions = FocusTimerData.sessions()
+        live()
+    }
+
+    /// ライブアクティビティを今の状態に合わせる
+    func live() {
+        let s = state
+        Task { await FocusTimerLive.sync(s) }
     }
 
     func saveSettings(_ s: FocusTimerSettings) {
@@ -110,6 +123,7 @@ struct FocusTimerRootView: View {
     @State private var picking = false
     @State private var showSettings = false
     @State private var actionFeedback = 0
+    @State private var viewHeight: CGFloat = 800   // 見えている高さ（小さい画面で操作ボタンまで1画面に収める）
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -126,6 +140,11 @@ struct FocusTimerRootView: View {
             .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onGeometryChange(for: CGFloat.self) { (proxy: GeometryProxy) -> CGFloat in
+            proxy.size.height - proxy.safeAreaInsets.top - proxy.safeAreaInsets.bottom
+        } action: { (h: CGFloat) in
+            viewHeight = h
+        }
         .paletteBackground(p)
         .onReceive(ticker) { _ in model.tick() }
         .onChange(of: scene) { _, s in if s == .active { model.reload() } }
@@ -188,7 +207,7 @@ struct FocusTimerRootView: View {
                     .background(p.accent.opacity(0.14), in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
                     Text("取り組むこと").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
-                    Text(displayTitle.isEmpty ? "タップして選ぶ（なしでも始められます）" : displayTitle)
+                    Text(displayTitle.isEmpty ? "タップして選ぶ" : displayTitle)
                         .font(displayTitle.isEmpty ? .subheadline.weight(.semibold) : .headline)
                         .foregroundStyle(displayTitle.isEmpty ? p.sub : p.text)
                         .lineLimit(2).multilineTextAlignment(.leading)
@@ -205,25 +224,40 @@ struct FocusTimerRootView: View {
 
     private var displayTitle: String { model.state.isRunning ? model.state.title : title }
 
+    /// 文字盤の直径。上の見出し・カードと下のボタンを除いた高さに合わせる（最大 320）
+    private var dialSize: CGFloat {
+        let room: CGFloat = viewHeight - 350
+        return min(320, max(210, room))
+    }
+
     private var phaseColor: Color {
         model.state.phase.isBreak ? HabitColor.teal.color(p) : p.accent
+    }
+
+    /// phaseColor の上に載せる記号の色
+    private var onPhaseColor: Color {
+        model.state.phase.isBreak ? HabitColor.teal.onColor(p) : p.onAccent
     }
 
     private var dial: some View {
         let s = model.state
         let every = max(2, model.settings.longBreakEvery)
+        let size: CGFloat = dialSize
+        let line: CGFloat = size >= 280 ? 22 : 16
+        let clockSize: CGFloat = (size * 0.225).rounded()
+        let ringStyle: StrokeStyle = StrokeStyle(lineWidth: line, lineCap: .round)
         return ZStack {
-            Circle().stroke(phaseColor.opacity(0.14), lineWidth: 22)
+            Circle().stroke(phaseColor.opacity(0.14), lineWidth: line)
             Circle()
                 .trim(from: 0, to: max(0.001, min(1, 1 - model.progress)))
-                .stroke(phaseColor, style: StrokeStyle(lineWidth: 22, lineCap: .round))
+                .stroke(phaseColor, style: ringStyle)
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 1), value: model.progress)
             VStack(spacing: 8) {
                 Label(s.phase.name + (s.isPaused ? "・一時停止中" : ""), systemImage: s.phase.icon)
                     .font(.headline).foregroundStyle(phaseColor)
                 Text(FocusTimerFormat.clock(model.remaining))
-                    .font(.system(size: 72, weight: .heavy, design: p.fontDesign))
+                    .font(.system(size: clockSize, weight: .heavy, design: p.fontDesign))
                     .monospacedDigit()
                     .foregroundStyle(p.text)
                     .contentTransition(.numericText(countsDown: true))
@@ -241,10 +275,9 @@ struct FocusTimerRootView: View {
                 }
                 .padding(.top, 2)
             }
-            .padding(40)
+            .padding(size * 0.125)
         }
-        .frame(maxWidth: 320)
-        .aspectRatio(1, contentMode: .fit)
+        .frame(width: size, height: size)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
     }
@@ -266,7 +299,7 @@ struct FocusTimerRootView: View {
                     .font(.system(size: 36, weight: .bold))
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: 96, height: 96)
-                    .foregroundStyle(p.onAccent)
+                    .foregroundStyle(onPhaseColor)
                     .background(phaseColor, in: Circle())
                     .shadow(color: phaseColor.opacity(0.35), radius: 14, y: 6)
             }
