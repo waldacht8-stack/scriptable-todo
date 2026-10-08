@@ -61,6 +61,17 @@ jobs:
           APP=$(find build/sim -name 'TodoApp.app' -type d | head -1)
           xcrun simctl install "$UDID" "$APP"
           xcrun simctl ui "$UDID" appearance light
+          # 許可の確認（カレンダー・アラーム）が出る前に、最初に撮る
+          # ウィジェットの見本（構成 × 大きさ × 色合い）
+          # カレンダーの許可の確認が見本に重ならないよう、先に許可しておく
+          xcrun simctl privacy "$UDID" grant calendar com.todoapp.TodoApp || true
+          xcrun simctl terminate "$UDID" com.todoapp.TodoApp || true
+          SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -widgetpreview -theme focus -AppleLanguages "(ja)" -AppleLocale ja_JP
+          sleep 7
+          xcrun simctl io "$UDID" screenshot "shots/widgets.png"
+          SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -widgetpreview -widgetsize large -theme night -AppleLanguages "(ja)" -AppleLocale ja_JP
+          sleep 12
+          xcrun simctl io "$UDID" screenshot "shots/widgets-large.png"
           # 「今日」の4つの構成（色合いを組み合わせて）と設定画面
           for combo in focus:focus board:night thumb:dawn timeline:paper; do
             layout=${combo%%:*}; theme=${combo##*:}
@@ -86,16 +97,6 @@ jobs:
           SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -tab 4 -AppleLanguages "(ja)" -AppleLocale ja_JP
           sleep 6
           xcrun simctl io "$UDID" screenshot "shots/settings.png"
-          # ウィジェットの見本（構成 × 大きさ × 色合い）
-          # カレンダーの許可の確認が見本に重ならないよう、先に許可しておく
-          xcrun simctl privacy "$UDID" grant calendar com.todoapp.TodoApp || true
-          xcrun simctl terminate "$UDID" com.todoapp.TodoApp || true
-          SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -widgetpreview -theme focus -AppleLanguages "(ja)" -AppleLocale ja_JP
-          sleep 7
-          xcrun simctl io "$UDID" screenshot "shots/widgets.png"
-          SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -widgetpreview -widgetsize large -theme night -AppleLanguages "(ja)" -AppleLocale ja_JP
-          sleep 12
-          xcrun simctl io "$UDID" screenshot "shots/widgets-large.png"
 
       - name: 実機用にビルド（署名なし）して IPA を作る
         run: |
