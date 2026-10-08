@@ -9,6 +9,8 @@ final class WakeViewModel: ObservableObject {
     @Published var sessions: [WakeSession]
     @Published var message = ""
     @Published var feedback = 0
+    @Published var undoToast = false
+    private var toastToken = 0
     let demo: Bool
     private var rescheduleTask: Task<Void, Never>?
 
@@ -80,12 +82,49 @@ final class WakeViewModel: ObservableObject {
             sessions.removeAll { $0.day == k }
             sessions.insert(WakeSession(day: k, checkInAt: now, stage: stage, score: WakeLogic.score(stage: stage)), at: 0)
             feedback += 1
+            showUndoToast()
+            return
+        }
+        guard canCheckIn else { return }
+        Task {
+            guard await WakeActions.checkIn(at: .now) != nil else { return }
+            refresh(reschedule: false)
+            feedback += 1
+            showUndoToast()
+        }
+    }
+
+    /// 今チェックインできるか（最初のアラームの2時間前から）
+    var canCheckIn: Bool { WakeLogic.canCheckIn(now: now, settings: settings, state: state) }
+    /// 次に「起きた！」を押せるようになる時刻
+    var checkInFrom: Date? { WakeLogic.nextCheckInStart(now: now, settings: settings, state: state) }
+
+    /// チェックイン直後の「取り消す」（約10秒）
+    private func showUndoToast() {
+        toastToken += 1
+        let token = toastToken
+        undoToast = true
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            guard let self, self.toastToken == token else { return }
+            self.undoToast = false
+        }
+    }
+
+    /// チェックインを取り消す（今日の記録を消し、残りのアラームを予約し直す）
+    func undoCheckIn() {
+        undoToast = false
+        if demo {
+            let k = WakeLogic.key(now)
+            state.checkInAt = nil
+            state.routineDone = []
+            state.belongingsDone = []
+            sessions.removeAll { $0.day == k }
             return
         }
         Task {
-            await WakeActions.checkIn(at: .now)
+            await WakeActions.undoCheckIn(now: .now)
             refresh(reschedule: false)
-            feedback += 1
         }
     }
 

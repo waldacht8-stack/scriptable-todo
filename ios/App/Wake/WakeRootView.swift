@@ -25,6 +25,13 @@ struct WakeRootView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .paletteBackground(p)
+                .overlay(alignment: .bottom) {
+                    if model.undoToast {
+                        WakeUndoToast(model: model)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .animation(.spring(duration: 0.3), value: model.undoToast)
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: WakeRoute.self) { route in
@@ -104,6 +111,7 @@ struct WakeBeforeView: View {
     @ObservedObject var model: WakeViewModel
     var body: some View {
         WakeNextCard(model: model)
+        WakeLockedCheckIn(model: model)
         if let plan = model.nextPlan { WakeStageTimeline(plan: plan, reached: 0) }
         WakeSkipCard(model: model)
         WakeSummaryRow(model: model)
@@ -324,6 +332,7 @@ struct WakeMorningView: View {
         if !model.settings.routine.isEmpty { WakeRoutineCard(model: model) }
         if !model.settings.belongings.isEmpty { WakeBelongingsCard(model: model) }
         WakeTodoCard(now: model.now)
+        WakeUndoCard(model: model)
     }
 }
 
@@ -517,9 +526,11 @@ struct WakeEveningView: View {
             WakeBedtimeCard(plan: plan, bed: WakeLogic.bedtime(before: plan, settings: model.settings), now: model.now)
         }
         WakeNextCard(model: model)
+        WakeLockedCheckIn(model: model)
         WakeSkipCard(model: model)
         if model.todaySession != nil { WakeResultCard(model: model) }
         WakeSummaryRow(model: model)
+        if model.checkInAt != nil { WakeUndoCard(model: model) }
     }
 }
 

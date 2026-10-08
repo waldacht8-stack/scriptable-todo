@@ -146,16 +146,18 @@ enum WakeActions {
 
     // MARK: チェックイン
 
-    /// 起床チェックイン：今日の残りの段階を取り消し、記録を保存し、持ち物の通知を予約する
+    /// 起床チェックイン：今日の残りのアラームを取り消し、記録を保存し、持ち物の通知を予約する。
+    /// 受付時間（最初のアラームの2時間前〜その日の受付終わり）の外では何もしない（nil を返す）
     @discardableResult
-    static func checkIn(at now: Date = .now) async -> WakeSession {
+    static func checkIn(at now: Date = .now) async -> WakeSession? {
         let todayKey = WakeLogic.key(now)
         var sessions = WakeStore.sessions()
         var state = WakeStore.state()
+        let settings = WakeStore.settings()
         if state.day == todayKey, state.checkInAt != nil, let s = sessions.first(where: { $0.day == todayKey }) {
             return s
         }
-        let settings = WakeStore.settings()
+        guard WakeLogic.canCheckIn(now: now, settings: settings, state: state) else { return nil }
         let plan = WakeLogic.plan(for: now, settings: settings, state: state)
         let stage = plan.map { WakeLogic.reached($0, at: now) } ?? 0
         let session = WakeSession(day: todayKey, checkInAt: now, stage: stage, score: WakeLogic.score(stage: stage), missed: nil)
@@ -180,6 +182,29 @@ enum WakeActions {
         await WakeActivityControl.sync(now: now)
         await reschedule(now: now)
         return session
+    }
+
+    /// チェックインの取り消し：今日の記録を消して状態を戻し、今日の残りのアラームを予約し直す
+    static func undoCheckIn(now: Date = .now) async {
+        let todayKey = WakeLogic.key(now)
+        var sessions = WakeStore.sessions()
+        sessions.removeAll { $0.day == todayKey }
+        WakeStore.save(sessions)
+
+        var state = WakeStore.state()
+        state.checkInAt = nil
+        state.routineDone = []
+        state.belongingsDone = []
+        let settings = WakeStore.settings()
+        if let plan = WakeLogic.plan(for: now, settings: settings, state: state), !plan.isSkipped,
+           !state.pendingDays.contains(todayKey) {
+            state.pendingDays.append(todayKey)
+        }
+        WakeStore.save(state)
+
+        await remove(prefix: "wake-belongings")
+        await WakeActivityControl.sync(now: now)
+        await reschedule(now: now)
     }
 
     // MARK: 通知（識別子は wake- で始める）

@@ -34,6 +34,7 @@ struct WakeProvider: TimelineProvider {
             times.append(contentsOf: n.stages.map(\.at))
         }
         if let dep = snap.departure { times.append(dep) }
+        if let t = snap.today { times.append(t.last.addingTimeInterval(3600)) }   // 受付の終わり
         for h in [12, 18, 24] {
             if let d = cal.date(byAdding: .hour, value: h, to: today) { times.append(d) }
         }
@@ -182,14 +183,20 @@ struct WakeWidgetView: View {
         }
     }
 
-    private var checkInButton: some View {
-        Button(intent: WakeCheckInIntent()) {
-            Label("起きた！", systemImage: "sun.max.fill").font(.subheadline.weight(.heavy))
-                .frame(maxWidth: .infinity).padding(.vertical, 8)
-                .background(p.accent, in: RoundedRectangle(cornerRadius: min(p.radius, 12), style: .continuous))
-                .foregroundStyle(p.onAccent)
+    /// 受付時間（最初のアラームの2時間前から）だけ「起きた！」を出す。それ以外は押せる時刻を出す（誤タップ防止）
+    @ViewBuilder private var checkInButton: some View {
+        if s.canCheckIn {
+            Button(intent: WakeCheckInIntent()) {
+                Label("起きた！", systemImage: "sun.max.fill").font(.subheadline.weight(.heavy))
+                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    .background(p.accent, in: RoundedRectangle(cornerRadius: min(p.radius, 12), style: .continuous))
+                    .foregroundStyle(p.onAccent)
+            }
+            .buttonStyle(.plain)
+        } else if let from = s.checkInFrom {
+            let label: String = "\(WakeLogic.dayLabel(from, now: entry.date)) \(JP.time(from))から押せます"
+            Text(label).font(Font.caption2.weight(.semibold)).foregroundStyle(p.sub).lineLimit(1).minimumScaleFactor(0.7)
         }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder private var stepButton: some View {
