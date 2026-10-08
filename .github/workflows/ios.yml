@@ -75,6 +75,11 @@ jobs:
               echo "blank shot $out ($size bytes), retry $i"
             done
           }
+          # カレンダーの許可の確認が写真に重ならないよう、先に許可しておく
+          xcrun simctl privacy "$UDID" grant calendar com.todoapp.TodoApp || true
+          # ウィジェットの見本（構成 × 大きさ × 色合い）
+          shot shots/widgets.png -demo -widgetpreview -theme focus
+          shot shots/widgets-large.png -demo -widgetpreview -widgetsize large -theme night
           # 「今日」の4つの構成（色合いを組み合わせて）
           for combo in focus:focus board:night thumb:dawn timeline:paper; do
             layout=${combo%%:*}; theme=${combo##*:}

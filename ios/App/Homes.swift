@@ -509,7 +509,7 @@ struct GroupHome: View {
             HStack(spacing: 10) {
                 TextField("何をする？（入力して確定で追加）", text: $draft)
                     .submitLabel(.done)
-                    .onSubmit { store.add(draft); draft = "" }
+                    .onSubmit { let q = QuickParse.parse(draft); store.add(q.title, due: q.due, allDay: q.allDay, repeatRule: q.repeatRule); draft = "" }
                     .padding(.horizontal, 14).padding(.vertical, 12)
                     .background(p.card, in: Capsule())
                 Button(action: onAdd) {
