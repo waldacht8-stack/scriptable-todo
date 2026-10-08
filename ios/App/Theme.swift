@@ -80,6 +80,12 @@ enum Sky {
         return [mix(lower.1, upper.1, t), mix(lower.2, upper.2, t)]
     }
 
+    // 文字を白にするほど空が暗い時間帯（夕方〜夜明け）
+    static func isDarkSky(at date: Date = .now) -> Bool {
+        let h = Calendar.current.component(.hour, from: date)
+        return h >= 18 || h < 6
+    }
+
     static func isNight(at date: Date = .now) -> Bool {
         let h = Calendar.current.component(.hour, from: date)
         return h >= 19 || h < 5
@@ -119,6 +125,32 @@ extension View {
     func glassCard(_ radius: CGFloat = 22) -> some View { modifier(GlassCard(cornerRadius: radius)) }
 }
 
+// MARK: - 日付の表示（端末の言語設定にかかわらず日本語）
+
+enum JP {
+    private static func fmt(_ pattern: String) -> DateFormatter {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ja_JP")
+        f.dateFormat = pattern
+        return f
+    }
+    private static let md = fmt("M月d日（E）")
+    private static let ymd = fmt("y年M月d日 EEEE")
+    private static let hm = fmt("HH:mm")
+    private static let mdShort = fmt("M/d（E）")
+
+    static func date(_ d: Date) -> String { md.string(from: d) }
+    static func longDate(_ d: Date) -> String { ymd.string(from: d) }
+    static func time(_ d: Date) -> String { hm.string(from: d) }
+    static func shortDate(_ d: Date) -> String { mdShort.string(from: d) }
+
+    /// 一覧の左に出す短い時刻（時刻なし＝終日、期限なし）
+    static func clock(_ t: TodoItem, none: String = "--:--") -> String {
+        guard let due = t.due else { return none }
+        return t.isAllDay ? "終日" : time(due)
+    }
+}
+
 // MARK: - 期限の表示
 
 enum DueText {
@@ -126,13 +158,13 @@ enum DueText {
         guard let due = t.due else { return "期限なし" }
         let cal = Calendar.current
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: due)).day ?? 0
-        let time = due.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+        let time = JP.time(due)
         let day: String
         switch days {
         case 0: day = "今日"
         case -1: day = "昨日"
         case 1: day = "明日"
-        default: day = due.formatted(.dateTime.month(.defaultDigits).day().weekday(.abbreviated))
+        default: day = JP.shortDate(due)
         }
         if t.isAllDay { return days == 0 ? "今日・終日" : day }
         return days == 0 ? time : "\(day) \(time)"

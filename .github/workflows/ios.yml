@@ -58,11 +58,11 @@ jobs:
           xcrun simctl ui "$UDID" appearance light
           # 4つのデザインのホーム画面（見本データ）と設定画面
           for theme in sky dial focus paper; do
-            xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -theme $theme -tab 0
+            SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -theme $theme -tab 0 -AppleLanguages "(ja)" -AppleLocale ja_JP
             sleep 7
             xcrun simctl io "$UDID" screenshot "shots/home-$theme.png"
           done
-          xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -tab 2
+          SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -tab 2 -AppleLanguages "(ja)" -AppleLocale ja_JP
           sleep 6
           xcrun simctl io "$UDID" screenshot "shots/settings.png"
 

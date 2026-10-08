@@ -89,15 +89,15 @@ struct SkyHome: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(ctx.date.formatted(.dateTime.month().day().weekday(.wide))).font(.subheadline.weight(.semibold)).opacity(0.85)
+                            Text(JP.date(ctx.date)).font(.subheadline.weight(.semibold)).opacity(0.85)
                             Text(greeting(ctx.date)).font(.largeTitle.bold())
                             Text("のこり \(store.open.count) 件").font(.title3.weight(.semibold)).opacity(0.9)
                         }
                         .padding(.top, 40)
                         VStack(spacing: 0) {
                             ForEach(store.open) { item in
-                                SkyRow(item: item) { store.complete(item); feedback += 1 }
-                                if item.id != store.open.last?.id { Divider().overlay(.white.opacity(0.25)).padding(.leading, 56) }
+                                SkyRow(item: item, ink: ink(ctx.date)) { store.complete(item); feedback += 1 }
+                                if item.id != store.open.last?.id { Divider().overlay(ink(ctx.date).opacity(0.2)).padding(.leading, 56) }
                             }
                             if store.open.isEmpty {
                                 Text("今日はもう、やることはありません").padding(24)
@@ -112,10 +112,15 @@ struct SkyHome: View {
                     .padding(.bottom, 110)
                 }
             }
-            .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+            .foregroundStyle(ink(ctx.date))
+            .shadow(color: (Sky.isDarkSky(at: ctx.date) ? Color.black : Color.white).opacity(0.18), radius: 2, y: 1)
         }
         .sensoryFeedback(.success, trigger: feedback)
+    }
+
+    // 明るい空では濃い紺、暗い空では白の文字
+    private func ink(_ d: Date) -> Color {
+        Sky.isDarkSky(at: d) ? .white : Color(red: 0.05, green: 0.12, blue: 0.26)
     }
 
     private func greeting(_ d: Date) -> String {
@@ -135,11 +140,11 @@ struct SkyOrb: View {
             let h = Double(Calendar.current.component(.hour, from: date)) + Double(Calendar.current.component(.minute, from: date)) / 60
             let night = Sky.isNight(at: date)
             let t = night ? ((h < 5 ? h + 24 : h) - 19) / 10 : (h - 5) / 14 // 0〜1 で東から西へ
-            let x = g.size.width * (0.1 + 0.8 * t)
-            let y = g.size.height * (0.32 - 0.22 * sin(.pi * t))
+            let x = g.size.width * (0.55 + 0.38 * t)  // 文字と重ならないよう右側の空に
+            let y = g.size.height * (0.13 - 0.07 * sin(.pi * t))
             Circle()
                 .fill(night ? Color(white: 0.95) : Color(red: 1, green: 0.93, blue: 0.7))
-                .frame(width: night ? 44 : 64, height: night ? 44 : 64)
+                .frame(width: night ? 34 : 46, height: night ? 34 : 46)
                 .shadow(color: night ? .white.opacity(0.5) : .yellow.opacity(0.7), radius: night ? 18 : 40)
                 .position(x: x, y: y)
         }
@@ -151,17 +156,18 @@ struct SkyOrb: View {
 struct SkyRow: View {
     @EnvironmentObject var store: TodoStore
     let item: TodoItem
+    let ink: Color
     let onDone: () -> Void
     var body: some View {
         HStack(spacing: 14) {
-            Button(action: onDone) { CheckCircle(done: item.done, color: .white) }.buttonStyle(.plain)
+            Button(action: onDone) { CheckCircle(done: item.done, color: ink) }.buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     if item.isImportant { Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow) }
                     Text(item.title).font(.body.weight(.semibold)).lineLimit(1)
                 }
                 Text(DueText.label(item)).font(.caption.weight(.medium))
-                    .foregroundStyle(item.isOverdue() ? Color(red: 1, green: 0.75, blue: 0.6) : .white.opacity(0.8))
+                    .foregroundStyle(item.isOverdue() ? Color(red: 0.85, green: 0.30, blue: 0.10) : ink.opacity(0.75))
             }
             Spacer()
         }
@@ -181,7 +187,7 @@ struct DialHome: View {
         TimelineView(.periodic(from: .now, by: 30)) { ctx in
             ScrollView {
                 VStack(spacing: 22) {
-                    Text(ctx.date.formatted(.dateTime.month().day().weekday(.abbreviated))).font(.headline).foregroundStyle(.secondary)
+                    Text(JP.date(ctx.date)).font(.headline).foregroundStyle(.secondary)
                         .padding(.top, 24)
                     ZStack {
                         DayRing(items: todayItems, now: ctx.date, accent: mint).frame(width: 300, height: 300)
@@ -202,7 +208,7 @@ struct DialHome: View {
                                 Button { store.complete(item) } label: {
                                     RoundedRectangle(cornerRadius: 7).strokeBorder(item.isOverdue() ? .orange : mint, lineWidth: 2.5).frame(width: 26, height: 26)
                                 }.buttonStyle(.plain)
-                                Text(item.due.map { $0.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)) } ?? "--:--")
+                                Text(JP.clock(item))
                                     .font(.callout.monospacedDigit()).foregroundStyle(item.isOverdue() ? .orange : .secondary)
                                 Text(item.title).lineLimit(1)
                                 Spacer()
@@ -255,14 +261,14 @@ struct DayRing: View {
                 }
             }
             for item in items {
-                guard let due = item.due else { continue }
+                guard let due = item.due, !item.isAllDay else { continue } // 終日は時刻がないので円には置かない
                 let p = point(hourOf(due), r)
                 let color: Color = item.done ? .gray : (item.isOverdue(now) ? .orange : accent)
                 ctx.fill(Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)), with: .color(color))
             }
-            var hand = Path(); hand.move(to: c); hand.addLine(to: point(h, r - 30))
-            ctx.stroke(hand, with: .color(.white), style: StrokeStyle(lineWidth: 2, lineCap: .round))
-            ctx.fill(Path(ellipseIn: CGRect(x: c.x - 4, y: c.y - 4, width: 8, height: 8)), with: .color(.white))
+            // 現在時刻：中央の数字と重ならないよう、円の上に短い印だけを出す
+            var hand = Path(); hand.move(to: point(h, r - 22)); hand.addLine(to: point(h, r + 12))
+            ctx.stroke(hand, with: .color(.white), style: StrokeStyle(lineWidth: 4, lineCap: .round))
         }
     }
 
@@ -359,11 +365,10 @@ struct FocusCard: View {
         .padding(26)
         .frame(maxWidth: .infinity)
         .frame(height: 360)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 32))
+        .background(RoundedRectangle(cornerRadius: 32).fill(Color(.secondarySystemGroupedBackground)).shadow(color: .black.opacity(0.12), radius: 18, y: 8))
         .overlay(alignment: .topTrailing) {
             if drag.width > 30 { stamp("完了", .green) } else if drag.width < -30 { stamp("明日へ", .orange) }
         }
-        .shadow(color: .black.opacity(0.12), radius: 18, y: 8)
         .padding(.horizontal, 24)
         .scaleEffect(1 - CGFloat(index) * 0.05)
         .offset(x: drag.width, y: CGFloat(index) * 18 + drag.height * 0.1)
@@ -392,14 +397,14 @@ struct PaperHome: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text(Date.now.formatted(.dateTime.year().month().day().weekday(.wide)))
+                Text(JP.longDate(.now))
                     .font(.system(size: 22, weight: .semibold, design: .serif))
                     .padding(.top, 36).padding(.bottom, 4)
                 Text("本日の用事　\(store.open.count)").font(.system(.subheadline, design: .serif)).foregroundStyle(ink.opacity(0.6))
                     .frame(height: line, alignment: .bottom)
                 ForEach(store.open + store.doneToday) { item in
                     HStack(spacing: 12) {
-                        Text(item.due.map { $0.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)) } ?? "　―　")
+                        Text(JP.clock(item, none: "　―　"))
                             .font(.system(.footnote, design: .serif).monospacedDigit()).foregroundStyle(item.isOverdue() ? red : ink.opacity(0.55))
                             .frame(width: 48, alignment: .leading)
                         Text((item.isImportant ? "◎ " : "") + item.title)
