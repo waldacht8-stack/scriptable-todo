@@ -242,12 +242,16 @@ struct FocusCard: View {
     }
 
     private func stamp(_ text: String, _ color: Color) -> some View {
-        Text(verbatim: text).font(Font.title2.bold()).foregroundStyle(color)
+        // 型を明示（Xcode 26.3 では1つの式のままだと font があいまいになる）
+        let label: Text = Text(verbatim: text).font(Font.title2.weight(.bold))
+        let angle: Double = drag.width > 0 ? -12 : 12
+        let fade: Double = Double(min(1, abs(drag.width) / 120))
+        return label.foregroundStyle(color)
             .padding(.horizontal, 14).padding(.vertical, 6)
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(color, lineWidth: 3))
-            .rotationEffect(.degrees(drag.width > 0 ? -12 : 12))
+            .rotationEffect(.degrees(angle))
             .padding(22)
-            .opacity(min(1, abs(drag.width) / 120))
+            .opacity(fade)
     }
 }
 
