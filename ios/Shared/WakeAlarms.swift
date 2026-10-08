@@ -168,6 +168,7 @@ enum WakeActions {
 
         cancelAlarms(day: todayKey)
         await scheduleBelongings(now: now)
+        await WakeActivityControl.sync(now: now)
         await reschedule(now: now)
         return session
     }

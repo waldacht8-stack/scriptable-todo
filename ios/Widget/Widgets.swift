@@ -8,6 +8,7 @@ struct AppWidgets: WidgetBundle {
     var body: some Widget {
         TodoWidget()
         WakeWidget()
+        WakeLiveActivity()
     }
 }
 

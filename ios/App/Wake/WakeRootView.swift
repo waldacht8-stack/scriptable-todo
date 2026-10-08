@@ -288,10 +288,12 @@ struct WakeWindowView: View {
 
 struct WakeMorningView: View {
     @ObservedObject var model: WakeViewModel
+    @StateObject private var weather = WakeWeatherModel()
 
     var body: some View {
         WakeResultCard(model: model)
         if let dep = model.departure, dep > model.now { WakeCountdownCard(model: model, departure: dep) }
+        WakeWeatherCard(weather: weather).onAppear { weather.load(demo: model.demo) }
         if !model.settings.routine.isEmpty { WakeRoutineCard(model: model) }
         if !model.settings.belongings.isEmpty { WakeBelongingsCard(model: model) }
         WakeTodoCard(now: model.now)

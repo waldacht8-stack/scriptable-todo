@@ -18,7 +18,7 @@ struct WakeCheckInIntent: LiveActivityIntent {
 }
 
 /// ルーティンの次の項目を完了にする（ウィジェットのボタン）
-struct WakeRoutineStepIntent: AppIntent {
+struct WakeRoutineStepIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "ルーティンを1つ進める"
     static var openAppWhenRun: Bool = false
 
@@ -36,6 +36,7 @@ struct WakeRoutineStepIntent: AppIntent {
             state.routineDone.append(id)
         }
         WakeStore.save(state)
+        await WakeActivityControl.sync()
         return .result()
     }
 }

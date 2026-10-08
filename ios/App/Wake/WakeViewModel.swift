@@ -43,6 +43,7 @@ final class WakeViewModel: ObservableObject {
         state = WakeStore.state()
         sessions = WakeStore.sessions()
         if reschedule && !demo { scheduleAll() }
+        if !demo { Task { await WakeActivityControl.sync() } }
     }
 
     func update(_ change: (inout WakeSettings) -> Void) {
@@ -105,6 +106,7 @@ final class WakeViewModel: ObservableObject {
         s.routineDone = state.routineDone
         s.belongingsDone = state.belongingsDone
         WakeStore.save(s)
+        Task { await WakeActivityControl.sync() }
     }
 
     /// 次の起床日だけオフ（もう一度押すと元に戻す）
