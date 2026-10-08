@@ -65,7 +65,7 @@ jobs:
           for combo in focus:focus board:night thumb:dawn timeline:paper; do
             layout=${combo%%:*}; theme=${combo##*:}
             SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -layout $layout -theme $theme -tab 0 -AppleLanguages "(ja)" -AppleLocale ja_JP
-            sleep 7
+            sleep 14
             xcrun simctl io "$UDID" screenshot "shots/home-$layout-$theme.png"
           done
           # 週間が白いままのことがあったので、長めに待った写真と、アプリが動いているかを残す
@@ -80,7 +80,7 @@ jobs:
           # 起床・習慣・集中のタブ（見本データ）
           for tab in 1 2 3; do
             SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -theme focus -tab $tab -AppleLanguages "(ja)" -AppleLocale ja_JP
-            sleep 7
+            sleep 14
             xcrun simctl io "$UDID" screenshot "shots/tab-$tab.png"
           done
           SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -tab 4 -AppleLanguages "(ja)" -AppleLocale ja_JP
