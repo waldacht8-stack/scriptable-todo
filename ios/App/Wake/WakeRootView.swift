@@ -125,11 +125,12 @@ struct WakeNextCard: View {
                     Text(JP.time(plan.first)).font(.system(size: 72, weight: .heavy, design: p.fontDesign))
                         .foregroundStyle(p.text).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                 }
-                Text("あと \(WakeLogic.duration(plan.first.timeIntervalSince(model.now)))・アラーム\(plan.stages.count)回（\(JP.time(plan.last))まで）")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(p.accent)
-                if let dep = plan.departure {
-                    Text("出発 \(JP.time(dep))").font(.footnote.weight(.semibold)).foregroundStyle(p.sub)
-                }
+                let left: String = "あと \(WakeLogic.duration(plan.first.timeIntervalSince(model.now)))"
+                Text(left).font(Font.headline).foregroundStyle(p.accent)
+                let detail: String = "アラーム\(plan.stages.count)回（\(JP.time(plan.last))まで）"
+                    + (plan.departure.map { "・出発 \(JP.time($0))" } ?? "")
+                Text(detail).font(Font.footnote.weight(.semibold)).foregroundStyle(p.sub)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("予定はありません").font(.title.bold()).foregroundStyle(p.text)
                 Text("設定で起きる曜日と時刻を決めてください").font(.footnote).foregroundStyle(p.sub)
@@ -165,8 +166,34 @@ struct WakeStageTimeline: View {
                         .monospacedDigit().foregroundStyle(done ? p.sub : p.text)
                 }
             }
+            Divider().padding(.vertical, 2)
+            WakeAlarmHint()
         }
         .paletteCard(p)
+    }
+}
+
+/// アラーム画面の2つのボタンの違い（「止める」では次のアラームが止まらない）
+struct WakeAlarmHint: View {
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            row(icon: "stop.circle", title: "止める", text: "今の音だけ止まります。次のアラームは鳴ります")
+            row(icon: "sun.max.fill", title: "起きた！", text: "残りのアラームがすべて止まり、起床を記録します")
+        }
+    }
+
+    private func row(icon: String, title: String, text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: icon).font(Font.footnote.weight(.bold)).foregroundStyle(p.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("「\(title)」").font(Font.footnote.weight(.bold)).foregroundStyle(p.text)
+                Text(text).font(Font.footnote).foregroundStyle(p.sub)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
     }
 }
 
@@ -265,7 +292,7 @@ struct WakeWindowView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("起きた！チェックイン")
-            Text("押すと残りのアラームが止まります").font(.footnote).foregroundStyle(p.sub)
+            Text("押すと、残りのアラームがすべて止まります").font(Font.footnote).foregroundStyle(p.sub)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
@@ -504,16 +531,14 @@ struct WakeBedtimeCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            WakeCardTitle(text: "就寝", icon: "bed.double.fill")
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(JP.time(bed)).font(.system(size: 64, weight: .heavy, design: p.fontDesign))
-                    .monospacedDigit().foregroundStyle(p.text)
-                Text(bed > now ? "まで あと\(WakeLogic.duration(bed.timeIntervalSince(now)))" : "を過ぎました")
-                    .font(.headline).foregroundStyle(bed > now ? p.accent : p.overdue)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-            }
-            Text("今寝ると \(WakeLogic.duration(plan.first.timeIntervalSince(now))) 眠れます")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+            WakeCardTitle(text: "就寝の予定", icon: "bed.double.fill")
+            Text(JP.time(bed)).font(Font.system(size: 64, weight: .heavy, design: p.fontDesign))
+                .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
+            let status: String = bed > now ? "あと \(WakeLogic.duration(bed.timeIntervalSince(now)))" : "就寝の時刻を過ぎています"
+            let statusColor: Color = bed > now ? p.accent : p.overdue
+            Text(status).font(Font.headline).foregroundStyle(statusColor)
+            let sleep: String = "今寝ると \(WakeLogic.duration(plan.first.timeIntervalSince(now))) 眠れます"
+            Text(sleep).font(Font.subheadline.weight(.semibold)).foregroundStyle(p.sub)
         }
         .paletteCard(p, padding: 22)
     }

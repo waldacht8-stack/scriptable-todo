@@ -74,7 +74,8 @@ enum WakeActions {
             for stage in plan.stages where stage.at > now {
                 let id = UUID()
                 do {
-                    try await scheduleOne(id: id, stage: stage, total: plan.stages.count)
+                    let next: Date? = plan.stages.first(where: { $0.number == stage.number + 1 })?.at
+                    try await scheduleOne(id: id, stage: stage, total: plan.stages.count, next: next)
                     state.alarms.append(WakeScheduledAlarm(id: id.uuidString, at: stage.at, day: plan.day, stage: stage.number))
                     count += 1
                     any = true
@@ -91,10 +92,18 @@ enum WakeActions {
     }
 
     @available(iOS 26.0, *)
-    private static func scheduleOne(id: UUID, stage: WakePlan.Stage, total: Int) async throws {
+    private static func scheduleOne(id: UUID, stage: WakePlan.Stage, total: Int, next: Date?) async throws {
         let stop = AlarmButton(text: "止める", textColor: .white, systemImageName: "stop.circle")
         let up = AlarmButton(text: "起きた！", textColor: .white, systemImageName: "sun.max.fill")
-        let title = stage.name.isEmpty ? "起床アラーム \(stage.number)/\(total)" : "起床アラーム \(stage.number)/\(total)：\(stage.name)"
+        // 「止める」は今の音を止めるだけで、次のアラームは鳴る。そのことを題名で伝える
+        let head: String = stage.name.isEmpty ? "起床アラーム \(stage.number)/\(total)" : "\(stage.name)（\(stage.number)/\(total)）"
+        let tail: String
+        if let next {
+            tail = "止めても\(JP.time(next))にまた鳴ります"
+        } else {
+            tail = "最後のアラームです"
+        }
+        let title = "\(head)・\(tail)"
         let alert = AlarmPresentation.Alert(
             title: LocalizedStringResource(stringLiteral: title),
             stopButton: stop,
