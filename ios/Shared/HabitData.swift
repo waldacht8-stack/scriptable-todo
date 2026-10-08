@@ -281,7 +281,8 @@ struct HabitRing: View {
         ZStack {
             Circle().stroke((track ?? color.opacity(0.18)), lineWidth: lineWidth)
             Circle()
-                .trim(from: 0, to: max(0.001, min(1, fraction)))
+                .trim(from: 0, to: max(0, min(1, fraction)))
+                .opacity(fraction > 0 ? 1 : 0)
                 .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
