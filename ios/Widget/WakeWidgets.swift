@@ -2,59 +2,283 @@ import SwiftUI
 import WidgetKit
 import AppIntents
 
-// 起床のウィジェット（エージェント1の担当）
+// 起床のウィジェット（エージェント1の担当）。
+// チェックイン前：次のアラームと「起きた！」ボタン。チェックイン後：出発までのカウントダウンと次のルーティン。
 
 struct WakeEntry: TimelineEntry {
     let date: Date
-    let state: WakeState
+    let snap: WakeSnapshot
+    let palette: Palette
 }
 
 struct WakeProvider: TimelineProvider {
-    func placeholder(in context: Context) -> WakeEntry { WakeEntry(date: .now, state: WakeState()) }
+    private func entry(at d: Date) -> WakeEntry {
+        WakeEntry(date: d, snap: WakeSnapshot.make(now: d), palette: AppTheme.from(SettingsData.load().theme).palette)
+    }
+
+    func placeholder(in context: Context) -> WakeEntry { entry(at: .now) }
 
     func getSnapshot(in context: Context, completion: @escaping (WakeEntry) -> Void) {
-        completion(WakeEntry(date: .now, state: WakeData.state()))
+        completion(entry(at: .now))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<WakeEntry>) -> Void) {
-        let e = WakeEntry(date: .now, state: WakeData.state())
-        completion(Timeline(entries: [e], policy: .after(.now.addingTimeInterval(15 * 60))))
+        // 時間帯が切り替わる時刻（起床の2時間前・各段階・正午・出発・18時）にも描き直す
+        let now = Date()
+        let snap = WakeSnapshot.make(now: now)
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        var times: [Date] = [now]
+        if let n = snap.next {
+            times.append(n.first.addingTimeInterval(-2 * 3600))
+            times.append(contentsOf: n.stages.map(\.at))
+        }
+        if let dep = snap.departure { times.append(dep) }
+        for h in [12, 18, 24] {
+            if let d = cal.date(byAdding: .hour, value: h, to: today) { times.append(d) }
+        }
+        let limit = now.addingTimeInterval(24 * 3600)
+        let sorted = Array(Set(times.filter { $0 >= now && $0 <= limit })).sorted()
+        let entries: [WakeEntry] = sorted.prefix(20).map { entry(at: $0) }
+        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(30 * 60))))
     }
 }
 
 struct WakeWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "WakeWidget", provider: WakeProvider()) { entry in
-            WakeWidgetView(state: entry.state)
-                .containerBackground(.background, for: .widget)
+            WakeWidgetView(entry: entry)
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette) }
         }
         .configurationDisplayName("起床")
-        .description("起床チェックインと出発までの時間。")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .description("次のアラームと「起きた！」ボタン。起きた後は出発までの時間と次のルーティン。")
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryCircular, .accessoryInline])
     }
 }
 
 struct WakeWidgetView: View {
-    let state: WakeState
+    @Environment(\.widgetFamily) private var family
+    let entry: WakeEntry
+    private var p: Palette { entry.palette }
+    private var s: WakeSnapshot { entry.snap }
+    private var checked: Bool { s.checkInAt != nil }
+    private var departureAhead: Date? {
+        guard checked, let d = s.departure, d > entry.date else { return nil }
+        return d
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("起床").font(.headline)
-            if let at = state.checkedInAt, Calendar.current.isDateInToday(at) {
-                Label("チェックイン済み \(at.formatted(date: .omitted, time: .shortened))", systemImage: "sun.max.fill")
-                    .font(.subheadline)
+        Group {
+            switch family {
+            case .accessoryInline: inline
+            case .accessoryCircular: circular
+            case .accessoryRectangular: rectangular
+            case .systemMedium: medium
+            default: small
+            }
+        }
+        .fontDesign(p.fontDesign)
+    }
+
+    // MARK: ホーム画面
+
+    private var small: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let dep = departureAhead {
+                Text("出発まで").font(.caption.weight(.bold)).foregroundStyle(p.sub)
+                Text(dep, style: .timer).font(.system(size: 30, weight: .heavy, design: p.fontDesign))
+                    .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
+                Spacer(minLength: 0)
+                stepButton
+            } else if checked {
+                Text("今朝の起床").font(.caption.weight(.bold)).foregroundStyle(p.sub)
+                Text(s.checkInAt.map { JP.time($0) } ?? "").font(.system(size: 30, weight: .heavy, design: p.fontDesign))
+                    .foregroundStyle(p.text)
+                Text("\(s.score ?? 0)点").font(.headline).foregroundStyle(p.accent)
+                Spacer(minLength: 0)
+                nextLine
             } else {
-                Button(intent: CheckInIntent()) {
-                    Label("起きた！", systemImage: "alarm")
-                        .font(.subheadline.bold())
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(.tint, in: RoundedRectangle(cornerRadius: 10))
-                        .foregroundStyle(.white)
+                nextAlarmBlock(size: 34)
+                Spacer(minLength: 0)
+                checkInButton
+            }
+        }
+    }
+
+    private var medium: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                if let dep = departureAhead {
+                    Text("出発まで").font(.caption.weight(.bold)).foregroundStyle(p.sub)
+                    Text(dep, style: .timer).font(.system(size: 36, weight: .heavy, design: p.fontDesign))
+                        .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
+                    Text("出発 \(JP.time(dep))").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
+                } else if checked {
+                    Text("今朝の起床").font(.caption.weight(.bold)).foregroundStyle(p.sub)
+                    Text(s.checkInAt.map { JP.time($0) } ?? "").font(.system(size: 36, weight: .heavy, design: p.fontDesign))
+                        .foregroundStyle(p.text)
+                    Text("\(s.score ?? 0)点").font(.headline).foregroundStyle(p.accent)
+                } else {
+                    nextAlarmBlock(size: 40)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 6) {
+                if departureAhead != nil {
+                    Text("次のルーティン").font(.caption.weight(.bold)).foregroundStyle(p.sub)
+                    Text(s.nextStep?.name ?? "出発準備OK").font(.headline).foregroundStyle(p.text).lineLimit(2)
+                    Spacer(minLength: 0)
+                    stepButton
+                } else if checked {
+                    nextLine
+                    Spacer(minLength: 0)
+                } else {
+                    stagesList
+                    Spacer(minLength: 0)
+                    checkInButton
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func nextAlarmBlock(size: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Label(s.phase == .window ? "起床中" : "次のアラーム", systemImage: "alarm.fill")
+                .font(.caption.weight(.bold)).foregroundStyle(p.sub)
+            if let n = s.next {
+                Text(JP.time(s.phase == .window ? (s.nextStage?.at ?? n.first) : n.first))
+                    .font(.system(size: size, weight: .heavy, design: p.fontDesign))
+                    .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
+                Text(s.phase == .window ? "\(s.reached)回目まで鳴りました" : "\(WakeLogic.dayLabel(n.first, now: entry.date))・アラーム\(n.stages.count)回")
+                    .font(.caption.weight(.semibold)).foregroundStyle(p.accent).lineLimit(1)
+            } else {
+                Text("予定なし").font(.title2.weight(.heavy)).foregroundStyle(p.text)
+            }
+        }
+    }
+
+    private var stagesList: some View {
+        let stages: [WakePlan.Stage] = (s.phase == .window ? s.today : s.next)?.stages ?? []
+        return VStack(alignment: .leading, spacing: 3) {
+            ForEach(stages, id: \.number) { st in
+                HStack(spacing: 6) {
+                    Image(systemName: st.at <= entry.date ? "bell.fill" : "bell")
+                        .font(.caption2).foregroundStyle(p.accent)
+                    Text("\(st.number)回目").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
+                    Spacer(minLength: 0)
+                    Text(JP.time(st.at)).font(.caption.weight(.bold)).monospacedDigit().foregroundStyle(p.text)
+                }
+            }
+        }
+    }
+
+    private var nextLine: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("次の起床").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+            Text(s.next.map { "\(WakeLogic.dayLabel($0.first, now: entry.date)) \(JP.time($0.first))" } ?? "予定なし")
+                .font(.caption.weight(.bold)).foregroundStyle(p.text).lineLimit(1)
+        }
+    }
+
+    private var checkInButton: some View {
+        Button(intent: WakeCheckInIntent()) {
+            Label("起きた！", systemImage: "sun.max.fill").font(.subheadline.weight(.heavy))
+                .frame(maxWidth: .infinity).padding(.vertical, 8)
+                .background(p.accent, in: RoundedRectangle(cornerRadius: min(p.radius, 12), style: .continuous))
+                .foregroundStyle(p.onAccent)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder private var stepButton: some View {
+        if let step = s.nextStep {
+            Button(intent: WakeRoutineStepIntent(id: step.id)) {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle")
+                    Text(step.name).lineLimit(1)
+                }
+                .font(.caption.weight(.bold))
+                .frame(maxWidth: .infinity).padding(.vertical, 7)
+                .background(p.accent, in: RoundedRectangle(cornerRadius: min(p.radius, 12), style: .continuous))
+                .foregroundStyle(p.onAccent)
+            }
+            .buttonStyle(.plain)
+        } else {
+            Label("出発準備OK", systemImage: "checkmark.seal.fill").font(.caption.weight(.bold)).foregroundStyle(p.accent)
+        }
+    }
+
+    // MARK: ロック画面（単色）
+
+    @ViewBuilder private var inline: some View {
+        if let dep = departureAhead {
+            Text("出発まで \(dep, style: .timer)")
+        } else if s.phase == .window {
+            Text("起きたらチェックイン")
+        } else if let n = s.next {
+            Text("\(WakeLogic.dayLabel(n.first, now: entry.date)) \(JP.time(n.first)) 起床")
+        } else {
+            Text("起床の予定なし")
+        }
+    }
+
+    private var circular: some View {
+        ZStack {
+            AccessoryWidgetBackground()
+            if let dep = departureAhead {
+                VStack(spacing: 0) {
+                    Text("出発").font(.system(size: 9, weight: .semibold))
+                    Text(dep, style: .timer).font(.system(size: 12, weight: .heavy)).monospacedDigit()
+                        .multilineTextAlignment(.center).minimumScaleFactor(0.5)
+                }
+                .padding(4)
+            } else if !checked && s.phase == .window {
+                Button(intent: WakeCheckInIntent()) {
+                    VStack(spacing: 0) {
+                        Image(systemName: "sun.max.fill").font(.title3)
+                        Text("起きた").font(.system(size: 10, weight: .bold))
+                    }
                 }
                 .buttonStyle(.plain)
+            } else if let n = s.next {
+                VStack(spacing: 0) {
+                    Image(systemName: "alarm.fill").font(.caption)
+                    Text(JP.time(n.first)).font(.system(size: 14, weight: .heavy)).monospacedDigit().minimumScaleFactor(0.6)
+                }
+            } else {
+                Image(systemName: "alarm")
             }
-            Spacer(minLength: 0)
         }
+    }
+
+    private var rectangular: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            if let dep = departureAhead {
+                Text("出発 \(JP.time(dep)) まで").font(.caption2.weight(.semibold))
+                Text(dep, style: .timer).font(.title3.weight(.heavy)).monospacedDigit()
+                Text(s.nextStep.map { "次：\($0.name)" } ?? "出発準備OK").font(.caption.weight(.semibold)).lineLimit(1)
+            } else if !checked && s.phase == .window {
+                Button(intent: WakeCheckInIntent()) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("\(s.reached)回目まで鳴りました").font(.caption2.weight(.semibold))
+                        Label("起きた！", systemImage: "sun.max.fill").font(.headline.weight(.heavy))
+                        Text(s.nextStage.map { "次は \(JP.time($0.at))" } ?? "最後のアラーム").font(.caption2)
+                    }
+                }
+                .buttonStyle(.plain)
+            } else if let n = s.next {
+                Text("次の起床・アラーム\(n.stages.count)回").font(.caption2.weight(.semibold))
+                Text("\(WakeLogic.dayLabel(n.first, now: entry.date)) \(JP.time(n.first))").font(.title3.weight(.heavy))
+                if let bed = s.bedtime, bed > entry.date {
+                    Text("就寝 \(JP.time(bed))").font(.caption2)
+                }
+            } else {
+                Text("起床").font(.caption2.weight(.semibold))
+                Text("予定なし").font(.headline)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 45
     defaults:
       run:
@@ -43,8 +43,13 @@ jobs:
 
       - name: シミュレーター用にビルド
         run: |
+          set +e
           xcodebuild -project TodoApp.xcodeproj -scheme TodoApp -sdk iphonesimulator \
-            -configuration Debug -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO build | tail -40
+            -configuration Debug -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO build > sim.log 2>&1
+          code=$?
+          grep -E "error:" sim.log | sort -u | head -60   # エラー行はすべて見えるように
+          tail -5 sim.log
+          exit $code
 
       - name: シミュレーターで起動してスクリーンショット
         run: |

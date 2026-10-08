@@ -13,3 +13,4 @@ ios/App/*.entitlements
 ios/Widget/Info.plist
 ios/Widget/*.entitlements
 ios/App/Assets.xcassets/AppIcon.appiconset/icon.png
+.claude/worktrees/
