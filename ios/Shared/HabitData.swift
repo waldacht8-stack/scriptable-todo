@@ -234,12 +234,13 @@ enum HabitData {
         return active == 0 ? nil : Double(done) / Double(active)
     }
 
-    /// 今日の対象の習慣全体の進み具合（0〜1。回数の習慣は途中まででも数える）
+    /// 今日の対象の習慣のうち、達成したものの割合（0〜1）。
+    /// 見出しの「n / m 達成」と同じ数え方にする（途中までの回数は各カードの輪に出す）
     static func dayProgress(_ habits: [Habit], _ log: HabitLog, on d: Date = .now) -> Double {
-        let active = habits.filter { $0.isActive(on: d) }
+        let active: [Habit] = habits.filter { $0.isActive(on: d) }
         guard !active.isEmpty else { return 0 }
-        let sum = active.reduce(0.0) { $0 + min(1, Double(count(log, $1, d)) / Double($1.target)) }
-        return sum / Double(active.count)
+        let done: Int = active.filter { isDone(log, $0, d) }.count
+        return Double(done) / Double(active.count)
     }
 
     // MARK: 見本データ（起動引数 -demo。一般的な内容だけ）
