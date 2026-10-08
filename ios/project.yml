@@ -31,6 +31,10 @@ targets:
         NSLocationWhenInUseUsageDescription: 朝のブリーフィングで今いる場所の天気を表示するために使います。
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.todoapp.TodoApp.refresh
     entitlements:
       path: App/TodoApp.entitlements
       properties:

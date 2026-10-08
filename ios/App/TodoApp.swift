@@ -1,5 +1,6 @@
 import SwiftUI
 import WidgetKit
+import BackgroundTasks
 
 @main
 struct HiyoriApp: App {
@@ -15,12 +16,40 @@ struct HiyoriApp: App {
             RootView()
                 .environmentObject(store)
                 .onChange(of: phase) { _, p in
+                    if p == .background { BackgroundRefresh.schedule() }
                     guard p == .active else { return }
                     store.reload() // ウィジェット・通知で変えた内容を反映
                     if !ProcessInfo.processInfo.arguments.contains("-demo") { Task { await store.refreshServices() } }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .todoDataChanged)) { _ in store.reload() }
         }
+        // アプリを開いていなくても、ときどきカレンダーの取り込みと通知の予約し直しをする
+        .backgroundTask(.appRefresh(BackgroundRefresh.id)) {
+            BackgroundRefresh.schedule()
+            await BackgroundRefresh.run()
+        }
+    }
+}
+
+/// バックグラウンドでの更新（実行の時刻は iOS が決める。おおむね1時間以上の間隔）
+enum BackgroundRefresh {
+    static let id = "com.todoapp.TodoApp.refresh"
+
+    static func schedule() {
+        let request = BGAppRefreshTaskRequest(identifier: id)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    @MainActor
+    static func run() async {
+        let s = SettingsData.load()
+        var list = TodoData.all()
+        if s.calendarImport && CalendarSync.authorized {
+            CalendarSync.importEvents(into: &list, settings: s)
+            TodoData.save(list)
+        }
+        await TodoNotifier.shared.reschedule(list, settings: s)
     }
 }
 
