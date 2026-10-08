@@ -161,20 +161,24 @@ struct WakeWeatherCard: View {
         VStack(alignment: .leading, spacing: 8) {
             WakeCardTitle(text: "今日の天気", icon: "cloud.sun.fill")
             if let w = weather.weather {
-                HStack(alignment: .center, spacing: 16) {
-                    Image(systemName: w.symbol).symbolRenderingMode(.multicolor).font(.system(size: 48))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(w.text).font(.title2.weight(.bold)).foregroundStyle(p.text)
-                        Text("最高 \(Int(w.high.rounded()))° / 最低 \(Int(w.low.rounded()))°")
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
-                    }
+                // 狭い画面でも切れないよう、上段に絵と気温、下段に天気と最高・最低・降水確率
+                let temp: String = "\(Int(w.temp.rounded()))°"
+                let range: String = "最高 \(Int(w.high.rounded()))°・最低 \(Int(w.low.rounded()))°"
+                let rain: String = "降水 \(w.rain)%"
+                let rainColor: Color = w.rain >= 50 ? p.overdue : p.accent
+                HStack(alignment: .center, spacing: 14) {
+                    Image(systemName: w.symbol).symbolRenderingMode(.multicolor).font(Font.system(size: 44))
+                    Text(temp).font(Font.system(size: 44, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
                     Spacer(minLength: 0)
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("\(Int(w.temp.rounded()))°").font(.system(size: 40, weight: .heavy, design: p.fontDesign))
-                            .foregroundStyle(p.text)
-                        Label("\(w.rain)%", systemImage: "umbrella.fill").font(.caption.weight(.bold))
-                            .foregroundStyle(w.rain >= 50 ? p.overdue : p.accent)
-                    }
+                    Text(w.text).font(Font.title3.weight(.bold)).foregroundStyle(p.text)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+                HStack(spacing: 12) {
+                    Text(range).font(Font.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 0)
+                    Label(rain, systemImage: "umbrella.fill").font(Font.subheadline.weight(.bold))
+                        .foregroundStyle(rainColor).lineLimit(1)
                 }
             } else if weather.needsLocation {
                 Button { weather.locate() } label: {
