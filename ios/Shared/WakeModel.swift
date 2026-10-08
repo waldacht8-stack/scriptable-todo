@@ -314,11 +314,40 @@ enum WakeLogic {
             if let dep = departure(now: now, settings: s), now < dep { return .morning }
             return hour >= 18 ? .evening : .day
         }
-        if let p = plan(for: now, settings: s, state: state), !p.isSkipped,
-           now >= p.first.addingTimeInterval(-2 * 3600), hour < 12 {
+        if canCheckIn(now: now, settings: s, state: state) {
             return .window
         }
         return hour >= 18 ? .evening : .before
+    }
+
+    /// その日のチェックインを受け付ける時間（最初のアラームの2時間前〜正午。遅い起床なら最後のアラームの1時間後まで）。
+    /// 起きる日でない・オフの日は nil
+    static func checkInWindow(for date: Date, settings s: WakeSettings, state: WakeDayState) -> (start: Date, end: Date)? {
+        guard let p = plan(for: date, settings: s, state: state), !p.isSkipped else { return nil }
+        let start: Date = p.first.addingTimeInterval(-2 * 3600)
+        let noon: Date = cal.date(byAdding: .hour, value: 12, to: p.dayStart) ?? p.dayStart
+        let end: Date = max(noon, p.last.addingTimeInterval(3600))
+        return (start, end)
+    }
+
+    /// 今チェックインできるか（受付時間内で、まだチェックインしていない）
+    static func canCheckIn(now: Date, settings s: WakeSettings, state: WakeDayState) -> Bool {
+        guard checkedIn(state, now: now) == nil,
+              let w = checkInWindow(for: now, settings: s, state: state) else { return false }
+        return now >= w.start && now < w.end
+    }
+
+    /// 次にチェックインを押せるようになる時刻（今押せるなら今）
+    static func nextCheckInStart(now: Date, settings s: WakeSettings, state: WakeDayState) -> Date? {
+        let start = cal.startOfDay(for: now)
+        let checked = checkedIn(state, now: now) != nil
+        for i in 0..<14 {
+            guard let d = cal.date(byAdding: .day, value: i, to: start),
+                  let w = checkInWindow(for: d, settings: s, state: state) else { continue }
+            if i == 0 && checked { continue }
+            if w.end > now { return max(w.start, now) }
+        }
+        return nil
     }
 
     /// 起床日の前夜の就寝時刻
@@ -412,6 +441,8 @@ struct WakeSnapshot {
     var nextStep: WakeRoutineItem?
     var stepsLeft: Int
     var bedtime: Date?
+    var canCheckIn: Bool = false
+    var checkInFrom: Date? = nil
 
     static func make(now: Date) -> WakeSnapshot {
         let s = WakeStore.settings()
@@ -429,7 +460,9 @@ struct WakeSnapshot {
             checkInAt: checkIn, score: checkIn != nil ? session?.score : nil,
             departure: WakeLogic.departure(now: now, settings: s),
             nextStep: checkIn != nil ? remaining.first : nil, stepsLeft: remaining.count,
-            bedtime: next.map { WakeLogic.bedtime(before: $0, settings: s) }
+            bedtime: next.map { WakeLogic.bedtime(before: $0, settings: s) },
+            canCheckIn: WakeLogic.canCheckIn(now: now, settings: s, state: st),
+            checkInFrom: WakeLogic.nextCheckInStart(now: now, settings: s, state: st)
         )
     }
 }
