@@ -1,28 +1,54 @@
 // todo-lib/widget.js
-// ホーム画面（小・中・大）とロック画面（円形・長方形・1行）のウィジェット。デザインは案1。
+// ホーム画面（小・中・大）とロック画面（円形・長方形・1行）のウィジェット。
+// デザインは設定の theme（clean／night／pop／mono）で切り替える。
 
-function palette() {
-  const dyn = (light, dark) => Color.dynamic(new Color(light), new Color(dark))
-  return {
-    bg: dyn('#FFFFFF', '#1C1F26'),
-    text: dyn('#15181D', '#F2F4F7'),
-    sub: dyn('#5A6270', '#9AA3AF'),
-    accent: dyn('#1D4ED8', '#6EA0FF'),
-    overdue: dyn('#C2410C', '#FB923C'),
-    overdueText: dyn('#9A3412', '#FDBA74'),
-    overdueBg: dyn('#FDEEE6', '#3A2214'),
-    line: dyn('#ECEEF1', '#2A2F38'),
-  }
+// [ライト, ダーク] は iPhone の外観設定に合わせて切り替わる。文字列1つはどちらの外観でも同じ色
+const THEMES = {
+  clean: {
+    bg: ['#FFFFFF', '#1C1F26'], text: ['#15181D', '#F2F4F7'], sub: ['#5A6270', '#9AA3AF'], accent: ['#1D4ED8', '#6EA0FF'],
+    overdue: ['#C2410C', '#FB923C'], overdueText: ['#9A3412', '#FDBA74'], overdueBg: ['#FDEEE6', '#3A2214'], line: ['#ECEEF1', '#2A2F38'],
+    radius: 10, rounded: false,
+  },
+  night: {
+    bg: '#0F1115', text: '#F2F4F7', sub: '#9AA3AF', accent: '#34D399',
+    overdue: '#FB923C', overdueText: '#FDBA74', overdueBg: '#2A1A10', line: '#262A33',
+    radius: 8, rounded: false,
+  },
+  pop: {
+    bg: ['#FFFFFF', '#14201F'], text: ['#1B1F24', '#F1F5F4'], sub: ['#59616C', '#9FB0AD'], accent: ['#0F766E', '#2DD4BF'],
+    overdue: ['#C2410C', '#FB923C'], overdueText: ['#9A3412', '#FDBA74'], overdueBg: ['#FDEEE6', '#3A2214'], line: ['#E3E7EC', '#24302E'],
+    radius: 14, rounded: true,
+  },
+  mono: {
+    bg: ['#FFFFFF', '#000000'], text: ['#111111', '#F5F5F5'], sub: ['#6B6B6B', '#A3A3A3'], accent: ['#111111', '#F5F5F5'],
+    overdue: ['#B91C1C', '#F87171'], overdueText: ['#991B1B', '#FCA5A5'], overdueBg: ['#FBEAEA', '#2A1212'], line: ['#E5E5E5', '#262626'],
+    radius: 6, rounded: false,
+  },
+}
+
+let ROUNDED = false // pop は丸ゴシック系の書体
+
+function palette(theme) {
+  const t = THEMES[theme] || THEMES.clean
+  const color = v => (Array.isArray(v) ? Color.dynamic(new Color(v[0]), new Color(v[1])) : new Color(v))
+  const C = { radius: t.radius, rounded: t.rounded }
+  for (const k of ['bg', 'text', 'sub', 'accent', 'overdue', 'overdueText', 'overdueBg', 'line']) C[k] = color(t[k])
+  return C
+}
+
+function font(weight, size) {
+  if (ROUNDED) return weight === 'regular' || weight === 'medium' ? Font.regularRoundedSystemFont(size) : Font.boldRoundedSystemFont(size)
+  return weight === 'heavy' ? Font.heavySystemFont(size)
+    : weight === 'regular' ? Font.systemFont(size)
+    : weight === 'semibold' ? Font.semiboldSystemFont(size)
+    : weight === 'medium' ? Font.mediumSystemFont(size)
+    : Font.boldSystemFont(size)
 }
 
 function text(stack, value, size, color, opts) {
   const o = opts || {}
   const t = stack.addText(String(value))
-  t.font = o.weight === 'heavy' ? Font.heavySystemFont(size)
-    : o.weight === 'regular' ? Font.systemFont(size)
-    : o.weight === 'semibold' ? Font.semiboldSystemFont(size)
-    : o.weight === 'medium' ? Font.mediumSystemFont(size)
-    : Font.boldSystemFont(size)
+  t.font = font(o.weight, size)
   if (color) t.textColor = color
   t.lineLimit = o.lines || 1
   if (o.minScale) t.minimumScaleFactor = o.minScale
@@ -66,7 +92,7 @@ function doneURL(t) {
 function overduePill(parent, count, C) {
   const p = parent.addStack()
   p.backgroundColor = C.overdueBg
-  p.cornerRadius = 8
+  p.cornerRadius = Math.max(4, C.radius - 2)
   p.setPadding(4, 8, 4, 8)
   p.centerAlignContent()
   p.spacing = 5
@@ -88,7 +114,7 @@ function addNextLeft(parent, next, size, labelColor, timeColor, stacked) {
   text(s, '次の期限まで', size - 2, labelColor)
   const d = s.addDate(new Date(next.due))
   d.applyTimerStyle()
-  d.font = Font.boldSystemFont(size)
+  d.font = font('bold', size)
   d.textColor = timeColor
   d.lineLimit = 1
   return s
@@ -207,7 +233,7 @@ function buildLarge(w, d, now, model, C) {
     const c = dueColor(t, now, model, C)
     const box = w.addStack()
     box.setPadding(5, 10, 5, 10)
-    box.cornerRadius = 10
+    box.cornerRadius = C.radius
     if (model.isOverdue(t, now)) box.backgroundColor = C.overdueBg
     row(box, t, c, dueLabel(t, now, model), model.isOverdue(t, now) ? C.overdueText : c, 15, C)
     w.addSpacer(3)
@@ -244,7 +270,9 @@ function buildInline(w, d, now, model) {
 }
 
 function build(data, family, now, model, errorMessage) {
-  const C = palette()
+  const theme = (data.settings && data.settings.theme) || 'clean'
+  ROUNDED = !!(THEMES[theme] || THEMES.clean).rounded
+  const C = palette(theme)
   const d = model.byDeadline(data.todos, now)
   const g = model.categorize(data.todos, now)
   d.celebrate = g.stats.total > 0 && g.stats.remaining === 0 // 今日の分をすべて終えた
@@ -280,4 +308,4 @@ function buildError(message) {
   return w
 }
 
-module.exports = { build, buildError }
+module.exports = { build, buildError, THEMES }

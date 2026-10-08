@@ -3,19 +3,65 @@
 // 画面 → Scriptable の受け渡しは「window.__next(completion) を繰り返し待つ」ロングポーリング方式。
 
 const CSS = `
-:root{
+/* デザイン（設定の theme）。html と body に theme-xxx クラスを付けて、色・角丸・書体の変数を差し替える */
+:root,.theme-clean{
   --bg:#F4F5F7;--card:#FFFFFF;--text:#15181D;--sub:#5A6270;--line:#ECEEF1;--track:#E1E4E9;
-  --accent:#1D4ED8;--accent-bg:#E8EEFC;--overdue:#C2410C;--overdue-bg:#FDEEE6;--muted:#8A919C;--btn:#15181D;--btn-text:#FFFFFF;
+  --accent:#1D4ED8;--accent-bg:#E8EEFC;--on-accent:#FFFFFF;--overdue:#C2410C;--overdue-bg:#FDEEE6;--muted:#8A919C;--btn:#15181D;--btn-text:#FFFFFF;
+  --r-card:16px;--r-check:15px;--r-check-s:13px;
+  --font:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;
 }
 @media (prefers-color-scheme: dark){
-  :root{
+  :root,.theme-clean{
     --bg:#0F1115;--card:#1C1F26;--text:#F2F4F7;--sub:#9AA3AF;--line:#2A2F38;--track:#2A2F38;
-    --accent:#6EA0FF;--accent-bg:#1E2A44;--overdue:#FB923C;--overdue-bg:#3A2214;--muted:#6B7280;--btn:#F2F4F7;--btn-text:#15181D;
+    --accent:#6EA0FF;--accent-bg:#1E2A44;--on-accent:#0F1115;--overdue:#FB923C;--overdue-bg:#3A2214;--muted:#6B7280;--btn:#F2F4F7;--btn-text:#15181D;
   }
 }
+/* ナイト：常にダーク、ミント、四角めのチェック */
+.theme-night{
+  --bg:#0B0D10;--card:#181B21;--text:#F2F4F7;--sub:#9AA3AF;--line:#262A33;--track:#262A33;
+  --accent:#34D399;--accent-bg:#11302A;--on-accent:#0B0D10;--overdue:#FB923C;--overdue-bg:#2A1A10;--muted:#6B7280;--btn:#34D399;--btn-text:#0B0D10;
+  --r-card:14px;--r-check:8px;--r-check-s:7px;
+  --font:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;
+  color-scheme:dark;
+}
+/* ポップ：丸い書体、大きな角丸、ティール */
+.theme-pop{
+  --bg:#F2F7F6;--card:#FFFFFF;--text:#1B1F24;--sub:#59616C;--line:#E3E7EC;--track:#DDE7E5;
+  --accent:#0F766E;--accent-bg:#E1F2EF;--on-accent:#FFFFFF;--overdue:#C2410C;--overdue-bg:#FDEEE6;--muted:#8A919C;--btn:#0F766E;--btn-text:#FFFFFF;
+  --r-card:24px;--r-check:16px;--r-check-s:14px;
+  --font:ui-rounded,"Hiragino Maru Gothic ProN",-apple-system,"Hiragino Sans",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  .theme-pop{
+    --bg:#0E1716;--card:#16211F;--text:#F1F5F4;--sub:#9FB0AD;--line:#24302E;--track:#24302E;
+    --accent:#2DD4BF;--accent-bg:#103532;--on-accent:#0E1716;--overdue:#FB923C;--overdue-bg:#3A2214;--muted:#6B7C79;--btn:#2DD4BF;--btn-text:#0E1716;
+  }
+}
+/* モノクロ：白黒だけ。期限切れだけ赤 */
+.theme-mono{
+  --bg:#FFFFFF;--card:#FFFFFF;--text:#111111;--sub:#6B6B6B;--line:#E5E5E5;--track:#EDEDED;
+  --accent:#111111;--accent-bg:#F0F0F0;--on-accent:#FFFFFF;--overdue:#B91C1C;--overdue-bg:#FBEAEA;--muted:#9A9A9A;--btn:#111111;--btn-text:#FFFFFF;
+  --r-card:8px;--r-check:15px;--r-check-s:13px;
+  --font:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;
+}
+.theme-mono .group{border:1px solid var(--line)}
+@media (prefers-color-scheme: dark){
+  .theme-mono{
+    --bg:#000000;--card:#0D0D0D;--text:#F5F5F5;--sub:#A3A3A3;--line:#262626;--track:#1F1F1F;
+    --accent:#F5F5F5;--accent-bg:#1A1A1A;--on-accent:#000000;--overdue:#F87171;--overdue-bg:#2A1212;--muted:#737373;--btn:#F5F5F5;--btn-text:#000000;
+  }
+}
+/* 設定のデザイン選択（色見本つきカード） */
+.themes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.theme-card{border:2px solid var(--line);border-radius:14px;background:var(--bg);padding:10px;display:flex;flex-direction:column;gap:8px;text-align:left;min-height:44px}
+.theme-card.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.theme-card b{font-size:14px;color:var(--text)}
+.theme-card small{font-size:11px;color:var(--sub)}
+.swatch{display:flex;gap:4px;height:22px}
+.swatch i{flex:1;border-radius:6px;border:1px solid rgba(127,127,127,.25)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--text);
-  font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;-webkit-text-size-adjust:100%}
+  font-family:var(--font);-webkit-text-size-adjust:100%}
 button{font-family:inherit;color:inherit}
 #app{padding:calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 110px)}
 .head{padding:0 4px 18px;display:flex;flex-direction:column;gap:12px}
@@ -34,7 +80,7 @@ h1{margin:2px 0 0;font-size:34px;font-weight:800;letter-spacing:.02em}
 .title .star{color:#E0A100;vertical-align:-2px;margin-right:4px}
 .imp-label{display:flex;align-items:center;gap:6px}
 .imp-label .star{color:#E0A100}
-.celebrate{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--accent-bg);color:var(--accent);border-radius:16px;padding:18px 12px;margin-bottom:20px;animation:pop .5s ease-out}
+.celebrate{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--accent-bg);color:var(--accent);border-radius:var(--r-card);padding:18px 12px;margin-bottom:20px;animation:pop .5s ease-out}
 .celebrate b{font-size:20px;font-weight:800}
 .celebrate span{font-size:13px;color:var(--sub)}
 .confetti{position:absolute;inset:0;pointer-events:none}
@@ -75,15 +121,15 @@ section.day{margin-bottom:14px;gap:6px}
 .cell{border:none;background:none;border-radius:10px;min-height:52px;padding:4px 0;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:15px;font-weight:600;color:var(--text)}
 .cell.blank{visibility:hidden}
 .cell .num{width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center}
-.cell.today .num{background:var(--accent);color:#fff}
+.cell.today .num{background:var(--accent);color:var(--on-accent)}
 .cell.sel{background:var(--bg);box-shadow:inset 0 0 0 2px var(--accent)}
-.badge{min-width:18px;height:18px;border-radius:9px;padding:0 5px;font-size:11px;font-weight:700;line-height:18px;background:var(--accent);color:#fff}
+.badge{min-width:18px;height:18px;border-radius:9px;padding:0 5px;font-size:11px;font-weight:700;line-height:18px;background:var(--accent);color:var(--on-accent)}
 .badge.od{background:var(--overdue)}
 .badge.done{background:var(--track);color:var(--sub)}
 .badge.none{background:none}
 .sun{color:var(--overdue)}
 .sat{color:var(--accent)}
-.cell.today .num.sun,.cell.today .num.sat{color:#fff}
+.cell.today .num.sun,.cell.today .num.sat{color:var(--on-accent)}
 .toast{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--btn);color:var(--btn-text);border-radius:14px;padding:10px 10px 10px 16px;font-size:14px;font-weight:600;margin-bottom:16px}
 .toast button{background:none;border:1px solid currentColor;color:inherit;border-radius:10px;padding:8px 12px;font-size:14px;font-weight:700;min-height:40px;flex-shrink:0}
 .error{background:var(--overdue-bg);color:var(--overdue);border-radius:14px;padding:12px 14px;font-size:13px;font-weight:600;margin-bottom:16px;line-height:1.5}
@@ -93,15 +139,15 @@ section{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 .sec-head h2{margin:0;font-size:15px;font-weight:700}
 .sec-head span{font-size:13px;font-weight:700}
 .c-overdue{color:var(--overdue)}.c-today{color:var(--accent)}.c-up{color:var(--sub)}
-.group{background:var(--card);border-radius:16px;overflow:hidden}
+.group{background:var(--card);border-radius:var(--r-card);overflow:hidden}
 .group.overdue{border:2px solid var(--overdue)}
 .item{display:flex;align-items:center;gap:14px;padding:14px 16px;min-height:64px;border-bottom:1px solid var(--line)}
 .item:last-child{border-bottom:none}
 .item.small{min-height:56px;padding:12px 16px}
-.check{width:30px;height:30px;flex-shrink:0;border-radius:15px;border:2.5px solid var(--accent);background:transparent;padding:0;
+.check{width:30px;height:30px;flex-shrink:0;border-radius:var(--r-check);color:var(--on-accent);border:2.5px solid var(--accent);background:transparent;padding:0;
   display:flex;align-items:center;justify-content:center;transition:background .2s}
 .overdue .check{border-color:var(--overdue)}
-.small .check{width:26px;height:26px;border-radius:13px;border-width:2px;border-color:var(--muted)}
+.small .check{width:26px;height:26px;border-radius:var(--r-check-s);border-width:2px;border-color:var(--muted)}
 .check svg{opacity:0;transition:opacity .2s}
 .check.on{background:var(--accent);border-color:var(--accent)}
 .overdue .check.on{background:var(--overdue)}
@@ -134,7 +180,7 @@ section{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 .link{align-self:flex-start;background:none;border:none;color:var(--accent);font-size:14px;padding:4px 0;min-height:36px}
 .actions{display:flex;gap:10px;margin-top:4px}
 .actions button{flex:1;height:50px;border-radius:14px;border:none;font-size:16px;font-weight:700}
-.btn-save{background:var(--accent);color:#fff}
+.btn-save{background:var(--accent);color:var(--on-accent)}
 .btn-cancel{background:var(--bg)}
 .btn-del{background:var(--overdue-bg);color:var(--overdue)}
 .btn-del.armed{background:var(--overdue);color:#fff}
@@ -204,7 +250,7 @@ function clientMain(DATA) {
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
   }
-  const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>'
+  const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>'
   const CAL = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'
   const PLUS = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
 
@@ -419,6 +465,8 @@ function clientMain(DATA) {
   }
 
   function closeSheet() {
+    // 設定でデザインを試しただけで閉じたら、保存済みのデザインに戻す
+    if (state.sheet && state.sheet.settings) applyTheme(state.settings.theme || 'clean')
     state.sheet = null
     document.getElementById('sheet').innerHTML = ''
   }
@@ -484,6 +532,43 @@ function clientMain(DATA) {
     setTimeout(() => { if (state.toast === toast) { state.toast = null; if (!state.sheet) render() } }, 6000)
   }
 
+  // ===== デザイン =====
+  // [名前, 表示名, 説明, 色見本（背景・カード・アクセント・期限切れ）]
+  const THEMES = [
+    ['clean', 'クリーン', '白いカードと青', ['#F4F5F7', '#FFFFFF', '#1D4ED8', '#C2410C']],
+    ['night', 'ナイト', '黒とミント（常にダーク）', ['#0B0D10', '#181B21', '#34D399', '#FB923C']],
+    ['pop', 'ポップ', '丸い書体とティール', ['#F2F7F6', '#FFFFFF', '#0F766E', '#C2410C']],
+    ['mono', 'モノクロ', '白黒のミニマル', ['#FFFFFF', '#F0F0F0', '#111111', '#B91C1C']],
+  ]
+
+  function applyTheme(name) {
+    let root = null
+    try { root = document.documentElement } catch (e) { /* 取れない環境では body だけ */ }
+    for (const el of [document.body, root]) {
+      if (!el) continue
+      for (const t of THEMES) el.classList.remove('theme-' + t[0])
+      el.classList.add('theme-' + name)
+    }
+  }
+
+  function themeCardsHTML(cur) {
+    return '<div class="themes">' + THEMES.map(t =>
+      '<button type="button" id="theme-' + t[0] + '" class="theme-card' + (t[0] === cur ? ' on' : '') + '" data-act="pick-theme" data-id="' + t[0] + '">' +
+      '<span class="swatch">' + t[3].map(c => '<i style="background:' + c + '"></i>').join('') + '</span>' +
+      '<b>' + t[1] + '</b><small>' + t[2] + '</small></button>').join('') + '</div>'
+  }
+
+  // 選んだデザインをその場で反映（保存するまでは試し）
+  function pickTheme(name) {
+    if (!state.sheet || !state.sheet.settings) return
+    state.sheet.theme = name
+    for (const t of THEMES) {
+      const card = document.getElementById('theme-' + t[0])
+      if (card) card.classList[t[0] === name ? 'add' : 'remove']('on')
+    }
+    applyTheme(name)
+  }
+
   // ===== 設定 =====
   function timeValue(h, m) {
     return pad2(h) + ':' + pad2(m || 0)
@@ -495,8 +580,9 @@ function clientMain(DATA) {
 
   function openSettings() {
     const s = state.settings
-    state.sheet = { settings: true }
-    let html = '<div class="backdrop" data-act="close"></div><form class="sheet" onsubmit="return false"><div class="grab"></div><h3>設定</h3><div class="set-title">通知</div>'
+    state.sheet = { settings: true, theme: s.theme || 'clean' }
+    let html = '<div class="backdrop" data-act="close"></div><form class="sheet" onsubmit="return false"><div class="grab"></div><h3>設定</h3>' +
+      '<div class="set-title">デザイン（アプリとウィジェット）</div>' + themeCardsHTML(state.sheet.theme) + '<div class="set-title">通知</div>'
     html += '<div class="set-row"><label class="check-row"><input id="s-morning-on" type="checkbox"' + (s.morningHour != null ? ' checked' : '') + '>朝の通知（今日のTODO）</label>' +
       '<input id="s-morning" type="time" value="' + timeValue(s.morningHour == null ? 7 : s.morningHour, s.morningMinute) + '"></div>'
     html += '<div class="set-row"><label class="check-row"><input id="s-evening-on" type="checkbox"' + (s.eveningHour != null ? ' checked' : '') + '>夜の通知（残りのTODO）</label>' +
@@ -538,6 +624,7 @@ function clientMain(DATA) {
       const keep = (cur.excludeCalendars || []).filter(c => cals.indexOf(c) < 0)
       s.excludeCalendars = keep.concat(cals.filter((c, i) => !get('s-cal-' + i).checked))
     }
+    s.theme = state.sheet.theme || s.theme
     state.settings = s
     closeSheet()
     showToast({ kind: 'info', title: '設定を保存しました' })
@@ -610,6 +697,7 @@ function clientMain(DATA) {
     else if (act === 'add') openSheet(null)
     else if (act === 'show-done') { state.showDone = !state.showDone; render() }
     else if (act === 'close') closeSheet()
+    else if (act === 'pick-theme') pickTheme(id)
     else if (act === 'save') saveSheet()
     else if (act === 'delete') deleteFromSheet(el)
     else if (act === 'view') {
@@ -659,9 +747,10 @@ function buildHTML(data, model, error, calendars, toast, allCalendars) {
     .map(name => model[name].toString()).join('\n')
   const payload = JSON.stringify({ todos: data.todos, error: error || null, calendars: calendars || [], toast: toast || null,
     settings: data.settings || {}, allCalendars: allCalendars || [] }).replace(/</g, '\\u003c')
-  return '<!doctype html><html lang="ja"><head><meta charset="utf-8">' +
+  const theme = ['clean', 'night', 'pop', 'mono'].indexOf((data.settings || {}).theme) >= 0 ? data.settings.theme : 'clean'
+  return '<!doctype html><html lang="ja" class="theme-' + theme + '"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">' +
-    '<style>' + CSS + '</style></head><body><div id="app"></div><div id="sheet"></div>' +
+    '<style>' + CSS + '</style></head><body class="theme-' + theme + '"><div id="app"></div><div id="sheet"></div>' +
     '<script>\n' + helpers + '\n' + clientMain.toString() + '\nclientMain(' + payload + ')\n</script></body></html>'
 }
 

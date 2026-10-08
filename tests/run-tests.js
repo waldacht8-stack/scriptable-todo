@@ -821,6 +821,69 @@ asyncTests.push(['模擬実行 お祝い表示: 今日の分を全部終えた�
   assert.ok(w.widgetTexts(w.script.widget).join('\n').indexOf('全部完了') >= 0, w.widgetTree(w.script.widget))
 }])
 
+// ===== デザイン（theme） =====
+const THEME_LIST = ['clean', 'night', 'pop', 'mono']
+for (const theme of THEME_LIST) {
+  for (const family of ['small', 'medium', 'large']) {
+    asyncTests.push(['模擬実行 ウィジェット（デザイン: ' + theme + '）' + family, async () => {
+      const data = sampleData()
+      data.settings = { theme: theme }
+      const env = await runTodo({ runsInWidget: true, widgetFamily: family, events: sampleEvents() }, data)
+      assertClean(env)
+      const w = env.script.widget
+      const fonts = []
+      const walk = n => {
+        if (n.__mockType === 'WidgetText') fonts.push(n.font.name)
+        if (n.__mockType === 'ListWidget' || n.__mockType === 'WidgetStack') n.children.forEach(walk)
+      }
+      walk(w)
+      const rounded = fonts.filter(f => f.indexOf('Rounded') >= 0).length
+      if (theme === 'pop') assert.strictEqual(rounded, fonts.length, 'ポップは丸い書体\n' + fonts.join(','))
+      else assert.strictEqual(rounded, 0, theme + ' は通常の書体')
+    }])
+  }
+}
+
+asyncTests.push(['模擬実行 設定でデザインを試す → キャンセルで戻る → 選んで保存', async () => {
+  const seen = {}
+  const env = await runTodo({
+    events: [],
+    onWebViewPresent: async (page, env) => {
+      const body = page.window.document.body
+      seen.start = body.classList.contains('theme-clean')
+      page.click('settings')
+      page.click('pick-theme', 'night')
+      seen.preview = body.classList.contains('theme-night') && !body.classList.contains('theme-clean')
+      seen.cardOn = page.window.document.getElementById('theme-night').classList.contains('on')
+      page.click('close')
+      seen.reverted = body.classList.contains('theme-clean') && !body.classList.contains('theme-night')
+      page.click('settings')
+      page.click('pick-theme', 'pop')
+      page.click('save-settings')
+      await env.waitFor(() => savedData(env).settings.theme === 'pop', 3000, 'デザインの保存')
+      seen.saved = body.classList.contains('theme-pop')
+    },
+  }, sampleData())
+  assertClean(env)
+  assert.deepStrictEqual(seen, { start: true, preview: true, cardOn: true, reverted: true, saved: true })
+
+  // 次に開いたときは保存したデザインで始まる
+  const ui = env.importModule('todo-lib/ui')
+  const html = ui.buildHTML(savedData(env), env.importModule('todo-lib/model'), null)
+  assert.ok(html.indexOf('<html lang="ja" class="theme-pop">') >= 0 && html.indexOf('<body class="theme-pop">') >= 0)
+}])
+
+asyncTests.push(['模擬実行 store: デザインの検証（知らない名前は無視）', async () => {
+  const env = createScriptableEnv()
+  const store = env.importModule('todo-lib/store')
+  const cur = store.normalize(null).settings
+  assert.strictEqual(cur.theme, 'clean', '既定はクリーン')
+  for (const t of THEME_LIST) assert.strictEqual(store.sanitizeSettings(cur, { theme: t }).theme, t)
+  assert.strictEqual(store.sanitizeSettings(cur, { theme: 'neon' }).theme, 'clean')
+  assert.ok(store.normalize({ settings: { theme: 'mono' } }).settings.theme === 'mono')
+  env.dispose()
+}])
+
 asyncTests.push(['模擬実行 アプリ: 閉じる直前の変更も回収される', async () => {
   const env = await runTodo({
     onWebViewPresent: async (page, env) => {

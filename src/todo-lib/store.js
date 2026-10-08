@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   eveningMinute: 0,
   lookaheadDays: 45,        // 今日から何日先までカレンダーを取り込むか（月表示のため約1か月半）
   excludeCalendars: ['日本の祝日', '祝日', '誕生日', 'Birthdays', 'Japanese Holidays', 'Holidays in Japan'],
+  theme: 'clean',           // デザイン（アプリ画面とウィジェット共通）: clean / night / pop / mono
 }
 
 function files() {
@@ -27,6 +28,7 @@ function dataPath() {
 }
 
 const DATA_VERSION = 2
+const THEME_NAMES = ['clean', 'night', 'pop', 'mono']
 
 function normalize(raw) {
   const data = raw || {}
@@ -55,6 +57,7 @@ function sanitizeSettings(current, incoming) {
   if ('remindMinutes' in v && (v.remindMinutes === null || (Number.isInteger(v.remindMinutes) && v.remindMinutes >= 0 && v.remindMinutes <= 1440))) s.remindMinutes = v.remindMinutes
   if (Number.isInteger(v.lookaheadDays) && v.lookaheadDays >= 1 && v.lookaheadDays <= 180) s.lookaheadDays = v.lookaheadDays
   if (Array.isArray(v.excludeCalendars) && v.excludeCalendars.every(c => typeof c === 'string')) s.excludeCalendars = v.excludeCalendars.slice(0, 100)
+  if (THEME_NAMES.indexOf(v.theme) >= 0) s.theme = v.theme
   return s
 }
 
@@ -92,4 +95,4 @@ function save(data) {
   fm.writeString(path, JSON.stringify(data, null, 1))
 }
 
-module.exports = { load, save, normalize, sanitizeSettings, DEFAULT_SETTINGS }
+module.exports = { load, save, normalize, sanitizeSettings, DEFAULT_SETTINGS, THEME_NAMES }

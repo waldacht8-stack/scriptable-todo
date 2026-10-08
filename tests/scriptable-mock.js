@@ -1101,7 +1101,7 @@ class FakePage {
     }
 
     const body = (/<body[^>]*>([\s\S]*?)<script>/.exec(html) || [])[1] || ''
-    const root = this.makeElement({ tag: 'body', attrs: {} })
+    const root = this.makeElement({ tag: 'body', attrs: parseAttrs((/<body([^>]*)>/.exec(html) || [])[1] || '') })
     this.body = root
     this.setInner(root, body)
 
