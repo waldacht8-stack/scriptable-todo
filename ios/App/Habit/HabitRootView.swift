@@ -303,7 +303,7 @@ struct HabitTodayCard: View {
         Button(action: onTap) {
             HStack(spacing: 16) {
                 ZStack {
-                    HabitRing(fraction: frac, color: done ? .white : c, track: done ? Color.white.opacity(0.3) : nil, lineWidth: 6)
+                    HabitRing(fraction: frac, color: done ? .white : c, track: done ? .white.opacity(0.3) : nil, lineWidth: 6)
                     Image(systemName: done ? "checkmark" : habit.icon)
                         .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(done ? .white : c)
@@ -419,7 +419,7 @@ struct HabitHeatmap: View {
                 VStack(spacing: 4) {
                     ForEach(0..<7, id: \.self) { r in
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(cellColor(cal.date(byAdding: .day, value: w * 7 + r, to: first) ?? first, today: today))
+                            .fill(fill(cal.date(byAdding: .day, value: w * 7 + r, to: first) ?? first, today: today))
                             .aspectRatio(1, contentMode: .fit)
                     }
                 }
@@ -429,7 +429,7 @@ struct HabitHeatmap: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func cellColor(_ d: Date, today: Date) -> Color {
+    private func fill(_ d: Date, today: Date) -> Color {
         if d > today { return .clear }
         if !habit.isActive(on: d) { return p.sub.opacity(0.05) }
         let n = HabitData.count(log, habit, d)

@@ -87,7 +87,7 @@ struct FocusTimerState: Codable, Equatable {
     }
 
     /// 残り秒（止まっているときは nil）
-    func left(at now: Date) -> Double? {
+    func remaining(at now: Date) -> Double? {
         guard isRunning else { return nil }
         if isPaused { return remaining }
         return max(0, (endAt ?? now).timeIntervalSince(now))
@@ -282,7 +282,7 @@ enum FocusTimerEngine {
     }
 
     private static func recordPartial(_ s: FocusTimerState, _ now: Date) {
-        guard s.isRunning, s.phase == .focus, let left = s.left(at: now) else { return }
+        guard s.isRunning, s.phase == .focus, let left = s.remaining(at: now) else { return }
         let done = s.total - left
         guard done >= 60 else { return }
         FocusTimerData.add(FocusSessionRecord(title: s.title, start: now.addingTimeInterval(-done), end: now,
