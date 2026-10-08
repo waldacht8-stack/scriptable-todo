@@ -16,13 +16,3 @@ struct ToggleTodoIntent: AppIntent {
         return .result()
     }
 }
-
-/// ウィジェット上のボタンで起床チェックイン（アプリは開かない）
-struct CheckInIntent: AppIntent {
-    static var title: LocalizedStringResource = "起床チェックイン"
-
-    func perform() async throws -> some IntentResult {
-        WakeData.checkIn()
-        return .result()
-    }
-}
