@@ -37,6 +37,7 @@ final class FocusTimerModel: ObservableObject {
             state = r.state
             sessions = FocusTimerData.sessions()
             finishCount += 1
+            live()
             if f.phase == .focus, f.todoID != nil { finishedTodo = f }
         } else {
             let s = FocusTimerData.state()   // ほかの場所（ウィジェットなど）で変わった分も反映
@@ -44,25 +45,37 @@ final class FocusTimerModel: ObservableObject {
         }
     }
 
-    var remaining: Double { state.remaining(at: now) ?? settings.seconds(state.phase) }
+    var remaining: Double { state.left(at: now) ?? settings.seconds(state.phase) }
     var total: Double { state.isRunning ? max(1, state.total) : settings.seconds(state.phase) }
     var progress: Double { 1 - remaining / total }
 
     func start(title: String, todoID: String?) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         state = FocusTimerEngine.start(title: title, todoID: todoID)
+        live()
     }
 
-    func togglePause() { state = FocusTimerEngine.togglePause() }
+    func togglePause() {
+        state = FocusTimerEngine.togglePause()
+        live()
+    }
 
     func stop() {
         state = FocusTimerEngine.stop()
         sessions = FocusTimerData.sessions()
+        live()
     }
 
     func skip() {
         state = FocusTimerEngine.skip()
         sessions = FocusTimerData.sessions()
+        live()
+    }
+
+    /// ライブアクティビティを今の状態に合わせる
+    func live() {
+        let s = state
+        Task { await FocusTimerLive.sync(s) }
     }
 
     func saveSettings(_ s: FocusTimerSettings) {
