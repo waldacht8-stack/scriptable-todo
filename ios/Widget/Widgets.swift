@@ -1,7 +1,8 @@
 import SwiftUI
 import WidgetKit
 
-// 1つのアプリに2種類のウィジェット。ホーム画面でウィジェットを追加するとき「TODO」「起床」を選べる。
+// 1つのアプリに複数のウィジェット。ホーム画面でウィジェットを追加するとき「TODO」「起床」などを選べる。
+// 各担当は自分のウィジェット・ライブアクティビティをこの一覧に1行ずつ足す（開発規約 1章）。
 @main
 struct AppWidgets: WidgetBundle {
     var body: some Widget {
@@ -12,37 +13,38 @@ struct AppWidgets: WidgetBundle {
 
 struct TodoEntry: TimelineEntry {
     let date: Date
-    let items: [TodoItem]
-    let groupOK: Bool
+    let data: TodoWidgetData
 }
 
 struct TodoProvider: TimelineProvider {
     func placeholder(in context: Context) -> TodoEntry {
-        TodoEntry(date: .now, items: [TodoItem(title: "TODO")], groupOK: true)
+        var d = TodoWidgetData.load()
+        d.items = [TodoItem(title: "やること")]
+        return TodoEntry(date: .now, data: d)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (TodoEntry) -> Void) {
-        completion(entry())
+        completion(TodoEntry(date: .now, data: .load()))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TodoEntry>) -> Void) {
-        completion(Timeline(entries: [entry()], policy: .after(.now.addingTimeInterval(15 * 60))))
-    }
-
-    private func entry() -> TodoEntry {
-        TodoEntry(date: .now, items: TodoData.all(), groupOK: SharedStore.isGroupAvailable)
+        // 期限切れへの切り替わりを反映するため、次の期限の直後にも描き直す
+        let data = TodoWidgetData.load()
+        let next = data.next?.due.map { $0.addingTimeInterval(1) }
+        let refresh = min(next ?? .distantFuture, .now.addingTimeInterval(15 * 60))
+        completion(Timeline(entries: [TodoEntry(date: .now, data: data)], policy: .after(refresh)))
     }
 }
 
 struct TodoWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "TodoWidget", provider: TodoProvider()) { entry in
-            TodoWidgetView(items: entry.items, groupOK: entry.groupOK)
-                .containerBackground(.background, for: .widget)
+            TodoWidgetView(data: entry.data)
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.data.palette) }
         }
         .configurationDisplayName("TODO")
-        .description("期限が近いTODO。ボタンで完了にできます。")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .description("期限が近いTODO。アプリと同じ構成・色合いで表示し、ボタンで完了にできます。")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge,
+                            .accessoryInline, .accessoryCircular, .accessoryRectangular])
     }
 }
-

@@ -1,36 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-/// 「今日」の画面構成。構成ごとにボタンの位置と操作が変わる。
-enum TodayLayout: String, CaseIterable, Identifiable {
-    case focus      // 1件ずつ大きなカード。右下の＋、スワイプで完了・延期
-    case board      // タイルのダッシュボード。上部の入力欄で追加
-    case thumb      // 片手：下に寄せた一覧と、下部の大きなボタン3つ
-    case timeline   // 縦の時間軸。右上の＋、時間帯をタップで追加
-
-    var id: String { rawValue }
-
-    var name: String {
-        switch self {
-        case .focus: "フォーカス"
-        case .board: "ボード"
-        case .thumb: "片手"
-        case .timeline: "タイムライン"
-        }
-    }
-
-    var summary: String {
-        switch self {
-        case .focus: "1件ずつ大きく。スワイプで完了・延期"
-        case .board: "全体を一目で。上で打ってすぐ追加"
-        case .thumb: "親指が届く下側だけで操作"
-        case .timeline: "一日の時間の流れで見る"
-        }
-    }
-
-    static func from(_ raw: String) -> TodayLayout { TodayLayout(rawValue: raw) ?? .focus }
-}
-
 /// 画面が使う TODO の状態。保存は SharedStore（ウィジェットと共有）に行う。
 @MainActor
 final class TodoStore: ObservableObject {
