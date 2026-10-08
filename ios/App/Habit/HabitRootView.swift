@@ -337,9 +337,6 @@ struct HabitTodayCard: View {
                     .foregroundStyle(fg)
                     .lineLimit(1)
                     .fixedSize()
-                } else {
-                    Text(done ? "できた" : "タップ").font(.subheadline.weight(.bold))
-                        .foregroundStyle(ringColor)
                 }
             }
             .padding(18)
