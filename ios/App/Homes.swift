@@ -5,6 +5,7 @@ struct HomeView: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
     @State private var addDraft: AddDraft?
+    @State private var shotArgsApplied = false
     // 起動引数 -donelist で完了済みの一覧を開いた状態にする（スクリーンショット用）
     @State private var listTab: ListTab? = ProcessInfo.processInfo.arguments.contains("-donelist") ? .done : nil
 
@@ -20,6 +21,14 @@ struct HomeView: View {
         .environment(\.editTodo, EditTodoAction { addDraft = AddDraft(item: $0) })
         .environment(\.openList, OpenListAction { listTab = $0 })
         .overlay(alignment: .top) { UndoToast() }
+        .onAppear {
+            // スクリーンショット用：-shotundo で「元に戻す」、-shotedit で先頭のTODOの編集画面を出す
+            guard !shotArgsApplied else { return }
+            shotArgsApplied = true
+            let args = ProcessInfo.processInfo.arguments
+            if args.contains("-shotedit"), let first = store.open.first { addDraft = AddDraft(item: first) }
+            if args.contains("-shotundo"), let first = store.open.first { store.complete(first) }
+        }
         .sheet(item: $addDraft) { draft in
             AddSheet(draft: draft).environmentObject(store).presentationDetents([.medium, .large])
         }
