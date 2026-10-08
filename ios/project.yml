@@ -25,6 +25,8 @@ targets:
         UILaunchScreen: {}
         NSAlarmKitUsageDescription: 起床アラームを鳴らすために使います。
         NSSupportsLiveActivities: true
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         NSCalendarsFullAccessUsageDescription: 予定をTODOに取り込み、TODOを予定として登録するために使います。
         NSLocationWhenInUseUsageDescription: 朝のブリーフィングで今いる場所の天気を表示するために使います。
         UIApplicationSceneManifest:

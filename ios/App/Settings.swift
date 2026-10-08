@@ -8,15 +8,43 @@ struct AddSheet: View {
     let draft: AddDraft
     @State private var title = ""
     @State private var hasDue = false
+    @State private var allDay = false
     @State private var due = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
+    @State private var note = ""
+    @State private var repeatRule = ""
+    @State private var important = false
+    @State private var toCalendar = false
+    @State private var calendarTitle = ""
     @FocusState private var focused: Bool
 
     var body: some View {
         NavigationStack {
             Form {
-                TextField("やること", text: $title).focused($focused).submitLabel(.done)
-                Toggle("期限を決める", isOn: $hasDue.animation())
-                if hasDue { DatePicker("期限", selection: $due) }
+                Section {
+                    TextField("やること", text: $title).focused($focused).submitLabel(.done)
+                    Toggle(isOn: $important) { Label("重要（先頭に固定）", systemImage: "star") }
+                }
+                Section {
+                    Toggle("期限を決める", isOn: $hasDue.animation())
+                    if hasDue {
+                        Toggle("終日", isOn: $allDay)
+                        DatePicker("期限", selection: $due, displayedComponents: allDay ? [.date] : [.date, .hourAndMinute])
+                        Picker("繰り返し", selection: $repeatRule) {
+                            Text("なし").tag("")
+                            ForEach(RepeatRule.allCases) { Text($0.name).tag($0.rawValue) }
+                        }
+                        if CalendarSync.authorized {
+                            Toggle("カレンダーにも予定として登録", isOn: $toCalendar.animation())
+                            if toCalendar {
+                                Picker("登録先", selection: $calendarTitle) {
+                                    Text("いつものカレンダー").tag("")
+                                    ForEach(CalendarSync.writableCalendars(), id: \.calendarIdentifier) { Text($0.title).tag($0.title) }
+                                }
+                            }
+                        }
+                    }
+                }
+                Section("メモ") { TextField("メモ（任意）", text: $note, axis: .vertical).lineLimit(2...5) }
             }
             .navigationTitle("TODOを追加")
             .navigationBarTitleDisplayMode(.inline)
@@ -24,7 +52,10 @@ struct AddSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("追加") {
-                        store.add(title, due: hasDue ? due : nil)
+                        let d = allDay ? Calendar.current.startOfDay(for: due) : due
+                        store.add(title, due: hasDue ? d : nil, allDay: hasDue && allDay, note: note,
+                                  repeatRule: hasDue && !repeatRule.isEmpty ? repeatRule : nil, important: important,
+                                  toCalendar: hasDue && toCalendar ? calendarTitle : nil)
                         dismiss()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -84,6 +115,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("すべての画面とウィジェットに反映されます。")
                 }
+                TodoSettingsSections()
                 Section("状態") {
                     Label(SharedStore.isGroupAvailable ? "ウィジェットとのデータ共有：使える" : "ウィジェットとのデータ共有：使えない",
                           systemImage: SharedStore.isGroupAvailable ? "checkmark.seal.fill" : "xmark.octagon.fill")

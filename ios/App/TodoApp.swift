@@ -6,11 +6,20 @@ struct HiyoriApp: App {
     @StateObject private var store = TodoStore()
     @Environment(\.scenePhase) private var phase
 
+    init() {
+        TodoNotifier.shared.setUp() // 通知のボタン（完了・10分後）をアプリを開かずに処理する
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(store)
-                .onChange(of: phase) { _, p in if p == .active { store.reload() } } // ウィジェットで変えた内容を反映
+                .onChange(of: phase) { _, p in
+                    guard p == .active else { return }
+                    store.reload() // ウィジェット・通知で変えた内容を反映
+                    if !ProcessInfo.processInfo.arguments.contains("-demo") { Task { await store.refreshServices() } }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .todoDataChanged)) { _ in store.reload() }
         }
     }
 }
