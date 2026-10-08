@@ -56,11 +56,12 @@ jobs:
           APP=$(find build/sim -name 'TodoApp.app' -type d | head -1)
           xcrun simctl install "$UDID" "$APP"
           xcrun simctl ui "$UDID" appearance light
-          # 4つのデザインのホーム画面（見本データ）と設定画面
-          for theme in sky dial focus paper; do
-            SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -theme $theme -tab 0 -AppleLanguages "(ja)" -AppleLocale ja_JP
+          # 「今日」の4つの構成（色合いを組み合わせて）と設定画面
+          for combo in focus:focus board:night thumb:dawn timeline:paper; do
+            layout=${combo%%:*}; theme=${combo##*:}
+            SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -layout $layout -theme $theme -tab 0 -AppleLanguages "(ja)" -AppleLocale ja_JP
             sleep 7
-            xcrun simctl io "$UDID" screenshot "shots/home-$theme.png"
+            xcrun simctl io "$UDID" screenshot "shots/home-$layout-$theme.png"
           done
           SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -tab 2 -AppleLanguages "(ja)" -AppleLocale ja_JP
           sleep 6

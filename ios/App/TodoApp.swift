@@ -25,12 +25,17 @@ struct RootView: View {
     }()
 
     var body: some View {
+        let p = store.theme.palette
         TabView(selection: $tab) {
             HomeView().tabItem { Label("今日", systemImage: "sun.horizon") }.tag(0)
             WakeTab().tabItem { Label("起床", systemImage: "alarm") }.tag(1)
             SettingsView().tabItem { Label("設定", systemImage: "gearshape") }.tag(2)
         }
-        .tint(store.theme == .sky ? Color(red: 0.11, green: 0.31, blue: 0.85) : store.theme.accent)
+        // デザイン（色合い）をすべての画面に渡す
+        .environment(\.palette, p)
+        .fontDesign(p.fontDesign)
+        .tint(p.accent)
+        .preferredColorScheme(p.scheme)
     }
 }
 

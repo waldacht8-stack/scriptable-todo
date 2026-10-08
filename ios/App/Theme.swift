@@ -1,128 +1,131 @@
 import SwiftUI
 
-/// アプリ内で切り替えるデザイン。色だけでなく、ホーム画面の構成と操作が変わる。
+// MARK: - デザイン（色合い）
+// 画面の構成はすべて「フォーカス」の考え方（大きなカード・余白・スワイプ）でそろえ、
+// デザインの切り替えは色・書体・角の丸みを変える。各画面は @Environment(\.palette) で色を受け取る。
+
 enum AppTheme: String, CaseIterable, Identifiable {
-    case sky      // 空：時刻で空の色が変わる背景＋ガラスのカード
-    case dial     // ダイヤル：24時間の円にTODOを配置
-    case focus    // フォーカス：1件ずつ大きなカード。スワイプで完了・延期
-    case paper    // 手帳：罫線の紙と明朝体。完了で「済」のはんこ
+    case focus   // クリーン：明るいグレーに白いカード、青
+    case night   // ナイト：黒にミント（常にダーク）
+    case dawn    // 朝焼け：やわらかい朝の色、コーラル
+    case paper   // 手帳：クリーム色の紙と明朝体、朱色
 
     var id: String { rawValue }
 
     var name: String {
         switch self {
-        case .sky: "空"
-        case .dial: "ダイヤル"
-        case .focus: "フォーカス"
+        case .focus: "クリーン"
+        case .night: "ナイト"
+        case .dawn: "朝焼け"
         case .paper: "手帳"
         }
     }
 
     var summary: String {
         switch self {
-        case .sky: "時刻で変わる空の色とガラスのカード"
-        case .dial: "一日を24時間の円で見る"
-        case .focus: "1件ずつ。スワイプで完了・延期"
-        case .paper: "罫線の紙。完了ではんこ"
+        case .focus: "明るく、すっきり"
+        case .night: "黒とミント。夜も目にやさしい"
+        case .dawn: "朝の光のような暖かい色"
+        case .paper: "紙の手帳と明朝体"
         }
     }
 
-    var fontDesign: Font.Design {
+    static func from(_ raw: String) -> AppTheme { AppTheme(rawValue: raw) ?? .focus }
+
+    var palette: Palette {
         switch self {
-        case .sky: .rounded
-        case .dial: .monospaced
-        case .focus: .default
-        case .paper: .serif
-        }
-    }
-
-    var accent: Color {
-        switch self {
-        case .sky: .white
-        case .dial: Color(red: 0.20, green: 0.83, blue: 0.60)
-        case .focus: Color(red: 0.11, green: 0.31, blue: 0.85)
-        case .paper: Color(red: 0.75, green: 0.16, blue: 0.13)
-        }
-    }
-
-    var prefersDark: Bool? {
-        switch self {
-        case .dial: true
-        case .paper: false
-        default: nil
-        }
-    }
-
-    static func from(_ raw: String) -> AppTheme { AppTheme(rawValue: raw) ?? .sky }
-}
-
-// MARK: - 空の色（時刻で変わる）
-
-enum Sky {
-    /// 時刻ごとの空のグラデーション（上・下）
-    static func colors(at date: Date = .now) -> [Color] {
-        let h = Double(Calendar.current.component(.hour, from: date)) + Double(Calendar.current.component(.minute, from: date)) / 60
-        let stops: [(Double, Color, Color)] = [
-            (0, rgb(0.04, 0.06, 0.16), rgb(0.10, 0.13, 0.30)),   // 深夜
-            (5, rgb(0.16, 0.18, 0.40), rgb(0.95, 0.55, 0.45)),   // 夜明け
-            (7, rgb(0.40, 0.65, 0.95), rgb(0.98, 0.80, 0.62)),   // 朝焼け
-            (11, rgb(0.20, 0.52, 0.95), rgb(0.62, 0.82, 0.98)),  // 青空
-            (16, rgb(0.30, 0.50, 0.90), rgb(0.95, 0.75, 0.55)),  // 午後
-            (18, rgb(0.35, 0.25, 0.55), rgb(0.98, 0.50, 0.35)),  // 夕焼け
-            (20, rgb(0.07, 0.09, 0.25), rgb(0.20, 0.18, 0.42)),  // 夜
-            (24, rgb(0.04, 0.06, 0.16), rgb(0.10, 0.13, 0.30)),
-        ]
-        var lower = stops[0], upper = stops[stops.count - 1]
-        for i in 0..<(stops.count - 1) where h >= stops[i].0 && h < stops[i + 1].0 {
-            lower = stops[i]; upper = stops[i + 1]
-        }
-        let t = (h - lower.0) / max(upper.0 - lower.0, 0.001)
-        return [mix(lower.1, upper.1, t), mix(lower.2, upper.2, t)]
-    }
-
-    // 文字を白にするほど空が暗い時間帯（夕方〜夜明け）
-    static func isDarkSky(at date: Date = .now) -> Bool {
-        let h = Calendar.current.component(.hour, from: date)
-        return h >= 18 || h < 6
-    }
-
-    static func isNight(at date: Date = .now) -> Bool {
-        let h = Calendar.current.component(.hour, from: date)
-        return h >= 19 || h < 5
-    }
-
-    private static func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color { Color(red: r, green: g, blue: b) }
-
-    private static func mix(_ a: Color, _ b: Color, _ t: Double) -> Color {
-        let ra = UIColor(a).rgba, rb = UIColor(b).rgba
-        return Color(red: ra.0 + (rb.0 - ra.0) * t, green: ra.1 + (rb.1 - ra.1) * t, blue: ra.2 + (rb.2 - ra.2) * t)
-    }
-}
-
-private extension UIColor {
-    var rgba: (Double, Double, Double) {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        getRed(&r, green: &g, blue: &b, alpha: &a)
-        return (Double(r), Double(g), Double(b))
-    }
-}
-
-// MARK: - ガラスのカード（iOS 26 は Liquid Glass、それより前は半透明の素材）
-
-struct GlassCard: ViewModifier {
-    var cornerRadius: CGFloat = 22
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius))
-        } else {
-            content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+        case .focus:
+            Palette(background: [Color(.systemGroupedBackground)], card: Color(.secondarySystemGroupedBackground),
+                    text: .primary, sub: .secondary, accent: Color(red: 0.11, green: 0.31, blue: 0.85),
+                    overdue: Color(red: 0.86, green: 0.36, blue: 0.10), onAccent: .white,
+                    fontDesign: .default, radius: 28, scheme: nil)
+        case .night:
+            Palette(background: [Color(red: 0.04, green: 0.05, blue: 0.06)], card: Color(red: 0.11, green: 0.12, blue: 0.14),
+                    text: .white, sub: Color(white: 0.62), accent: Color(red: 0.20, green: 0.83, blue: 0.60),
+                    overdue: Color(red: 0.98, green: 0.57, blue: 0.24), onAccent: Color(red: 0.04, green: 0.05, blue: 0.06),
+                    fontDesign: .rounded, radius: 24, scheme: .dark)
+        case .dawn:
+            Palette(background: [Color(red: 1.0, green: 0.93, blue: 0.86), Color(red: 0.99, green: 0.84, blue: 0.80)],
+                    card: Color(red: 1.0, green: 0.98, blue: 0.95), text: Color(red: 0.24, green: 0.16, blue: 0.20),
+                    sub: Color(red: 0.50, green: 0.40, blue: 0.42), accent: Color(red: 0.91, green: 0.38, blue: 0.36),
+                    overdue: Color(red: 0.80, green: 0.25, blue: 0.10), onAccent: .white,
+                    fontDesign: .rounded, radius: 30, scheme: .light)
+        case .paper:
+            Palette(background: [Color(red: 0.97, green: 0.95, blue: 0.89)], card: Color(red: 0.995, green: 0.985, blue: 0.95),
+                    text: Color(red: 0.16, green: 0.14, blue: 0.12), sub: Color(red: 0.45, green: 0.42, blue: 0.38),
+                    accent: Color(red: 0.75, green: 0.16, blue: 0.13), overdue: Color(red: 0.75, green: 0.16, blue: 0.13), onAccent: .white,
+                    fontDesign: .serif, radius: 14, scheme: .light)
         }
     }
 }
 
+/// 画面が使う色の組。新しい画面はこれだけを使って色を決める（デザイン切り替えに自動で追従する）
+struct Palette {
+    var background: [Color]      // 背景（2色ならグラデーション）
+    var card: Color              // カードの背景
+    var text: Color              // 本文
+    var sub: Color               // 補足の文字
+    var accent: Color            // 強調・ボタン
+    var overdue: Color           // 期限切れ・警告
+    var onAccent: Color          // accent の上に載せる文字
+    var fontDesign: Font.Design
+    var radius: CGFloat          // カードの角の丸み
+    var scheme: ColorScheme?     // nil なら端末の外観に合わせる
+
+    static let `default` = AppTheme.focus.palette
+}
+
+private struct PaletteKey: EnvironmentKey {
+    static let defaultValue = Palette.default
+}
+
+extension EnvironmentValues {
+    var palette: Palette {
+        get { self[PaletteKey.self] }
+        set { self[PaletteKey.self] = newValue }
+    }
+}
+
+/// 共通の部品
 extension View {
-    func glassCard(_ radius: CGFloat = 22) -> some View { modifier(GlassCard(cornerRadius: radius)) }
+    /// デザインの背景を全画面に敷く
+    func paletteBackground(_ p: Palette) -> some View {
+        background(
+            LinearGradient(colors: p.background.count > 1 ? p.background : [p.background[0], p.background[0]],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+        )
+    }
+
+    /// デザインのカード（全幅・角丸・やわらかい影）
+    func paletteCard(_ p: Palette, padding: CGFloat = 18) -> some View {
+        self
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: p.radius, style: .continuous)
+                    .fill(p.card)
+                    .shadow(color: .black.opacity(p.scheme == .dark ? 0 : 0.06), radius: 12, y: 4)
+            )
+    }
+}
+
+/// 見出し（画面上部の大きな数字など）
+struct BigCount: View {
+    @Environment(\.palette) private var p
+    let prefix: String
+    let value: Int
+    let suffix: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(prefix).font(.title3.weight(.semibold)).foregroundStyle(p.sub)
+            Text("\(value)").font(.system(size: 56, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
+                .contentTransition(.numericText())
+            Text(suffix).font(.title3.weight(.semibold)).foregroundStyle(p.sub)
+            Spacer()
+        }
+    }
 }
 
 // MARK: - 日付の表示（端末の言語設定にかかわらず日本語）

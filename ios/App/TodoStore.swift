@@ -1,30 +1,69 @@
 import SwiftUI
 import WidgetKit
 
+/// 「今日」の画面構成。構成ごとにボタンの位置と操作が変わる。
+enum TodayLayout: String, CaseIterable, Identifiable {
+    case focus      // 1件ずつ大きなカード。右下の＋、スワイプで完了・延期
+    case board      // タイルのダッシュボード。上部の入力欄で追加
+    case thumb      // 片手：下に寄せた一覧と、下部の大きなボタン3つ
+    case timeline   // 縦の時間軸。右上の＋、時間帯をタップで追加
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .focus: "フォーカス"
+        case .board: "ボード"
+        case .thumb: "片手"
+        case .timeline: "タイムライン"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .focus: "1件ずつ大きく。スワイプで完了・延期"
+        case .board: "全体を一目で。上で打ってすぐ追加"
+        case .thumb: "親指が届く下側だけで操作"
+        case .timeline: "一日の時間の流れで見る"
+        }
+    }
+
+    static func from(_ raw: String) -> TodayLayout { TodayLayout(rawValue: raw) ?? .focus }
+}
+
 /// 画面が使う TODO の状態。保存は SharedStore（ウィジェットと共有）に行う。
 @MainActor
 final class TodoStore: ObservableObject {
     @Published var items: [TodoItem] = []
-    @Published var theme: AppTheme = .sky
+    @Published var theme: AppTheme = .focus
+    @Published var layout: TodayLayout = .focus
 
     init() {
         let args = ProcessInfo.processInfo.arguments
         if args.contains("-demo") { TodoData.save(TodoData.demo()) }
-        if let i = args.firstIndex(of: "-theme"), i + 1 < args.count {
-            var s = SettingsData.load()
-            s.theme = args[i + 1]
-            SettingsData.save(s)
-        }
+        var s = SettingsData.load()
+        if let v = Self.arg("-theme", args) { s.theme = v }
+        if let v = Self.arg("-layout", args) { s.layout = v }
+        if args.contains("-theme") || args.contains("-layout") { SettingsData.save(s) }
         reload()
+    }
+
+    private static func arg(_ name: String, _ args: [String]) -> String? {
+        guard let i = args.firstIndex(of: name), i + 1 < args.count else { return nil }
+        return args[i + 1]
     }
 
     func reload() {
         items = TodoData.all()
-        theme = AppTheme.from(SettingsData.load().theme)
+        let s = SettingsData.load()
+        theme = AppTheme.from(s.theme)
+        layout = TodayLayout.from(s.layout)
     }
 
     /// 未完了（期限切れ → 期限が近い順 → 期限なし。重要は先頭）
     var open: [TodoItem] { TodoData.sorted(items.filter { !$0.done }) }
+
+    var overdue: [TodoItem] { open.filter { $0.isOverdue() } }
 
     var doneToday: [TodoItem] {
         items.filter { $0.done && ($0.doneAt.map { Calendar.current.isDateInToday($0) } ?? false) }
@@ -72,6 +111,13 @@ final class TodoStore: ObservableObject {
         var s = SettingsData.load()
         s.theme = t.rawValue
         SettingsData.save(s) // ウィジェットもすぐ描き直す
+    }
+
+    func setLayout(_ l: TodayLayout) {
+        layout = l
+        var s = SettingsData.load()
+        s.layout = l.rawValue
+        SettingsData.save(s)
     }
 
     private func update(_ id: String, _ change: (inout TodoItem) -> Void) {

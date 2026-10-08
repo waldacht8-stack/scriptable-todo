@@ -2,9 +2,22 @@ import Foundation
 import WidgetKit
 
 /// アプリ本体とウィジェットが同じデータを読み書きする場所（App Group の共有フォルダ）。
-/// 共有フォルダが取れないときはアプリ専用のフォルダに置き、その状態を画面に出す。
+///
+/// SideStore（無料の Apple ID）は、アプリが指定した App Group の名前を、署名したアカウント用の名前
+/// （例：group.com.todoapp.shared.XXXXXXXXXX）に書き換えて登録することがある。
+/// そのため、まずアプリに同梱されたプロファイル（embedded.mobileprovision）から実際に許可された
+/// App Group の名前を読み取り、それで共有フォルダを開く。見つからなければ元の名前を試す。
 enum SharedStore {
-    static let groupID = "group.com.todoapp.shared"
+    static let baseGroupID = "group.com.todoapp.shared"
+
+    /// 実際に使える App Group の名前（プロファイルから読み取ったもの、なければ元の名前）
+    static let groupID: String = {
+        let candidates = ProvisioningGroups.read().filter { $0.hasPrefix(baseGroupID) || $0.contains("todoapp") } + [baseGroupID]
+        for id in candidates where FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id) != nil {
+            return id
+        }
+        return baseGroupID
+    }()
 
     /// App Group の共有フォルダ。取れなければ nil（＝ウィジェットとデータを共有できない）
     static var groupURL: URL? {
@@ -13,11 +26,17 @@ enum SharedStore {
 
     static var isGroupAvailable: Bool { groupURL != nil }
 
+    /// 画面の「状態」に出す説明（うまくいかないときの手がかり）
+    static var diagnosis: String {
+        let found = ProvisioningGroups.read()
+        return "使用中: \(groupID)\nプロファイル: " + (found.isEmpty ? "（App Group の記載なし）" : found.joined(separator: ", "))
+    }
+
     private static var baseURL: URL {
         groupURL ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
-    private static func url(_ name: String) -> URL { baseURL.appendingPathComponent(name) }
+    static func url(_ name: String) -> URL { baseURL.appendingPathComponent(name) }
 
     static func load<T: Decodable>(_ type: T.Type, from name: String) -> T? {
         guard let data = try? Data(contentsOf: url(name)) else { return nil }
@@ -28,6 +47,30 @@ enum SharedStore {
         guard let data = try? JSONEncoder.iso.encode(value) else { return }
         try? data.write(to: url(name), options: .atomic)
         WidgetCenter.shared.reloadAllTimelines()
+    }
+}
+
+/// アプリ（またはウィジェット）に同梱されたプロファイルから App Group の名前を読む
+enum ProvisioningGroups {
+    static func read() -> [String] {
+        var bundleURL = Bundle.main.bundleURL
+        // ウィジェット（.appex）から呼ばれたときは、自分のプロファイル → 親アプリのプロファイルの順に探す
+        var urls = [bundleURL.appendingPathComponent("embedded.mobileprovision")]
+        if bundleURL.pathExtension == "appex" {
+            bundleURL = bundleURL.deletingLastPathComponent().deletingLastPathComponent()
+            urls.append(bundleURL.appendingPathComponent("embedded.mobileprovision"))
+        }
+        for url in urls {
+            guard let data = try? Data(contentsOf: url),
+                  let start = data.range(of: Data("<?xml".utf8)),
+                  let end = data.range(of: Data("</plist>".utf8), in: start.lowerBound..<data.endIndex) else { continue }
+            let plistData = data.subdata(in: start.lowerBound..<end.upperBound)
+            guard let plist = try? PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any],
+                  let ent = plist["Entitlements"] as? [String: Any],
+                  let groups = ent["com.apple.security.application-groups"] as? [String] else { continue }
+            if !groups.isEmpty { return groups }
+        }
+        return []
     }
 }
 
@@ -48,20 +91,24 @@ extension JSONEncoder {
     }()
 }
 
-// MARK: - データ
+// MARK: - TODO のデータ
 
 struct TodoItem: Codable, Identifiable, Hashable {
     var id: String = UUID().uuidString
     var title: String
     var done: Bool = false
-    // 段階1で追加。古いデータには無いので省略可能にしておく
     var due: Date? = nil
     var allDay: Bool? = nil
     var important: Bool? = nil
     var doneAt: Date? = nil
+    var note: String? = nil
+    var repeatRule: String? = nil        // daily / weekdays / weekly / monthly
+    var eventID: String? = nil           // カレンダー由来の予定の識別子
+    var calendarTitle: String? = nil
 
     var isImportant: Bool { important ?? false }
     var isAllDay: Bool { allDay ?? false }
+    var isCalendar: Bool { eventID != nil }
 
     func isOverdue(_ now: Date = .now) -> Bool {
         guard !done, let due else { return false }
@@ -76,7 +123,17 @@ struct WakeState: Codable {
 
 /// アプリ全体の設定（ウィジェットも読む）
 struct AppSettings: Codable {
-    var theme: String = "sky"
+    var theme: String = "focus"     // 色合い（AppTheme）
+    var layout: String = "focus"    // 「今日」の画面構成（TodayLayout）
+
+    init() {}
+
+    // 項目が増えても古い設定ファイルを読めるように、無い項目は既定値にする
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        theme = try c.decodeIfPresent(String.self, forKey: .theme) ?? "focus"
+        layout = try c.decodeIfPresent(String.self, forKey: .layout) ?? "focus"
+    }
 }
 
 enum TodoData {
@@ -122,7 +179,7 @@ enum TodoData {
             TodoItem(title: "歯医者", due: at(0, 14), important: true),
             TodoItem(title: "牛乳と卵を買う", due: at(0, 18)),
             TodoItem(title: "請求書を確認"),
-            TodoItem(title: "ゴミ出し", done: true, due: at(0, 8), doneAt: at(0, 8, 5)),
+            TodoItem(title: "ゴミ出し", done: true, due: at(0, 8), doneAt: at(0, 8, 5), repeatRule: "weekly"),
             TodoItem(title: "美容院", due: at(1, 11)),
             TodoItem(title: "車検の見積もり", due: at(5, 0), allDay: true),
         ]

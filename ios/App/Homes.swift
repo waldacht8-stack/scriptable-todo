@@ -1,58 +1,53 @@
 import SwiftUI
 
-/// 設定のデザインに合わせてホーム画面を切り替える
+/// 「今日」タブ。設定の構成（TodayLayout）で画面の作りとボタンの位置が変わる。色は palette に従う。
 struct HomeView: View {
     @EnvironmentObject var store: TodoStore
-    @State private var adding = false
+    @Environment(\.palette) private var p
+    @State private var addDraft: AddDraft?
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            switch store.theme {
-            case .sky: SkyHome()
-            case .dial: DialHome()
-            case .focus: FocusHome()
-            case .paper: PaperHome()
+        Group {
+            switch store.layout {
+            case .focus: FocusHome(onAdd: { addDraft = AddDraft() })
+            case .board: BoardHome()
+            case .thumb: ThumbHome(onAdd: { addDraft = AddDraft() })
+            case .timeline: TimelineHome(onAdd: { addDraft = $0 })
             }
-            Button { adding = true } label: {
-                Image(systemName: "plus").font(.title2.bold()).frame(width: 58, height: 58)
-            }
-            .buttonStyle(AddButtonStyle(theme: store.theme))
-            .padding(20)
-            .accessibilityLabel("TODOを追加")
         }
-        .fontDesign(store.theme.fontDesign)
-        .sheet(isPresented: $adding) { AddSheet().environmentObject(store).presentationDetents([.medium]) }
+        .sheet(item: $addDraft) { draft in
+            AddSheet(draft: draft).environmentObject(store).presentationDetents([.medium, .large])
+        }
     }
 }
 
-struct AddButtonStyle: ButtonStyle {
-    let theme: AppTheme
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(theme == .sky || theme == .dial ? Color.black : Color.white)
-            .background(theme == .sky ? Color.white : theme.accent, in: Circle())
-            .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
-            .scaleEffect(configuration.isPressed ? 0.92 : 1)
-            .animation(.spring(duration: 0.2), value: configuration.isPressed)
-    }
+/// 追加画面に最初から入れておく値（タイムラインで時間帯をタップしたときは時刻入り）
+struct AddDraft: Identifiable {
+    let id = UUID()
+    var due: Date? = nil
 }
 
-// MARK: - 共通：チェックの丸
+// MARK: - 共通部品
 
-struct CheckCircle: View {
+/// チェックの印（デザインの角の丸みが小さいときは四角）
+struct CheckMark: View {
+    @Environment(\.palette) private var p
     let done: Bool
-    let color: Color
+    var color: Color? = nil
     var size: CGFloat = 28
+
     var body: some View {
+        let c = color ?? p.accent
+        let r = p.radius < 18 ? size * 0.28 : size / 2
         ZStack {
-            Circle().strokeBorder(color, lineWidth: 2.5)
+            RoundedRectangle(cornerRadius: r).strokeBorder(c, lineWidth: 2.5)
             if done {
-                Circle().fill(color)
-                Image(systemName: "checkmark").font(.system(size: size * 0.45, weight: .bold)).foregroundStyle(.white)
+                RoundedRectangle(cornerRadius: r).fill(c)
+                Image(systemName: "checkmark").font(.system(size: size * 0.45, weight: .bold)).foregroundStyle(p.onAccent)
             }
         }
         .frame(width: size, height: size)
-        .contentShape(Circle())
+        .contentShape(Rectangle())
     }
 }
 
@@ -75,248 +70,115 @@ extension View {
     func todoMenu(_ item: TodoItem) -> some View { modifier(TodoMenu(item: item)) }
 }
 
-// MARK: - ① 空：時刻で変わる空の色＋ガラスのカード
-
-struct SkyHome: View {
+/// 一覧の1行（ボード・片手・一覧シートで使う）
+struct TodoLine: View {
     @EnvironmentObject var store: TodoStore
-    @State private var feedback = 0
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { ctx in
-            ZStack {
-                LinearGradient(colors: Sky.colors(at: ctx.date), startPoint: .top, endPoint: .bottom).ignoresSafeArea()
-                SkyOrb(date: ctx.date)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(JP.date(ctx.date)).font(.subheadline.weight(.semibold)).opacity(0.85)
-                            Text(greeting(ctx.date)).font(.largeTitle.bold())
-                            Text("のこり \(store.open.count) 件").font(.title3.weight(.semibold)).opacity(0.9)
-                        }
-                        .padding(.top, 40)
-                        VStack(spacing: 0) {
-                            ForEach(store.open) { item in
-                                SkyRow(item: item, ink: ink(ctx.date)) { store.complete(item); feedback += 1 }
-                                if item.id != store.open.last?.id { Divider().overlay(ink(ctx.date).opacity(0.2)).padding(.leading, 56) }
-                            }
-                            if store.open.isEmpty {
-                                Text("今日はもう、やることはありません").padding(24)
-                            }
-                        }
-                        .glassCard()
-                        if !store.doneToday.isEmpty {
-                            Text("完了 \(store.doneToday.count) 件").font(.footnote.weight(.semibold)).opacity(0.8).padding(.leading, 6)
-                        }
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 110)
-                }
-            }
-            .foregroundStyle(ink(ctx.date))
-            .shadow(color: (Sky.isDarkSky(at: ctx.date) ? Color.black : Color.white).opacity(0.18), radius: 2, y: 1)
-        }
-        .sensoryFeedback(.success, trigger: feedback)
-    }
-
-    // 明るい空では濃い紺、暗い空では白の文字
-    private func ink(_ d: Date) -> Color {
-        Sky.isDarkSky(at: d) ? .white : Color(red: 0.05, green: 0.12, blue: 0.26)
-    }
-
-    private func greeting(_ d: Date) -> String {
-        switch Calendar.current.component(.hour, from: d) {
-        case 4..<11: "おはようございます"
-        case 11..<17: "こんにちは"
-        default: "こんばんは"
-        }
-    }
-}
-
-/// 時刻の位置に太陽（夜は月）を浮かべる
-struct SkyOrb: View {
-    let date: Date
-    var body: some View {
-        GeometryReader { g in
-            let h = Double(Calendar.current.component(.hour, from: date)) + Double(Calendar.current.component(.minute, from: date)) / 60
-            let night = Sky.isNight(at: date)
-            let t = night ? ((h < 5 ? h + 24 : h) - 19) / 10 : (h - 5) / 14 // 0〜1 で東から西へ
-            let x = g.size.width * (0.55 + 0.38 * t)  // 文字と重ならないよう右側の空に
-            let y = g.size.height * (0.13 - 0.07 * sin(.pi * t))
-            Circle()
-                .fill(night ? Color(white: 0.95) : Color(red: 1, green: 0.93, blue: 0.7))
-                .frame(width: night ? 34 : 46, height: night ? 34 : 46)
-                .shadow(color: night ? .white.opacity(0.5) : .yellow.opacity(0.7), radius: night ? 18 : 40)
-                .position(x: x, y: y)
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-    }
-}
-
-struct SkyRow: View {
-    @EnvironmentObject var store: TodoStore
+    @Environment(\.palette) private var p
     let item: TodoItem
-    let ink: Color
-    let onDone: () -> Void
+    var large = false
+
     var body: some View {
         HStack(spacing: 14) {
-            Button(action: onDone) { CheckCircle(done: item.done, color: ink) }.buttonStyle(.plain)
-            VStack(alignment: .leading, spacing: 2) {
+            Button {
+                if item.done { store.uncomplete(item) } else { store.complete(item) }
+            } label: {
+                CheckMark(done: item.done, color: item.isOverdue() ? p.overdue : p.accent, size: large ? 32 : 26)
+            }
+            .buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     if item.isImportant { Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow) }
-                    Text(item.title).font(.body.weight(.semibold)).lineLimit(1)
+                    Text(item.title).font(large ? .title3.weight(.semibold) : .body.weight(.semibold))
+                        .strikethrough(item.done).foregroundStyle(item.done ? p.sub : p.text).lineLimit(2)
                 }
-                Text(DueText.label(item)).font(.caption.weight(.medium))
-                    .foregroundStyle(item.isOverdue() ? Color(red: 0.85, green: 0.30, blue: 0.10) : ink.opacity(0.75))
+                HStack(spacing: 6) {
+                    Text(DueText.label(item)).foregroundStyle(item.isOverdue() ? p.overdue : p.sub)
+                    if item.repeatRule != nil { Image(systemName: "repeat").foregroundStyle(p.sub) }
+                    if item.isCalendar { Image(systemName: "calendar").foregroundStyle(p.sub) }
+                }
+                .font(.caption.weight(.medium))
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.vertical, large ? 14 : 10)
         .contentShape(Rectangle())
+        .swipeActions(edge: .leading) {
+            Button { store.complete(item) } label: { Label("完了", systemImage: "checkmark") }.tint(.green)
+        }
+        .swipeActions(edge: .trailing) {
+            Button { store.postpone(item) } label: { Label("明日へ", systemImage: "arrow.turn.up.right") }.tint(.orange)
+            Button(role: .destructive) { store.delete(item) } label: { Label("削除", systemImage: "trash") }
+        }
         .todoMenu(item)
     }
 }
 
-// MARK: - ② ダイヤル：一日を24時間の円で見る
-
-struct DialHome: View {
-    @EnvironmentObject var store: TodoStore
-    private let mint = AppTheme.dial.accent
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 30)) { ctx in
-            ScrollView {
-                VStack(spacing: 22) {
-                    Text(JP.date(ctx.date)).font(.headline).foregroundStyle(.secondary)
-                        .padding(.top, 24)
-                    ZStack {
-                        DayRing(items: todayItems, now: ctx.date, accent: mint).frame(width: 300, height: 300)
-                        VStack(spacing: 4) {
-                            if let next = store.nextTimed, let due = next.due {
-                                Text("次の予定まで").font(.caption).foregroundStyle(.secondary)
-                                Text(due, style: .timer).font(.system(size: 34, weight: .bold, design: .monospaced)).foregroundStyle(mint)
-                                Text(next.title).font(.subheadline.weight(.semibold)).lineLimit(1).frame(maxWidth: 170)
-                            } else {
-                                Text("\(store.open.count)").font(.system(size: 54, weight: .bold, design: .monospaced)).foregroundStyle(mint)
-                                Text("のこり").font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    VStack(spacing: 10) {
-                        ForEach(store.open) { item in
-                            HStack(spacing: 12) {
-                                Button { store.complete(item) } label: {
-                                    RoundedRectangle(cornerRadius: 7).strokeBorder(item.isOverdue() ? .orange : mint, lineWidth: 2.5).frame(width: 26, height: 26)
-                                }.buttonStyle(.plain)
-                                Text(JP.clock(item))
-                                    .font(.callout.monospacedDigit()).foregroundStyle(item.isOverdue() ? .orange : .secondary)
-                                Text(item.title).lineLimit(1)
-                                Spacer()
-                                if item.isImportant { Image(systemName: "star.fill").foregroundStyle(.yellow).font(.caption) }
-                            }
-                            .padding(12)
-                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
-                            .todoMenu(item)
-                        }
-                    }
-                    .padding(.horizontal, 18)
-                }
-                .padding(.bottom, 110)
-            }
-            .background(Color(red: 0.04, green: 0.05, blue: 0.06).ignoresSafeArea())
-            .preferredColorScheme(.dark)
-        }
-    }
-
-    private var todayItems: [TodoItem] {
-        store.items.filter { $0.due.map { Calendar.current.isDateInToday($0) } ?? false }
-    }
-}
-
-/// 24時間の円：外周に時刻の目盛り、今日のTODOを点で、現在時刻を針で
-struct DayRing: View {
-    let items: [TodoItem]
-    let now: Date
-    let accent: Color
-
-    var body: some View {
-        Canvas { ctx, size in
-            let c = CGPoint(x: size.width / 2, y: size.height / 2)
-            let r = min(size.width, size.height) / 2 - 18
-            func point(_ hour: Double, _ radius: CGFloat) -> CGPoint {
-                let a = (hour / 24) * 2 * .pi - .pi / 2
-                return CGPoint(x: c.x + cos(a) * radius, y: c.y + sin(a) * radius)
-            }
-            var track = Path(); track.addArc(center: c, radius: r, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: false)
-            ctx.stroke(track, with: .color(.white.opacity(0.12)), lineWidth: 14)
-            let h = hourOf(now)
-            var passed = Path(); passed.addArc(center: c, radius: r, startAngle: .degrees(-90), endAngle: .degrees(-90 + h / 24 * 360), clockwise: false)
-            ctx.stroke(passed, with: .color(accent.opacity(0.35)), style: StrokeStyle(lineWidth: 14, lineCap: .round))
-            for hour in 0..<24 {
-                var tick = Path()
-                tick.move(to: point(Double(hour), r - 14)); tick.addLine(to: point(Double(hour), r - (hour % 6 == 0 ? 26 : 20)))
-                ctx.stroke(tick, with: .color(.white.opacity(hour % 6 == 0 ? 0.6 : 0.25)), lineWidth: hour % 6 == 0 ? 2 : 1)
-                if hour % 6 == 0 {
-                    ctx.draw(Text("\(hour)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary), at: point(Double(hour), r - 40))
-                }
-            }
-            for item in items {
-                guard let due = item.due, !item.isAllDay else { continue } // 終日は時刻がないので円には置かない
-                let p = point(hourOf(due), r)
-                let color: Color = item.done ? .gray : (item.isOverdue(now) ? .orange : accent)
-                ctx.fill(Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)), with: .color(color))
-            }
-            // 現在時刻：中央の数字と重ならないよう、円の上に短い印だけを出す
-            var hand = Path(); hand.move(to: point(h, r - 22)); hand.addLine(to: point(h, r + 12))
-            ctx.stroke(hand, with: .color(.white), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-        }
-    }
-
-    private func hourOf(_ d: Date) -> Double {
-        Double(Calendar.current.component(.hour, from: d)) + Double(Calendar.current.component(.minute, from: d)) / 60
-    }
-}
-
-// MARK: - ③ フォーカス：1件ずつ。右スワイプで完了、左で明日へ
+// MARK: - ① フォーカス：1件ずつ大きなカード。右スワイプで完了、左で明日へ。右下の＋で追加
 
 struct FocusHome: View {
     @EnvironmentObject var store: TodoStore
+    @Environment(\.palette) private var p
+    let onAdd: () -> Void
     @State private var drag: CGSize = .zero
     @State private var feedback = 0
+    @State private var showAll = false
 
     var body: some View {
-        VStack(spacing: 18) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("あと").font(.title3.weight(.semibold)).foregroundStyle(.secondary)
-                Text("\(store.open.count)").font(.system(size: 56, weight: .heavy))
-                Text("件").font(.title3.weight(.semibold)).foregroundStyle(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal, 24).padding(.top, 30)
-            ZStack {
-                if store.open.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: "checkmark.seal.fill").font(.system(size: 72)).foregroundStyle(AppTheme.focus.accent)
-                        Text("全部終わりました").font(.title2.bold())
+        ZStack(alignment: .bottomTrailing) {
+            VStack(spacing: 16) {
+                HStack(alignment: .center) {
+                    BigCount(prefix: "あと", value: store.open.count, suffix: "件")
+                    Button { showAll = true } label: {
+                        Label("一覧", systemImage: "list.bullet").font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .background(p.card, in: Capsule())
+                    }
+                    .foregroundStyle(p.text)
+                }
+                .padding(.horizontal, 24).padding(.top, 24)
+                ZStack {
+                    if store.open.isEmpty {
+                        VStack(spacing: 10) {
+                            Image(systemName: "checkmark.seal.fill").font(.system(size: 72)).foregroundStyle(p.accent)
+                            Text("全部終わりました").font(.title2.bold()).foregroundStyle(p.text)
+                        }
+                    }
+                    ForEach(Array(store.open.prefix(3).enumerated().reversed()), id: \.element.id) { index, item in
+                        FocusCard(item: item, index: index, drag: index == 0 ? drag : .zero)
+                            .gesture(swipe(item), including: index == 0 ? .all : .none)
+                            .todoMenu(item)
                     }
                 }
-                ForEach(Array(store.open.prefix(3).enumerated().reversed()), id: \.element.id) { index, item in
-                    FocusCard(item: item, index: index, drag: index == 0 ? drag : .zero)
-                        .gesture(swipe(item), including: index == 0 ? .all : .none)
-                        .todoMenu(item)
+                .frame(maxHeight: .infinity)
+                HStack {
+                    Label("明日へ", systemImage: "arrow.left").foregroundStyle(p.overdue)
+                    Spacer()
+                    Label("完了", systemImage: "arrow.right").labelStyle(TrailingIcon()).foregroundStyle(p.accent)
                 }
+                .font(.footnote.weight(.semibold))
+                .padding(.horizontal, 32).padding(.bottom, 96)
             }
-            .frame(maxHeight: .infinity)
-            HStack {
-                Label("明日へ", systemImage: "arrow.left").foregroundStyle(.orange)
-                Spacer()
-                Label("完了", systemImage: "arrow.right").labelStyle(TrailingIcon()).foregroundStyle(.green)
+            Button(action: onAdd) {
+                Image(systemName: "plus").font(.title2.bold()).frame(width: 60, height: 60)
+                    .foregroundStyle(p.onAccent).background(p.accent, in: Circle())
+                    .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
             }
-            .font(.footnote.weight(.semibold))
-            .padding(.horizontal, 32).padding(.bottom, 100)
+            .padding(22)
+            .accessibilityLabel("TODOを追加")
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .paletteBackground(p)
         .sensoryFeedback(.success, trigger: feedback)
+        .sheet(isPresented: $showAll) {
+            NavigationStack {
+                List { ForEach(store.open) { TodoLine(item: $0) }.listRowBackground(p.card) }
+                    .scrollContentBackground(.hidden).paletteBackground(p)
+                    .navigationTitle("すべてのTODO").navigationBarTitleDisplayMode(.inline)
+            }
+            .environment(\.palette, p)
+            .environmentObject(store)
+            .presentationDetents([.large])
+        }
     }
 
     private func swipe(_ item: TodoItem) -> some Gesture {
@@ -343,31 +205,35 @@ struct TrailingIcon: LabelStyle {
 }
 
 struct FocusCard: View {
+    @Environment(\.palette) private var p
     let item: TodoItem
     let index: Int
     let drag: CGSize
 
     var body: some View {
+        let tag = item.isOverdue() ? p.overdue : p.accent
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(DueText.label(item))
-                    .font(.subheadline.weight(.bold))
+                Text(DueText.label(item)).font(.subheadline.weight(.bold))
                     .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background((item.isOverdue() ? Color.orange : AppTheme.focus.accent).opacity(0.14), in: Capsule())
-                    .foregroundStyle(item.isOverdue() ? .orange : AppTheme.focus.accent)
+                    .background(tag.opacity(0.14), in: Capsule()).foregroundStyle(tag)
+                if item.repeatRule != nil { Image(systemName: "repeat").foregroundStyle(p.sub) }
                 Spacer()
                 if item.isImportant { Image(systemName: "star.fill").foregroundStyle(.yellow) }
             }
             Spacer()
-            Text(item.title).font(.system(size: 34, weight: .bold)).lineLimit(3).minimumScaleFactor(0.6)
+            Text(item.title).font(.system(size: 34, weight: .bold, design: p.fontDesign)).foregroundStyle(p.text)
+                .lineLimit(3).minimumScaleFactor(0.6)
+            if let note = item.note, !note.isEmpty { Text(note).font(.callout).foregroundStyle(p.sub).lineLimit(2) }
             Spacer()
         }
         .padding(26)
         .frame(maxWidth: .infinity)
         .frame(height: 360)
-        .background(RoundedRectangle(cornerRadius: 32).fill(Color(.secondarySystemGroupedBackground)).shadow(color: .black.opacity(0.12), radius: 18, y: 8))
+        .background(RoundedRectangle(cornerRadius: p.radius + 4, style: .continuous).fill(p.card)
+            .shadow(color: .black.opacity(0.12), radius: 18, y: 8))
         .overlay(alignment: .topTrailing) {
-            if drag.width > 30 { stamp("完了", .green) } else if drag.width < -30 { stamp("明日へ", .orange) }
+            if drag.width > 30 { stamp("完了", p.accent) } else if drag.width < -30 { stamp("明日へ", p.overdue) }
         }
         .padding(.horizontal, 24)
         .scaleEffect(1 - CGFloat(index) * 0.05)
@@ -385,89 +251,250 @@ struct FocusCard: View {
     }
 }
 
-// MARK: - ④ 手帳：罫線の紙と明朝体。完了で「済」のはんこ
+// MARK: - ② ボード：タイルで全体を一目で。上部の入力欄で打ってすぐ追加
 
-struct PaperHome: View {
+struct BoardHome: View {
     @EnvironmentObject var store: TodoStore
-    @State private var stamped: Set<String> = []
-    private let ink = Color(red: 0.16, green: 0.14, blue: 0.12)
-    private let red = AppTheme.paper.accent
-    private let line: CGFloat = 52
+    @Environment(\.palette) private var p
+    @State private var draft = ""
+    @FocusState private var typing: Bool
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(JP.longDate(.now))
-                    .font(.system(size: 22, weight: .semibold, design: .serif))
-                    .padding(.top, 36).padding(.bottom, 4)
-                Text("本日の用事　\(store.open.count)").font(.system(.subheadline, design: .serif)).foregroundStyle(ink.opacity(0.6))
-                    .frame(height: line, alignment: .bottom)
-                ForEach(store.open + store.doneToday) { item in
-                    HStack(spacing: 12) {
-                        Text(JP.clock(item, none: "　―　"))
-                            .font(.system(.footnote, design: .serif).monospacedDigit()).foregroundStyle(item.isOverdue() ? red : ink.opacity(0.55))
-                            .frame(width: 48, alignment: .leading)
-                        Text((item.isImportant ? "◎ " : "") + item.title)
-                            .font(.system(size: 19, design: .serif))
-                            .strikethrough(item.done, color: ink.opacity(0.5))
-                            .foregroundStyle(item.done ? ink.opacity(0.45) : ink)
-                            .lineLimit(1)
-                        Spacer()
-                        ZStack {
-                            if item.done || stamped.contains(item.id) { Hanko(color: red).transition(.scale(scale: 2.4).combined(with: .opacity)) }
-                        }
-                        .frame(width: 44, height: 44)
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(JP.date(.now)).font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(p.accent)
+                        TextField("何をする？（入力して確定で追加）", text: $draft)
+                            .focused($typing).submitLabel(.done)
+                            .onSubmit { store.add(draft); draft = "" }
                     }
-                    .frame(height: line)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        guard !item.done else { store.uncomplete(item); return }
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.55)) { _ = stamped.insert(item.id) }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { store.complete(item); stamped.remove(item.id) }
+                    .padding(14)
+                    .background(p.card, in: RoundedRectangle(cornerRadius: p.radius * 0.6, style: .continuous))
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                        tile("のこり", "\(store.open.count)", "件", p.accent)
+                        nextTile
+                        tile("期限切れ", "\(store.overdue.count)", "件", store.overdue.isEmpty ? p.sub : p.overdue)
+                        tile("今日の完了", "\(store.doneToday.count)", "件", p.text)
                     }
-                    .todoMenu(item)
+                }
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .listRowBackground(Color.clear)
+            }
+            Section {
+                ForEach(store.open) { TodoLine(item: $0) }
+                if store.open.isEmpty { Text("やることはありません").foregroundStyle(p.sub) }
+            } header: {
+                Text("やること").font(.headline).foregroundStyle(p.text)
+            }
+            .listRowBackground(p.card)
+        }
+        .scrollContentBackground(.hidden)
+        .paletteBackground(p)
+    }
+
+    private func tile(_ title: String, _ value: String, _ unit: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(p.sub)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(value).font(.system(size: 34, weight: .heavy, design: p.fontDesign)).foregroundStyle(color)
+                Text(unit).font(.caption).foregroundStyle(p.sub)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
+        .padding(14)
+        .background(p.card, in: RoundedRectangle(cornerRadius: p.radius * 0.7, style: .continuous))
+    }
+
+    private var nextTile: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("次の予定").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
+            if let next = store.nextTimed, let due = next.due {
+                Text(due, style: .timer).font(.system(size: 24, weight: .heavy, design: .monospaced)).foregroundStyle(p.accent)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                Text(next.title).font(.caption.weight(.semibold)).foregroundStyle(p.text).lineLimit(1)
+            } else {
+                Text("なし").font(.title2.weight(.heavy)).foregroundStyle(p.sub)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
+        .padding(14)
+        .background(p.card, in: RoundedRectangle(cornerRadius: p.radius * 0.7, style: .continuous))
+    }
+}
+
+// MARK: - ③ 片手：内容を下に寄せ、親指で届く下部の大きなボタンで操作
+
+struct ThumbHome: View {
+    @EnvironmentObject var store: TodoStore
+    @Environment(\.palette) private var p
+    let onAdd: () -> Void
+    @State private var showDone = false
+    @State private var feedback = 0
+
+    var body: some View {
+        let list = showDone ? store.doneToday : Array(store.open.reversed())
+        VStack(spacing: 0) {
+            HStack {
+                Text(JP.date(.now)).font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+                Spacer()
+                Text(showDone ? "今日の完了 \(store.doneToday.count) 件" : "のこり \(store.open.count) 件")
+                    .font(.subheadline.weight(.bold)).foregroundStyle(p.text)
+            }
+            .padding(.horizontal, 20).padding(.top, 12)
+            List {
+                ForEach(list) { TodoLine(item: $0, large: true) }
+                    .listRowBackground(p.card)
+                if list.isEmpty {
+                    Text(showDone ? "今日完了したものはまだありません" : "やることはありません").foregroundStyle(p.sub)
+                        .listRowBackground(p.card)
                 }
             }
-            .padding(.horizontal, 26)
-            .padding(.bottom, 120)
-            .background(alignment: .topLeading) { RuledLines(spacing: line, offset: 36 + 30 + line, color: Color(red: 0.55, green: 0.70, blue: 0.85).opacity(0.45)) }
+            .scrollContentBackground(.hidden)
+            .defaultScrollAnchor(.bottom)       // 一番近いTODOが親指の近く（下）に来る
+            HStack(spacing: 10) {
+                bigButton(showDone ? "やること" : "完了済み", showDone ? "list.bullet" : "checkmark.circle", filled: false) { showDone.toggle() }
+                bigButton("次を完了", "checkmark", filled: false) {
+                    if let first = store.open.first { store.complete(first); feedback += 1 }
+                }
+                .disabled(store.open.isEmpty)
+                bigButton("追加", "plus", filled: true, action: onAdd)
+            }
+            .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 10)
         }
-        .foregroundStyle(ink)
-        .background(Color(red: 0.98, green: 0.96, blue: 0.90).ignoresSafeArea())
-        .overlay(alignment: .leading) { Rectangle().fill(red.opacity(0.35)).frame(width: 1.5).padding(.leading, 18).ignoresSafeArea() }
-        .preferredColorScheme(.light)
-        .sensoryFeedback(.impact(weight: .heavy), trigger: stamped.count)
+        .paletteBackground(p)
+        .sensoryFeedback(.success, trigger: feedback)
+    }
+
+    private func bigButton(_ title: String, _ icon: String, filled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon).font(.title2.weight(.bold))
+                Text(title).font(.caption.weight(.bold))
+            }
+            .frame(maxWidth: .infinity, minHeight: 66)
+            .foregroundStyle(filled ? p.onAccent : p.text)
+            .background(filled ? p.accent : p.card, in: RoundedRectangle(cornerRadius: p.radius * 0.7, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 
-struct RuledLines: View {
-    let spacing: CGFloat
-    let offset: CGFloat
-    let color: Color
+// MARK: - ④ タイムライン：縦の時間軸。右上の＋、時間帯をタップでその時刻のTODOを追加
+
+struct TimelineHome: View {
+    @EnvironmentObject var store: TodoStore
+    @Environment(\.palette) private var p
+    let onAdd: (AddDraft) -> Void
+    private let hourHeight: CGFloat = 64
+    private let startHour = 6
+
     var body: some View {
-        Canvas { ctx, size in
-            var y = offset
-            while y < size.height + 2000 {
-                var p = Path(); p.move(to: CGPoint(x: -40, y: y)); p.addLine(to: CGPoint(x: size.width + 40, y: y))
-                ctx.stroke(p, with: .color(color), lineWidth: 0.8)
-                y += spacing
+        NavigationStack {
+            TimelineView(.periodic(from: .now, by: 60)) { ctx in
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) {
+                            if !untimed.isEmpty {
+                                Text("時間を決めていない・今日以外").font(.caption.weight(.semibold)).foregroundStyle(p.sub).padding(.horizontal, 20)
+                                VStack(spacing: 0) { ForEach(untimed) { TodoLine(item: $0).padding(.horizontal, 16) } }
+                                    .background(p.card, in: RoundedRectangle(cornerRadius: p.radius * 0.6, style: .continuous))
+                                    .padding(.horizontal, 16)
+                            }
+                            ZStack(alignment: .topLeading) {
+                                VStack(spacing: 0) {
+                                    ForEach(startHour..<24, id: \.self) { h in
+                                        HStack(alignment: .top, spacing: 10) {
+                                            Text(String(format: "%02d:00", h)).font(.caption.monospacedDigit()).foregroundStyle(p.sub)
+                                                .frame(width: 44, alignment: .trailing)
+                                            Rectangle().fill(p.sub.opacity(0.18)).frame(height: 1).padding(.top, 7)
+                                        }
+                                        .frame(height: hourHeight, alignment: .top)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { onAdd(AddDraft(due: todayAt(h))) }
+                                        .id(h)
+                                    }
+                                }
+                                ForEach(timedToday) { item in
+                                    TimelineChip(item: item).padding(.leading, 64).padding(.trailing, 16)
+                                        .offset(y: offset(for: item.due ?? .now))
+                                }
+                                if offset(for: ctx.date) >= 0 {
+                                    HStack(spacing: 0) {
+                                        Circle().fill(p.overdue).frame(width: 9, height: 9)
+                                        Rectangle().fill(p.overdue).frame(height: 2)
+                                    }
+                                    .padding(.leading, 50).offset(y: offset(for: ctx.date) + 3)
+                                }
+                            }
+                            .padding(.top, 8)
+                        }
+                        .padding(.bottom, 40)
+                    }
+                    .onAppear { proxy.scrollTo(max(startHour, Calendar.current.component(.hour, from: .now) - 1), anchor: .top) }
+                }
+            }
+            .paletteBackground(p)
+            .navigationTitle(JP.date(.now))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { onAdd(AddDraft()) } label: { Image(systemName: "plus.circle.fill").font(.title2) }
+                        .accessibilityLabel("TODOを追加")
+                }
             }
         }
-        .frame(height: 3000)
-        .allowsHitTesting(false)
+    }
+
+    /// 時刻のない・今日以外の未完了
+    private var untimed: [TodoItem] {
+        store.open.filter { item in
+            guard let due = item.due, !item.isAllDay else { return true }
+            return !Calendar.current.isDateInToday(due) || Calendar.current.component(.hour, from: due) < startHour
+        }
+    }
+
+    /// 今日の時刻つき（完了も含めて時間軸に置く）
+    private var timedToday: [TodoItem] {
+        store.items.filter { item in
+            guard let due = item.due, !item.isAllDay, Calendar.current.isDateInToday(due) else { return false }
+            return Calendar.current.component(.hour, from: due) >= startHour
+        }
+    }
+
+    private func offset(for date: Date) -> CGFloat {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let h = Double(c.hour ?? 0) + Double(c.minute ?? 0) / 60 - Double(startHour)
+        return CGFloat(h) * hourHeight
+    }
+
+    private func todayAt(_ h: Int) -> Date {
+        Calendar.current.date(bySettingHour: h, minute: 0, second: 0, of: .now) ?? .now
     }
 }
 
-/// 朱色の丸いはんこ「済」
-struct Hanko: View {
-    let color: Color
+struct TimelineChip: View {
+    @EnvironmentObject var store: TodoStore
+    @Environment(\.palette) private var p
+    let item: TodoItem
+
     var body: some View {
-        ZStack {
-            Circle().strokeBorder(color, lineWidth: 2.5)
-            Text("済").font(.system(size: 20, weight: .heavy, design: .serif)).foregroundStyle(color)
+        let color = item.done ? p.sub : (item.isOverdue() ? p.overdue : p.accent)
+        HStack(spacing: 10) {
+            Button { item.done ? store.uncomplete(item) : store.complete(item) } label: {
+                CheckMark(done: item.done, color: color, size: 22)
+            }
+            .buttonStyle(.plain)
+            Text(JP.clock(item)).font(.caption.monospacedDigit().weight(.bold)).foregroundStyle(color)
+            Text(item.title).font(.subheadline.weight(.semibold)).foregroundStyle(item.done ? p.sub : p.text)
+                .strikethrough(item.done).lineLimit(1)
+            Spacer(minLength: 0)
+            if item.isImportant { Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow) }
         }
-        .frame(width: 40, height: 40)
-        .rotationEffect(.degrees(-14))
-        .opacity(0.88)
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(alignment: .leading) { RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4).padding(.vertical, 6) }
+        .todoMenu(item)
     }
 }
