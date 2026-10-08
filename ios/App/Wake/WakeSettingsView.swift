@@ -31,20 +31,20 @@ struct WakeSettingsView: View {
             .listRowBackground(p.card)
 
             Section {
-                Stepper("段階の数：\(model.settings.stages.count)", value: stageCount, in: 1...4)
+                Stepper("アラームの回数：\(model.settings.stages.count)", value: stageCount, in: 1...4)
                 ForEach(model.settings.stages.indices, id: \.self) { i in
                     HStack(spacing: 10) {
                         Text("\(i + 1)").font(.headline).foregroundStyle(p.onAccent)
                             .frame(width: 28, height: 28).background(p.accent, in: Circle())
-                        TextField("名前", text: stageName(i)).frame(maxWidth: .infinity)
+                        TextField("名前（任意）", text: stageName(i)).frame(maxWidth: .infinity)
                         Stepper("+\(model.settings.stages[i].offset)分", value: stageOffset(i), in: 0...120, step: 5)
                             .fixedSize()
                     }
                 }
             } header: {
-                Text("段階アラーム")
+                Text("アラーム")
             } footer: {
-                Text("起床時刻からのずれ（分）。チェックインするまで、次の段階が順に鳴ります。点数：段階1=100、2=85、3=70、4=40")
+                Text("起床時刻からのずれ（分）。チェックインするまで、次のアラームが順に鳴ります。点数：1回目=100、2回目=85、3回目=70、4回目=40")
             }
             .listRowBackground(p.card)
 
@@ -52,7 +52,7 @@ struct WakeSettingsView: View {
                 DatePicker("就寝時刻", selection: minutesBinding(\.bedtime), displayedComponents: .hourAndMinute)
                     .environment(\.locale, Locale(identifier: "ja_JP"))
             } footer: {
-                Text("就寝の30分前に、次の起床時刻と段階の数を通知します。")
+                Text("就寝の30分前に、次の起床時刻とアラームの回数を通知します。")
             }
             .listRowBackground(p.card)
 
@@ -232,7 +232,7 @@ struct WakeDayEditor: View {
             Section {
                 Toggle("この曜日に起きる", isOn: Binding(get: { day.on }, set: { v in model.update { $0.days[index].on = v } }))
                 if day.on {
-                    DatePicker("起床時刻（段階1）", selection: Binding(
+                    DatePicker("起床時刻（1回目）", selection: Binding(
                         get: { WakeTime.date(day.wake) },
                         set: { d in model.update { $0.days[index].wake = WakeTime.minutes(d) } }),
                                displayedComponents: .hourAndMinute)
@@ -256,10 +256,10 @@ struct WakeDayEditor: View {
             .listRowBackground(p.card)
 
             if day.on {
-                Section("この日の段階") {
+                Section("この日のアラーム") {
                     ForEach(Array(model.settings.stages.enumerated()), id: \.offset) { i, st in
                         HStack {
-                            Text("段階\(i + 1)　\(st.name)").foregroundStyle(p.text)
+                            Text("\(i + 1)回目　\(st.name)").foregroundStyle(p.text)
                             Spacer()
                             Text(WakeLogic.clock(day.wake + st.offset)).monospacedDigit().foregroundStyle(p.sub)
                         }

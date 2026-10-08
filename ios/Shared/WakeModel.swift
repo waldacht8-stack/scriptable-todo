@@ -34,7 +34,8 @@ struct WakeStage: Codable, Hashable, Identifiable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
-        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "段階"
+        let raw = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        name = ["そっと", "ふつう", "しっかり", "最終", "段階"].contains(raw) ? "" : raw   // 旧版の既定の名前は使わない
         offset = try c.decodeIfPresent(Int.self, forKey: .offset) ?? 0
     }
 }
@@ -86,7 +87,7 @@ struct WakeSettings: Codable, Hashable {
     /// すべてのアラームを止める
     var paused: Bool
 
-    static let stageNames = ["そっと", "ふつう", "しっかり", "最終"]
+    static let stageNames = ["", "", "", ""]   // 名前は任意（空なら「N回目」と表示）
     static let stageOffsets = [0, 10, 20, 30]
 
     init() {

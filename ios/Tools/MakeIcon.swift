@@ -1,4 +1,4 @@
-// アプリのアイコン「ひより」を描いて PNG にする（GitHub Actions の macOS で実行）。
+// アプリのアイコン「日和」を描いて PNG にする（GitHub Actions の macOS で実行）。
 // 使い方: swift Tools/MakeIcon.swift <出力先.png>
 // 絵柄：朝焼けの空に、地平線から昇る朝日。朝日の上に、光の筋のようなチェックマーク。
 import AppKit

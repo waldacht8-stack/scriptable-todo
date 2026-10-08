@@ -125,14 +125,49 @@ struct WakeState: Codable {
 struct AppSettings: Codable {
     var theme: String = "focus"     // 色合い（AppTheme）
     var layout: String = "focus"    // 「今日」の画面構成（TodayLayout）
+    // TODO の通知（nil は送らない）
+    var remindMinutes: Int? = 30    // 期限の何分前
+    var morningHour: Int? = 7       // 朝の一覧
+    var eveningHour: Int? = 20      // 夜の残り
+    // カレンダー
+    var calendarImport: Bool = true
+    var lookaheadDays: Int = 45
+    var excludeCalendars: [String] = ["日本の祝日", "祝日", "誕生日", "Birthdays", "Japanese Holidays", "Holidays in Japan"]
+    var lastBackup: Date? = nil
 
     init() {}
 
     // 項目が増えても古い設定ファイルを読めるように、無い項目は既定値にする
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        theme = try c.decodeIfPresent(String.self, forKey: .theme) ?? "focus"
-        layout = try c.decodeIfPresent(String.self, forKey: .layout) ?? "focus"
+        let d = AppSettings()
+        theme = try c.decodeIfPresent(String.self, forKey: .theme) ?? d.theme
+        layout = try c.decodeIfPresent(String.self, forKey: .layout) ?? d.layout
+        remindMinutes = c.contains(.remindMinutes) ? try c.decodeIfPresent(Int.self, forKey: .remindMinutes) : d.remindMinutes
+        morningHour = c.contains(.morningHour) ? try c.decodeIfPresent(Int.self, forKey: .morningHour) : d.morningHour
+        eveningHour = c.contains(.eveningHour) ? try c.decodeIfPresent(Int.self, forKey: .eveningHour) : d.eveningHour
+        calendarImport = try c.decodeIfPresent(Bool.self, forKey: .calendarImport) ?? d.calendarImport
+        lookaheadDays = try c.decodeIfPresent(Int.self, forKey: .lookaheadDays) ?? d.lookaheadDays
+        excludeCalendars = try c.decodeIfPresent([String].self, forKey: .excludeCalendars) ?? d.excludeCalendars
+        lastBackup = try c.decodeIfPresent(Date.self, forKey: .lastBackup)
+    }
+
+    // nil（オフ）を「項目なし」と区別して保存する
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(theme, forKey: .theme)
+        try c.encode(layout, forKey: .layout)
+        try c.encode(remindMinutes, forKey: .remindMinutes)
+        try c.encode(morningHour, forKey: .morningHour)
+        try c.encode(eveningHour, forKey: .eveningHour)
+        try c.encode(calendarImport, forKey: .calendarImport)
+        try c.encode(lookaheadDays, forKey: .lookaheadDays)
+        try c.encode(excludeCalendars, forKey: .excludeCalendars)
+        try c.encodeIfPresent(lastBackup, forKey: .lastBackup)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case theme, layout, remindMinutes, morningHour, eveningHour, calendarImport, lookaheadDays, excludeCalendars, lastBackup
     }
 }
 
@@ -148,8 +183,12 @@ enum TodoData {
     static func toggle(id: String) {
         var items = all()
         if let i = items.firstIndex(where: { $0.id == id }) {
-            items[i].done.toggle()
-            items[i].doneAt = items[i].done ? .now : nil
+            if items[i].done {
+                items[i].done = false
+                items[i].doneAt = nil
+            } else {
+                TodoActions.complete(&items, at: i) // 繰り返しなら次の回もできる
+            }
         }
         save(items)
     }

@@ -55,7 +55,7 @@ struct WakeRecordsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(WakeLogic.date(fromKey: s.day).map { JP.date($0) } ?? s.day)
                                     .font(.body.weight(.semibold)).foregroundStyle(p.text)
-                                Text(s.isMissed ? "未チェックイン" : (s.stage == 0 ? "アラームの前に起床" : "段階\(s.stage)で起床"))
+                                Text(s.isMissed ? "未チェックイン" : (s.stage == 0 ? "アラームの前に起床" : "\(s.stage)回目で起床"))
                                     .font(.caption).foregroundStyle(s.isMissed ? p.overdue : p.sub)
                             }
                             Spacer(minLength: 0)
