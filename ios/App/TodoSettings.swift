@@ -63,7 +63,7 @@ struct TodoSettingsSections: View {
             } header: {
                 Text("データ")
             } footer: {
-                Text("毎日自動でバックアップします（14日分）。保存先：「ファイル」アプリ → このiPhone内 → ひより → バックアップ。Scriptable版のデータは、iCloud Drive → Scriptable → todo-data → todo-data.json を選ぶと取り込めます。")
+                Text("毎日自動でバックアップします（14日分）。保存先：「ファイル」アプリ → このiPhone内 → 日和 → バックアップ。Scriptable版のデータは、iCloud Drive → Scriptable → todo-data → todo-data.json を選ぶと取り込めます。")
             }
         }
         .onAppear {

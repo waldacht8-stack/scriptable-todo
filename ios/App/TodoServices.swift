@@ -205,7 +205,7 @@ enum CalendarSync {
     }
 }
 
-// MARK: - バックアップ（「ファイル」アプリ → このiPhone内 → ひより に毎日保存）と復元・移行
+// MARK: - バックアップ（「ファイル」アプリ → このiPhone内 → 日和 に毎日保存）と復元・移行
 
 struct BackupFile: Codable {
     var version = 1
@@ -235,7 +235,7 @@ enum Backup {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ja_JP")
         f.dateFormat = "yyyy-MM-dd"
-        let url = folder.appendingPathComponent("ひより-\(f.string(from: .now)).json")
+        let url = folder.appendingPathComponent("日和-\(f.string(from: .now)).json")
         guard let data = try? JSONEncoder.iso.encode(BackupFile(todos: TodoData.all(), settings: SettingsData.load())) else { return nil }
         try? data.write(to: url, options: .atomic)
         let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []

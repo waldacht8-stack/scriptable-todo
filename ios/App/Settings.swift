@@ -177,37 +177,43 @@ struct LayoutThumb: View {
                     Circle().fill(accent).frame(width: 18, height: 18).padding(8)
                 }
             case .board:
-                VStack(spacing: 5) {
-                    Capsule().fill(accent.opacity(0.5)).frame(height: 10)
-                    HStack(spacing: 5) { tileShape; tileShape }
-                    HStack(spacing: 5) { tileShape; tileShape }
-                    Capsule().fill(ink).frame(height: 6)
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach([Color.red, accent, ink], id: \.self) { c in
+                        HStack(spacing: 4) { RoundedRectangle(cornerRadius: 1).fill(c).frame(width: 3, height: 8); Capsule().fill(ink).frame(width: 24, height: 4) }
+                        RoundedRectangle(cornerRadius: 3).fill(Color(.systemBackground)).frame(height: 12)
+                    }
+                    Spacer(minLength: 0)
+                    HStack(spacing: 4) { Capsule().fill(Color(.systemBackground)).frame(height: 12); Circle().fill(accent).frame(width: 12, height: 12) }
                 }
                 .padding(10)
             case .thumb:
-                VStack(spacing: 4) {
-                    Spacer()
-                    ForEach(0..<3, id: \.self) { _ in Capsule().fill(ink).frame(height: 8) }
-                    HStack(spacing: 4) {
-                        RoundedRectangle(cornerRadius: 4).fill(ink).frame(height: 18)
-                        RoundedRectangle(cornerRadius: 4).fill(ink).frame(height: 18)
-                        RoundedRectangle(cornerRadius: 4).fill(accent).frame(height: 18)
+                ZStack(alignment: .bottomTrailing) {
+                    VStack(spacing: 6) {
+                        HStack(spacing: 3) {
+                            ForEach(0..<7, id: \.self) { i in RoundedRectangle(cornerRadius: 3).fill(i == 0 ? accent : Color(.systemBackground)).frame(height: 16) }
+                        }
+                        ForEach(0..<3, id: \.self) { _ in
+                            HStack(spacing: 5) { Capsule().fill(accent.opacity(0.6)).frame(width: 14, height: 5); Capsule().fill(ink).frame(height: 5) }
+                        }
+                        Spacer(minLength: 0)
                     }
+                    .padding(10)
+                    Circle().fill(accent).frame(width: 16, height: 16).padding(8)
                 }
-                .padding(10)
             case .timeline:
-                ZStack(alignment: .topTrailing) {
-                    VStack(alignment: .leading, spacing: 9) {
-                        ForEach(0..<5, id: \.self) { i in
+                ZStack(alignment: .topLeading) {
+                    Rectangle().fill(ink).frame(width: 2).padding(.leading, 31).padding(.vertical, 10)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(0..<4, id: \.self) { i in
+                            if i == 2 { Rectangle().fill(Color.red).frame(height: 2).padding(.leading, 18) }
                             HStack(spacing: 5) {
                                 Capsule().fill(ink).frame(width: 12, height: 3)
-                                if i == 1 || i == 3 { RoundedRectangle(cornerRadius: 3).fill(accent.opacity(0.6)).frame(height: 10) }
-                                else { Rectangle().fill(ink.opacity(0.5)).frame(height: 1) }
+                                Circle().fill(i < 2 ? ink : accent).frame(width: 8, height: 8)
+                                RoundedRectangle(cornerRadius: 3).fill(Color(.systemBackground)).frame(height: 12)
                             }
                         }
                     }
-                    .padding(12)
-                    Circle().fill(accent).frame(width: 14, height: 14).padding(6)
+                    .padding(10)
                 }
             }
         }
