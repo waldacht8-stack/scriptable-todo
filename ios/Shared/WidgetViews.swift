@@ -12,6 +12,7 @@ struct TodoWidgetData {
     var layout: TodayLayout
     var palette: Palette
     var groupOK: Bool
+    var doneItems: [TodoItem] = []  // 今日の完了（ながれ構成で使う）
 
     static func load(now: Date = .now) -> TodoWidgetData {
         let all = TodoData.all()
@@ -24,7 +25,8 @@ struct TodoWidgetData {
             next: open.filter { !$0.isAllDay && ($0.due ?? .distantPast) > now }.min { ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) },
             layout: TodayLayout.from(s.layout),
             palette: AppTheme.from(s.theme).palette,
-            groupOK: SharedStore.isGroupAvailable
+            groupOK: SharedStore.isGroupAvailable,
+            doneItems: all.filter { $0.done && ($0.doneAt.map { Calendar.current.isDateInToday($0) } ?? false) }
         )
     }
 }
@@ -106,103 +108,239 @@ struct TodoWidgetView: View {
         }
     }
 
-    /// ボード：タイルで全体を一目で
-    private var board: some View {
-        let cols = family == .systemSmall ? 1 : 2
-        return VStack(spacing: 6) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: cols), spacing: 6) {
-                tile("のこり", "\(data.items.count)", p.accent)
-                if cols == 2 {
-                    nextTile
-                    tile("期限切れ", "\(data.overdue)", data.overdue > 0 ? p.overdue : p.sub)
-                    tile("今日の完了", "\(data.doneToday)", p.text)
-                }
-            }
-            if family == .systemLarge {
-                lines(Array(data.items.prefix(5)), large: false)
-            }
-            if cols == 1, let first = data.items.first {
-                Text(first.title).font(.caption.weight(.semibold)).foregroundStyle(p.text).lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            Spacer(minLength: 0)
+    // MARK: グループ（期限ごとの見出し）
+
+    /// 小：期限切れ・今日・明日の件数。中・大：色帯の見出しつきで期限ごとの一覧
+    @ViewBuilder private var board: some View {
+        if family == .systemSmall {
+            groupCounts
+        } else {
+            groupList
         }
     }
 
-    /// 片手：大きなチェック付きの一覧
-    private var thumb: some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private var groupCounts: some View {
+        VStack(alignment: .leading, spacing: 6) {
             Text("のこり \(data.items.count) 件").font(.caption.weight(.bold)).foregroundStyle(p.sub)
-            lines(Array(data.items.prefix(family == .systemLarge ? 6 : (family == .systemMedium ? 3 : 2))), large: true)
+            countRow(.overdue)
+            countRow(.today)
+            countRow(.tomorrow)
             Spacer(minLength: 0)
         }
     }
 
-    /// タイムライン：時刻の色帯つき
+    private func countRow(_ g: WGroup) -> some View {
+        let n: Int = data.items.filter { WGroup.of($0) == g }.count
+        let barColor: Color = g.color(p)
+        let numberColor: Color = n > 0 ? barColor : p.sub
+        let shape = RoundedRectangle(cornerRadius: min(p.radius, 10), style: .continuous)
+        return HStack(spacing: 7) {
+            RoundedRectangle(cornerRadius: 2).fill(barColor).frame(width: 4, height: 20)
+            Text(g.name).font(.subheadline.weight(.bold)).foregroundStyle(p.text).lineLimit(1)
+            Spacer(minLength: 0)
+            Text("\(n)").font(.system(size: 22, weight: .heavy, design: p.fontDesign)).foregroundStyle(numberColor)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(p.card, in: shape)
+    }
+
+    private var groupRows: [WGroupRow] {
+        let budget: Int = family == .systemLarge ? 13 : 5
+        var rows: [WGroupRow] = []
+        for g in WGroup.allCases {
+            let items: [TodoItem] = data.items.filter { WGroup.of($0) == g }
+            if items.isEmpty || rows.count + 2 > budget { continue }
+            rows.append(WGroupRow(id: "group-\(g.rawValue)", group: g, count: items.count, item: nil))
+            for item in items where rows.count < budget {
+                rows.append(WGroupRow(id: item.id, group: g, count: 0, item: item))
+            }
+        }
+        return rows
+    }
+
+    private var groupList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(groupRows) { row in
+                if let item = row.item {
+                    itemLine(item, color: row.group.color(p))
+                } else {
+                    sectionBar(row.group.name, row.count, row.group.color(p))
+                }
+            }
+            if data.items.isEmpty { emptyText("やることはありません") }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func sectionBar(_ title: String, _ count: Int, _ color: Color) -> some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4, height: 14)
+            Text(title).font(.caption.weight(.heavy)).foregroundStyle(p.text)
+            Text("\(count)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 1)
+    }
+
+    /// 1行：丸を押すと完了（どの構成でも共通）
+    private func itemLine(_ item: TodoItem, color: Color) -> some View {
+        let clock: String = JP.clock(item, none: "")
+        return Button(intent: ToggleTodoIntent(id: item.id)) {
+            HStack(spacing: 6) {
+                Image(systemName: "circle").font(.system(size: 13, weight: .semibold)).foregroundStyle(color)
+                Text(item.title).font(.caption.weight(.semibold)).foregroundStyle(p.text).lineLimit(1)
+                Spacer(minLength: 0)
+                Text(clock).font(.caption2.monospacedDigit().weight(.semibold)).foregroundStyle(p.sub)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func emptyText(_ s: String) -> some View {
+        Text(s).font(.caption.weight(.semibold)).foregroundStyle(p.sub)
+    }
+
+    // MARK: 週間（7日の帯と今日のやること）
+
+    private static let weekdaySymbols: [String] = ["日", "月", "火", "水", "木", "金", "土"]
+
+    private var thumb: some View {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        let todays: [TodoItem] = todayItems
+        let limit: Int = family == .systemLarge ? 9 : (family == .systemMedium ? 3 : 2)
+        let chipGap: CGFloat = family == .systemSmall ? 2 : 4
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: chipGap) {
+                ForEach(0..<7, id: \.self) { i in
+                    dayChip(cal.date(byAdding: .day, value: i, to: today) ?? today, selected: i == 0)
+                }
+            }
+            Text("今日のやること \(todays.count)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+            ForEach(todays.prefix(limit)) { item in
+                itemLine(item, color: item.isOverdue() ? p.overdue : p.accent)
+            }
+            if todays.isEmpty { emptyText("今日のやることはありません") }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// 期限切れと今日の期限のもの
+    private var todayItems: [TodoItem] {
+        let cal = Calendar.current
+        return data.items.filter { item in
+            guard let due = item.due else { return false }
+            return item.isOverdue() || cal.isDateInToday(due)
+        }
+    }
+
+    private func dayChip(_ d: Date, selected: Bool) -> some View {
+        let cal = Calendar.current
+        let small: Bool = family == .systemSmall
+        let has: Bool = data.items.contains { item in item.due.map { cal.isDate($0, inSameDayAs: d) } ?? false }
+        let fg: Color = selected ? p.onAccent : p.text
+        let bg: Color = selected ? p.accent : p.card
+        let dot: Color = has ? (selected ? p.onAccent : p.accent) : Color.clear
+        let wd: String = Self.weekdaySymbols[cal.component(.weekday, from: d) - 1]
+        let wdSize: CGFloat = small ? 8 : 10
+        let daySize: CGFloat = small ? 11 : 15
+        let shape = RoundedRectangle(cornerRadius: small ? 6 : 9, style: .continuous)
+        return VStack(spacing: 1) {
+            Text(wd).font(.system(size: wdSize, weight: .bold))
+            Text("\(cal.component(.day, from: d))").font(.system(size: daySize, weight: .heavy).monospacedDigit())
+            Circle().fill(dot).frame(width: 4, height: 4)
+        }
+        .foregroundStyle(fg)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, small ? 3 : 5)
+        .background(bg, in: shape)
+    }
+
+    // MARK: ながれ（1本の線と「いま」の印）
+
+    private var flowTimeWidth: CGFloat { 34 }
+
     private var timeline: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(JP.date(.now)).font(.caption.weight(.bold)).foregroundStyle(p.sub)
-            ForEach(data.items.prefix(family == .systemLarge ? 7 : (family == .systemMedium ? 3 : 2))) { item in
-                let color = item.isOverdue() ? p.overdue : p.accent
-                Button(intent: ToggleTodoIntent(id: item.id)) {
-                    HStack(spacing: 7) {
-                        RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4)
-                        Text(JP.clock(item, none: "―")).font(.caption.monospacedDigit().weight(.bold)).foregroundStyle(color)
-                            .frame(width: 38, alignment: .leading)
-                        Text(item.title).font(.caption.weight(.semibold)).foregroundStyle(p.text).lineLimit(1)
-                        Spacer(minLength: 0)
+        let now = Date.now
+        let entries: [TodoItem] = flowEntries
+        let nowIndex: Int = entries.firstIndex { !$0.done && ($0.due ?? .distantFuture) > now } ?? entries.count
+        let maxRows: Int = family == .systemLarge ? 10 : (family == .systemMedium ? 4 : 3)
+        let before: Int = family == .systemLarge ? 3 : 1
+        let start: Int = max(0, min(nowIndex - before, entries.count - maxRows))
+        let shown: [TodoItem] = Array(entries.dropFirst(start).prefix(maxRows))
+        let markerAt: Int = nowIndex - start
+        let lineX: CGFloat = flowTimeWidth + 6 + 6
+        return VStack(alignment: .leading, spacing: 5) {
+            Text("のこり \(data.items.count) 件 ・ 完了 \(data.doneToday)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+            ZStack(alignment: .topLeading) {
+                Rectangle().fill(p.sub.opacity(0.35)).frame(width: 2).padding(.leading, lineX).padding(.vertical, 4)
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { pair in
+                        if pair.offset == markerAt { nowMarker }
+                        flowRow(pair.element)
                     }
-                    .padding(.vertical, 5).padding(.trailing, 6)
-                    .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    if markerAt >= shown.count { nowMarker }
                 }
-                .buttonStyle(.plain)
             }
+            .fixedSize(horizontal: false, vertical: true)
+            if entries.isEmpty { emptyText("やることはありません") }
             Spacer(minLength: 0)
         }
     }
 
-    private func lines(_ items: [TodoItem], large: Bool) -> some View {
-        VStack(alignment: .leading, spacing: large ? 7 : 5) {
-            ForEach(items) { item in
-                Button(intent: ToggleTodoIntent(id: item.id)) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "circle").font(large ? .title3 : .body)
-                            .foregroundStyle(item.isOverdue() ? p.overdue : p.accent)
-                        Text(item.title).font(large ? .subheadline.weight(.semibold) : .caption.weight(.semibold))
-                            .foregroundStyle(p.text).lineLimit(1)
-                        Spacer(minLength: 0)
-                        Text(DueText.label(item)).font(.caption2.weight(.semibold))
-                            .foregroundStyle(item.isOverdue() ? p.overdue : p.sub)
-                    }
-                }
+    /// 今日の完了＋期限つきの未完了を時刻順に
+    private var flowEntries: [TodoItem] {
+        let list: [TodoItem] = data.doneItems + data.items.filter { $0.due != nil }
+        return list.sorted { flowKey($0) < flowKey($1) }
+    }
+
+    private func flowKey(_ t: TodoItem) -> Date { t.due ?? t.doneAt ?? .now }
+
+    private func flowTime(_ t: TodoItem) -> String {
+        let cal = Calendar.current
+        let d: Date = flowKey(t)
+        if cal.isDateInToday(d) { return t.isAllDay ? "終日" : JP.time(d) }
+        if cal.isDateInTomorrow(d) { return "明日" }
+        if cal.isDateInYesterday(d) { return "昨日" }
+        return "\(cal.component(.month, from: d))/\(cal.component(.day, from: d))"
+    }
+
+    @ViewBuilder private func flowRow(_ item: TodoItem) -> some View {
+        if item.done {
+            flowRowBody(item)
+        } else {
+            Button(intent: ToggleTodoIntent(id: item.id)) { flowRowBody(item) }
                 .buttonStyle(.plain)
-            }
         }
     }
 
-    private func tile(_ title: String, _ value: String, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(title).font(.caption2.weight(.semibold)).foregroundStyle(p.sub)
-            Text(value).font(.system(size: 24, weight: .heavy, design: p.fontDesign)).foregroundStyle(color)
+    private func flowRowBody(_ item: TodoItem) -> some View {
+        let color: Color = item.isOverdue() ? p.overdue : p.accent
+        let timeColor: Color = item.done ? p.sub : color
+        let titleColor: Color = item.done ? p.sub : p.text
+        let symbol: String = item.done ? "checkmark.circle.fill" : "circle"
+        let dotBack: Color = p.background.first ?? p.card
+        return HStack(spacing: 6) {
+            Text(flowTime(item)).font(.caption2.monospacedDigit().weight(.bold)).foregroundStyle(timeColor)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(width: flowTimeWidth, alignment: .leading)
+            Image(systemName: symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(timeColor)
+                .frame(width: 14, height: 14)
+                .background(Circle().fill(dotBack))
+            Text(item.title).strikethrough(item.done).font(.caption.weight(.semibold)).foregroundStyle(titleColor)
+                .lineLimit(1)
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(p.card, in: RoundedRectangle(cornerRadius: min(p.radius, 14), style: .continuous))
     }
 
-    private var nextTile: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text("次の予定").font(.caption2.weight(.semibold)).foregroundStyle(p.sub)
-            if let due = data.next?.due {
-                Text(due, style: .timer).font(.system(size: 18, weight: .heavy, design: .monospaced)).foregroundStyle(p.accent)
-                    .lineLimit(1).minimumScaleFactor(0.6)
-            } else {
-                Text("なし").font(.system(size: 18, weight: .heavy)).foregroundStyle(p.sub)
-            }
+    private var nowMarker: some View {
+        HStack(spacing: 6) {
+            Text("いま").font(.caption2.weight(.heavy)).foregroundStyle(p.overdue)
+                .frame(width: flowTimeWidth, alignment: .leading)
+            Circle().fill(p.overdue).frame(width: 8, height: 8).frame(width: 14)
+            Rectangle().fill(p.overdue).frame(height: 1.5)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(p.card, in: RoundedRectangle(cornerRadius: min(p.radius, 14), style: .continuous))
     }
 
     private var noShare: some View {
@@ -241,4 +379,46 @@ struct TodoWidgetView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
+
+// MARK: - グループ構成の区分（アプリの DueGroup と同じ考え方。ウィジェットからはアプリの型が見えないため別に持つ）
+
+private enum WGroup: Int, CaseIterable {
+    case overdue, today, tomorrow, later, noDue
+
+    var name: String {
+        switch self {
+        case .overdue: return "期限切れ"
+        case .today: return "今日"
+        case .tomorrow: return "明日"
+        case .later: return "これから"
+        case .noDue: return "期限なし"
+        }
+    }
+
+    func color(_ p: Palette) -> Color {
+        switch self {
+        case .overdue: return p.overdue
+        case .today: return p.accent
+        case .tomorrow: return p.accent.opacity(0.6)
+        case .later, .noDue: return p.sub
+        }
+    }
+
+    static func of(_ item: TodoItem, now: Date = .now) -> WGroup {
+        guard let due = item.due else { return .noDue }
+        if item.isOverdue(now) { return .overdue }
+        let cal = Calendar.current
+        let days: Int = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: due)).day ?? 0
+        if days <= 0 { return .today }
+        if days == 1 { return .tomorrow }
+        return .later
+    }
+}
+
+private struct WGroupRow: Identifiable {
+    let id: String
+    let group: WGroup
+    let count: Int
+    let item: TodoItem?
 }
