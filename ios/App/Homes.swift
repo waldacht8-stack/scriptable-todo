@@ -242,7 +242,7 @@ struct FocusCard: View {
     }
 
     private func stamp(_ text: String, _ color: Color) -> some View {
-        Text(text).font(.title2.bold()).foregroundStyle(color)
+        Text(verbatim: text).font(Font.title2.bold()).foregroundStyle(color)
             .padding(.horizontal, 14).padding(.vertical, 6)
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(color, lineWidth: 3))
             .rotationEffect(.degrees(drag.width > 0 ? -12 : 12))
