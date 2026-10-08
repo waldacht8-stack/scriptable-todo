@@ -5,6 +5,8 @@ struct HomeView: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
     @State private var addDraft: AddDraft?
+    // 起動引数 -donelist で完了済みの一覧を開いた状態にする（スクリーンショット用）
+    @State private var listTab: ListTab? = ProcessInfo.processInfo.arguments.contains("-donelist") ? .done : nil
 
     var body: some View {
         Group {
@@ -15,16 +17,183 @@ struct HomeView: View {
             case .timeline: FlowHome(onAdd: { addDraft = AddDraft() })
             }
         }
+        .environment(\.editTodo, EditTodoAction { addDraft = AddDraft(item: $0) })
+        .environment(\.openList, OpenListAction { listTab = $0 })
+        .overlay(alignment: .top) { UndoToast() }
         .sheet(item: $addDraft) { draft in
             AddSheet(draft: draft).environmentObject(store).presentationDetents([.medium, .large])
+        }
+        .sheet(item: $listTab) { tab in
+            TodoListSheet(tab: tab).environment(\.palette, p).environmentObject(store)
         }
     }
 }
 
-/// 追加画面に最初から入れておく値（週間で明日以降を選んでいるときはその日の9時）
+/// 追加・編集の画面に最初から入れておく値（item があれば編集。週間で明日以降を選んでいるときはその日の9時）
 struct AddDraft: Identifiable {
     let id = UUID()
     var due: Date? = nil
+    var item: TodoItem? = nil
+}
+
+// MARK: - 編集・一覧を開く（どの構成の行からでも呼べるように環境で渡す）
+
+struct EditTodoAction {
+    var run: (TodoItem) -> Void = { _ in }
+    func callAsFunction(_ item: TodoItem) { run(item) }
+}
+
+enum ListTab: Int, Identifiable {
+    case open, done
+    var id: Int { rawValue }
+}
+
+struct OpenListAction {
+    var run: (ListTab) -> Void = { _ in }
+    func callAsFunction(_ tab: ListTab) { run(tab) }
+}
+
+private struct EditTodoKey: EnvironmentKey { static let defaultValue = EditTodoAction() }
+private struct OpenListKey: EnvironmentKey { static let defaultValue = OpenListAction() }
+
+extension EnvironmentValues {
+    var editTodo: EditTodoAction {
+        get { self[EditTodoKey.self] }
+        set { self[EditTodoKey.self] = newValue }
+    }
+    var openList: OpenListAction {
+        get { self[OpenListKey.self] }
+        set { self[OpenListKey.self] = newValue }
+    }
+}
+
+// MARK: - 元に戻す
+
+/// 完了・削除・延期のあと、しばらく上に出る「元に戻す」
+struct UndoToast: View {
+    @EnvironmentObject var store: TodoStore
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        ZStack {
+            if let u = store.undo {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(p.accent)
+                    Text(u.message).font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Button {
+                        withAnimation(.snappy) { store.undoLast() }
+                    } label: {
+                        Text("元に戻す").font(.subheadline.weight(.bold)).foregroundStyle(p.accent)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Color.white.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 8)
+                .background(Color.black.opacity(0.85), in: Capsule())
+                .padding(.horizontal, 16).padding(.top, 6)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .task(id: u.id) {
+                    try? await Task.sleep(for: .seconds(UndoInfo.seconds))
+                    if store.undo?.id == u.id { withAnimation(.snappy) { store.undo = nil } }
+                }
+            }
+        }
+        .animation(.snappy, value: store.undo?.id)
+    }
+}
+
+// MARK: - 一覧（やること・完了済み）
+
+struct TodoListSheet: View {
+    @EnvironmentObject var store: TodoStore
+    @Environment(\.palette) private var p
+    @Environment(\.dismiss) private var dismiss
+    @State var tab: ListTab
+    @State private var editing: AddDraft?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if tab == .open {
+                    ForEach(store.open) { TodoLine(item: $0) }.listRowBackground(p.card)
+                    if store.open.isEmpty { Text("やることはありません").foregroundStyle(p.sub).listRowBackground(p.card) }
+                } else {
+                    ForEach(doneDays, id: \.self) { day in
+                        Section {
+                            ForEach(doneItems(on: day)) { TodoLine(item: $0) }
+                        } header: {
+                            Text(dayTitle(day)).font(.subheadline.weight(.bold)).foregroundStyle(p.text).textCase(nil)
+                        }
+                        .listRowBackground(p.card)
+                    }
+                    if doneDays.isEmpty { Text("完了したTODOはまだありません").foregroundStyle(p.sub).listRowBackground(p.card) }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .paletteBackground(p)
+            .safeAreaInset(edge: .top) {
+                Picker("表示", selection: $tab) {
+                    Text("やること \(store.open.count)").tag(ListTab.open)
+                    Text("完了済み \(store.items.filter(\.done).count)").tag(ListTab.done)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16).padding(.bottom, 6)
+            }
+            .navigationTitle("TODOの一覧").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("閉じる") { dismiss() } } }
+        }
+        .environment(\.editTodo, EditTodoAction { editing = AddDraft(item: $0) })
+        .overlay(alignment: .top) { UndoToast() }
+        .sheet(item: $editing) { draft in
+            AddSheet(draft: draft).environmentObject(store).presentationDetents([.medium, .large])
+        }
+        .presentationDetents([.large])
+    }
+
+    /// 完了した日（新しい順）
+    private var doneDays: [Date] {
+        let cal = Calendar.current
+        let days = Set(store.items.filter(\.done).map { cal.startOfDay(for: $0.doneAt ?? $0.due ?? .now) })
+        return days.sorted(by: >)
+    }
+
+    private func doneItems(on day: Date) -> [TodoItem] {
+        let cal = Calendar.current
+        return store.items
+            .filter { $0.done && cal.isDate($0.doneAt ?? $0.due ?? .now, inSameDayAs: day) }
+            .sorted { ($0.doneAt ?? .distantPast) > ($1.doneAt ?? .distantPast) }
+    }
+
+    private func dayTitle(_ day: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(day) { return "今日" }
+        if cal.isDateInYesterday(day) { return "昨日" }
+        return JP.date(day)
+    }
+}
+
+/// 構成の見出しの横に置く「一覧」「完了済み」ボタン
+struct ListButtons: View {
+    @EnvironmentObject var store: TodoStore
+    @Environment(\.palette) private var p
+    @Environment(\.openList) private var openList
+
+    var body: some View {
+        HStack(spacing: 8) {
+            chip("完了済み", "checkmark.circle") { openList(.done) }
+        }
+    }
+
+    private func chip(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon).font(.subheadline.weight(.semibold)).foregroundStyle(p.text)
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(p.card, in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 // MARK: - 共通部品
@@ -54,13 +223,17 @@ struct CheckMark: View {
 /// 長押しメニュー（重要・明日へ・削除）
 struct TodoMenu: ViewModifier {
     @EnvironmentObject var store: TodoStore
+    @Environment(\.editTodo) private var editTodo
     let item: TodoItem
     func body(content: Content) -> some View {
         content.contextMenu {
+            Button { editTodo(item) } label: { Label("編集", systemImage: "pencil") }
             Button { store.toggleImportant(item) } label: {
                 Label(item.isImportant ? "重要を外す" : "重要にする", systemImage: item.isImportant ? "star.slash" : "star")
             }
-            Button { store.postpone(item) } label: { Label("明日へ延期", systemImage: "arrow.turn.up.right") }
+            if !item.done {
+                Button { store.postpone(item) } label: { Label("明日へ延期", systemImage: "arrow.turn.up.right") }
+            }
             Button(role: .destructive) { store.delete(item) } label: { Label("削除", systemImage: "trash") }
         }
     }
@@ -74,6 +247,7 @@ extension View {
 struct TodoLine: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
+    @Environment(\.editTodo) private var editTodo
     let item: TodoItem
     var large = false
 
@@ -102,6 +276,7 @@ struct TodoLine: View {
         }
         .padding(.vertical, large ? 14 : 10)
         .contentShape(Rectangle())
+        .onTapGesture { editTodo(item) }   // 行をタップで編集
         .swipeActions(edge: .leading) {
             Button { store.complete(item) } label: { Label("完了", systemImage: "checkmark") }.tint(.green)
         }
@@ -121,14 +296,15 @@ struct FocusHome: View {
     let onAdd: () -> Void
     @State private var drag: CGSize = .zero
     @State private var feedback = 0
-    @State private var showAll = false
+    @Environment(\.openList) private var openList
+    @Environment(\.editTodo) private var editTodo
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: 16) {
                 HStack(alignment: .center) {
                     BigCount(prefix: "あと", value: store.open.count, suffix: "件")
-                    Button { showAll = true } label: {
+                    Button { openList(.open) } label: {
                         Label("一覧", systemImage: "list.bullet").font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 14).padding(.vertical, 8)
                             .background(p.card, in: Capsule())
@@ -145,6 +321,7 @@ struct FocusHome: View {
                     }
                     ForEach(Array(store.open.prefix(3).enumerated().reversed()), id: \.element.id) { index, item in
                         FocusCard(item: item, index: index, drag: index == 0 ? drag : .zero)
+                            .onTapGesture { editTodo(item) }
                             .gesture(swipe(item), including: index == 0 ? .all : .none)
                             .todoMenu(item)
                     }
@@ -169,16 +346,6 @@ struct FocusHome: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .paletteBackground(p)
         .sensoryFeedback(.success, trigger: feedback)
-        .sheet(isPresented: $showAll) {
-            NavigationStack {
-                List { ForEach(store.open) { TodoLine(item: $0) }.listRowBackground(p.card) }
-                    .scrollContentBackground(.hidden).paletteBackground(p)
-                    .navigationTitle("すべてのTODO").navigationBarTitleDisplayMode(.inline)
-            }
-            .environment(\.palette, p)
-            .environmentObject(store)
-            .presentationDetents([.large])
-        }
     }
 
     private func swipe(_ item: TodoItem) -> some Gesture {
@@ -306,10 +473,14 @@ struct GroupHome: View {
         VStack(spacing: 0) {
             List {
                 Section {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(JP.date(.now)).font(.title2.weight(.heavy)).foregroundStyle(p.text)
-                        Text("のこり \(open.count) 件 ・ 今日の完了 \(store.doneToday.count) 件")
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+                    HStack(alignment: .center) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(JP.date(.now)).font(.title2.weight(.heavy)).foregroundStyle(p.text)
+                            Text("のこり \(open.count) 件 ・ 今日の完了 \(store.doneToday.count) 件")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+                        }
+                        Spacer(minLength: 8)
+                        ListButtons()
                     }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 0, trailing: 4))
@@ -353,7 +524,7 @@ struct GroupHome: View {
     }
 }
 
-// MARK: - ③ 週間：上の日付ボタンで日を選び、その日の予定を時刻つきで。右下の＋で追加
+// MARK: - ③ 週間：上の日付ボタンで期限の日を選び、その日が期限のTODOを一覧。右下の＋で追加
 
 struct WeekHome: View {
     @EnvironmentObject var store: TodoStore
@@ -371,6 +542,12 @@ struct WeekHome: View {
         let undated = store.open.filter { $0.due == nil }
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: 0) {
+                HStack(alignment: .center) {
+                    Text("のこり \(store.open.count) 件").font(.title3.weight(.heavy)).foregroundStyle(p.text)
+                    Spacer()
+                    ListButtons()
+                }
+                .padding(.horizontal, 16).padding(.top, 12)
                 HStack(spacing: 6) {
                     ForEach(0..<7, id: \.self) { i in
                         let d = cal.date(byAdding: .day, value: i, to: today) ?? today
@@ -382,18 +559,18 @@ struct WeekHome: View {
                 List {
                     if offset == 0 && !store.overdue.isEmpty {
                         Section {
-                            ForEach(store.overdue) { AgendaRow(item: $0) }
+                            ForEach(store.overdue) { TodoLine(item: $0) }
                         } header: { header("期限切れ", store.overdue.count, p.overdue) }
                         .listRowBackground(p.card)
                     }
                     Section {
-                        ForEach(dayItems) { AgendaRow(item: $0) }
-                        if dayItems.isEmpty { Text("予定はありません").foregroundStyle(p.sub) }
-                    } header: { header(offset == 0 ? "今日" : JP.date(day), dayItems.count, p.accent) }
+                        ForEach(dayItems) { TodoLine(item: $0) }
+                        if dayItems.isEmpty { Text("この日が期限のTODOはありません").foregroundStyle(p.sub) }
+                    } header: { header(offset == 0 ? "今日が期限" : "\(JP.date(day))が期限", dayItems.count, p.accent) }
                     .listRowBackground(p.card)
                     if offset == 0 && !undated.isEmpty {
                         Section {
-                            ForEach(undated) { AgendaRow(item: $0) }
+                            ForEach(undated) { TodoLine(item: $0) }
                         } header: { header("期限なし", undated.count, p.sub) }
                         .listRowBackground(p.card)
                     }
@@ -450,46 +627,7 @@ struct WeekHome: View {
     }
 }
 
-/// 週間の1行：左に時刻、中央にやること、右に完了の印
-struct AgendaRow: View {
-    @EnvironmentObject var store: TodoStore
-    @Environment(\.palette) private var p
-    let item: TodoItem
-
-    var body: some View {
-        let color = item.isOverdue() ? p.overdue : p.accent
-        HStack(spacing: 12) {
-            Text(item.isOverdue() ? DueText.label(item) : JP.clock(item, none: "—"))
-                .font(.subheadline.monospacedDigit().weight(.bold)).foregroundStyle(color)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .frame(width: 58, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    if item.isImportant { Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow) }
-                    Text(item.title).font(.body.weight(.semibold)).foregroundStyle(p.text).lineLimit(2)
-                }
-                if let note = item.note, !note.isEmpty {
-                    Text(note).font(.caption).foregroundStyle(p.sub).lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-            Button { store.complete(item) } label: { CheckMark(done: false, color: color, size: 26) }
-                .buttonStyle(.plain)
-        }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-        .swipeActions(edge: .leading) {
-            Button { store.complete(item) } label: { Label("完了", systemImage: "checkmark") }.tint(.green)
-        }
-        .swipeActions(edge: .trailing) {
-            Button { store.postpone(item) } label: { Label("明日へ", systemImage: "arrow.turn.up.right") }.tint(.orange)
-            Button(role: .destructive) { store.delete(item) } label: { Label("削除", systemImage: "trash") }
-        }
-        .todoMenu(item)
-    }
-}
-
-// MARK: - ④ ながれ：今日の完了から先の予定まで1本の線でつないだ時系列。「いま」の位置に印。右上の＋で追加
+// MARK: - ④ ながれ：今日の完了から先の期限まで1本の線でつないだTODO。「いま」の位置に印。右上の＋で追加
 
 struct FlowHome: View {
     @EnvironmentObject var store: TodoStore
@@ -511,6 +649,7 @@ struct FlowHome: View {
                                 .font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
                         }
                         Spacer()
+                        ListButtons()
                         Button(action: onAdd) {
                             Image(systemName: "plus").font(.title3.bold()).frame(width: 44, height: 44)
                                 .foregroundStyle(p.onAccent).background(p.accent, in: Circle())
@@ -573,6 +712,7 @@ struct FlowHome: View {
 struct FlowRow: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
+    @Environment(\.editTodo) private var editTodo
     let item: TodoItem
 
     var body: some View {
@@ -602,6 +742,8 @@ struct FlowRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(p.card, in: RoundedRectangle(cornerRadius: min(p.radius, 16), style: .continuous))
             .opacity(item.done ? 0.6 : 1)
+            .contentShape(Rectangle())
+            .onTapGesture { editTodo(item) }
         }
         .padding(.leading, 10).padding(.trailing, 16).padding(.vertical, 5)
         // 丸の中心を通る縦線（行の高さいっぱい）

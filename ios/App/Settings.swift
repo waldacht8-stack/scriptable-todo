@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - 追加
+// MARK: - 追加・編集（draft.item があれば編集）
 
 struct AddSheet: View {
     @EnvironmentObject var store: TodoStore
@@ -16,6 +16,9 @@ struct AddSheet: View {
     @State private var toCalendar = false
     @State private var calendarTitle = ""
     @FocusState private var focused: Bool
+    @State private var confirmDelete = false
+
+    private var editing: TodoItem? { draft.item }
 
     var body: some View {
         NavigationStack {
@@ -33,7 +36,7 @@ struct AddSheet: View {
                             Text("なし").tag("")
                             ForEach(RepeatRule.allCases) { Text($0.name).tag($0.rawValue) }
                         }
-                        if CalendarSync.authorized {
+                        if CalendarSync.authorized && editing == nil {
                             Toggle("カレンダーにも予定として登録", isOn: $toCalendar.animation())
                             if toCalendar {
                                 Picker("登録先", selection: $calendarTitle) {
@@ -45,25 +48,64 @@ struct AddSheet: View {
                     }
                 }
                 Section("メモ") { TextField("メモ（任意）", text: $note, axis: .vertical).lineLimit(2...5) }
+                if let item = editing {
+                    Section {
+                        Button {
+                            if item.done { store.uncomplete(item) } else { store.complete(item) }
+                            dismiss()
+                        } label: {
+                            Label(item.done ? "未完了に戻す" : "完了にする", systemImage: item.done ? "arrow.uturn.backward" : "checkmark")
+                        }
+                        Button(role: .destructive) { confirmDelete = true } label: { Label("削除", systemImage: "trash") }
+                    } footer: {
+                        if item.isCalendar { Text("カレンダーから取り込んだTODOです。ここで変えた内容はカレンダーには反映されません。") }
+                    }
+                }
             }
-            .navigationTitle("TODOを追加")
+            .navigationTitle(editing == nil ? "TODOを追加" : "TODOを編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("追加") {
+                    Button(editing == nil ? "追加" : "保存") {
                         let d = allDay ? Calendar.current.startOfDay(for: due) : due
-                        store.add(title, due: hasDue ? d : nil, allDay: hasDue && allDay, note: note,
-                                  repeatRule: hasDue && !repeatRule.isEmpty ? repeatRule : nil, important: important,
-                                  toCalendar: hasDue && toCalendar ? calendarTitle : nil)
+                        if var item = editing {
+                            item.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                            item.due = hasDue ? d : nil
+                            item.allDay = hasDue && allDay ? true : nil
+                            item.note = note.isEmpty ? nil : note
+                            item.repeatRule = hasDue && !repeatRule.isEmpty ? repeatRule : nil
+                            item.important = important ? true : nil
+                            store.save(item)
+                        } else {
+                            store.add(title, due: hasDue ? d : nil, allDay: hasDue && allDay, note: note,
+                                      repeatRule: hasDue && !repeatRule.isEmpty ? repeatRule : nil, important: important,
+                                      toCalendar: hasDue && toCalendar ? calendarTitle : nil)
+                        }
                         dismiss()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
             .onAppear {
-                if let d = draft.due { due = d; hasDue = true }
-                focused = true
+                if let item = editing {
+                    title = item.title
+                    important = item.isImportant
+                    hasDue = item.due != nil
+                    allDay = item.isAllDay
+                    if let d = item.due { due = d }
+                    note = item.note ?? ""
+                    repeatRule = item.repeatRule ?? ""
+                } else {
+                    if let d = draft.due { due = d; hasDue = true }
+                    focused = true
+                }
+            }
+            .confirmationDialog("このTODOを削除しますか？", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("削除", role: .destructive) {
+                    if let item = editing { store.delete(item) }
+                    dismiss()
+                }
             }
         }
     }

@@ -7,6 +7,8 @@ final class TodoStore: ObservableObject {
     @Published var items: [TodoItem] = []
     @Published var theme: AppTheme = .focus
     @Published var layout: TodayLayout = .focus
+    /// 直前の完了・延期・削除を取り消すための記録（しばらく「元に戻す」を出す）
+    @Published var undo: UndoInfo?
 
     init() {
         let args = ProcessInfo.processInfo.arguments
@@ -46,7 +48,9 @@ final class TodoStore: ObservableObject {
     /// 完了（繰り返しなら次の回もできる）
     func complete(_ item: TodoItem) {
         guard let i = items.firstIndex(where: { $0.id == item.id }) else { return }
+        let before = items
         TodoActions.complete(&items, at: i)
+        remember("「\(item.title)」を完了", before: before)
         saveAndNotify()
     }
 
@@ -56,11 +60,40 @@ final class TodoStore: ObservableObject {
 
     /// 明日へ延期（期限なしは明日の終日にする）
     func postpone(_ item: TodoItem) {
+        let before = items
         update(item.id) {
             let base = $0.due ?? Calendar.current.startOfDay(for: .now)
             $0.due = Calendar.current.date(byAdding: .day, value: 1, to: base)
             if item.due == nil { $0.allDay = true }
         }
+        remember("「\(item.title)」を明日へ", before: before)
+    }
+
+    /// 編集の保存（カレンダー由来でも中身はこのアプリで変えられる）
+    func save(_ edited: TodoItem) {
+        update(edited.id) { $0 = edited }
+    }
+
+    /// 直前の操作を取り消す。変わった項目だけを元に戻し、その間にできた項目（繰り返しの次の回）は消す
+    func undoLast() {
+        guard let u = undo else { return }
+        items.removeAll { u.addedIDs.contains($0.id) }
+        for old in u.before where u.changedIDs.contains(old.id) {
+            if let i = items.firstIndex(where: { $0.id == old.id }) { items[i] = old } else { items.append(old) }
+        }
+        if let key = u.dismissedKey { CalendarSync.dismissed.remove(key) }
+        undo = nil
+        saveAndNotify()
+    }
+
+    /// 操作の前後を比べて、取り消しに必要な分だけ覚えておく
+    private func remember(_ message: String, before: [TodoItem], dismissedKey: String? = nil) {
+        let old = Dictionary(before.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let now = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let changed = old.keys.filter { now[$0] != old[$0] }
+        let added = now.keys.filter { old[$0] == nil }
+        undo = UndoInfo(message: message, before: before.filter { changed.contains($0.id) },
+                        changedIDs: Set(changed), addedIDs: Set(added), dismissedKey: dismissedKey)
     }
 
     func toggleImportant(_ item: TodoItem) {
@@ -68,8 +101,10 @@ final class TodoStore: ObservableObject {
     }
 
     func delete(_ item: TodoItem) {
+        let before = items
         if let key = item.eventID { CalendarSync.dismissed.insert(key) } // 取り込んだ予定は再取り込みしない
         items.removeAll { $0.id == item.id }
+        remember("「\(item.title)」を削除", before: before, dismissedKey: item.eventID)
         saveAndNotify()
     }
 
@@ -122,4 +157,20 @@ final class TodoStore: ObservableObject {
         change(&items[i])
         saveAndNotify()
     }
+}
+
+/// 「元に戻す」に必要な記録
+struct UndoInfo: Identifiable {
+    /// 「元に戻す」を出しておく秒数
+    static let seconds: Double = 8
+
+    let id = UUID()
+    let message: String
+    /// 操作前の、変わった項目
+    let before: [TodoItem]
+    let changedIDs: Set<String>
+    /// 操作でできた項目（繰り返しの次の回など）
+    let addedIDs: Set<String>
+    /// 削除で「再取り込みしない」にしたカレンダーの予定
+    let dismissedKey: String?
 }
