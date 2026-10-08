@@ -2,3 +2,13 @@ todo-data/
 *.broken-*
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
+# iOS アプリ版のビルド生成物（GitHub Actions で作る）
+ios/build/
+ios/*.xcodeproj/
+ios/Payload/
+ios/*.ipa
+ios/shots/
+ios/App/Info.plist
+ios/App/*.entitlements
+ios/Widget/Info.plist
+ios/Widget/*.entitlements

@@ -1,0 +1,90 @@
+# 正式アプリ版のビルド（Mac を持たずに GitHub の macOS 環境で行う）
+# 1. XcodeGen で Xcode プロジェクトを作る
+# 2. シミュレーター用にビルドして起動し、画面のスクリーンショットを撮る（見た目の確認用）
+# 3. 実機用に署名なしでビルドし、App Group などの情報だけ ldid で付けて IPA にする（署名は SideStore が行う）
+# 4. IPA とスクリーンショットを成果物に、IPA をリリース「ios-latest」に置く（iPhone の Safari から直接ダウンロードできる）
+name: iOS app
+
+on:
+  push:
+    branches: [main]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode を選ぶ（いちばん新しいもの）
+        run: |
+          ls -d /Applications/Xcode*.app
+          XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: 道具を入れる
+        run: brew install xcodegen ldid
+
+      - name: Xcode プロジェクトを作る
+        run: xcodegen generate
+
+      - name: シミュレーター用にビルド
+        run: |
+          xcodebuild -project TodoApp.xcodeproj -scheme TodoApp -sdk iphonesimulator \
+            -configuration Debug -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO build | tail -40
+
+      - name: シミュレーターで起動してスクリーンショット
+        run: |
+          mkdir -p shots
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print([x['udid'] for r,v in sorted(d.items()) if 'iOS' in r for x in v if x['name'].startswith('iPhone')][-1])")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          APP=$(find build/sim -name 'TodoApp.app' -type d | head -1)
+          xcrun simctl install "$UDID" "$APP"
+          for mode in light dark; do
+            xcrun simctl ui "$UDID" appearance $mode
+            xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp
+            sleep 6
+            xcrun simctl io "$UDID" screenshot "shots/todo-$mode.png"
+            xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -preview
+            sleep 6
+            xcrun simctl io "$UDID" screenshot "shots/widgets-$mode.png"
+          done
+
+      - name: 実機用にビルド（署名なし）して IPA を作る
+        run: |
+          xcodebuild -project TodoApp.xcodeproj -scheme TodoApp -sdk iphoneos \
+            -configuration Release -derivedDataPath build/dev \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -40
+          APP=$(find build/dev -name 'TodoApp.app' -type d | head -1)
+          # SideStore が App Group を登録できるよう、権限（entitlements）だけ付けておく
+          ldid -SApp/TodoApp.entitlements "$APP/TodoApp"
+          ldid -SWidget/TodoWidget.entitlements "$APP/PlugIns/TodoWidget.appex/TodoWidget"
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          zip -qry TodoApp.ipa Payload
+          ls -la TodoApp.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TodoApp
+          path: |
+            ios/TodoApp.ipa
+            ios/shots/*.png
+
+      - name: リリース ios-latest に IPA を置く
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ios-latest --yes --cleanup-tag || true
+          gh release create ios-latest TodoApp.ipa shots/*.png --title "アプリ版（最新ビルド）" \
+            --notes "GitHub Actions が自動で作ったビルド。iPhone の Safari で TodoApp.ipa をダウンロードし、SideStore で開いてインストール。" --prerelease
