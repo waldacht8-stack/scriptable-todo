@@ -125,7 +125,7 @@ struct WakeNextCard: View {
                     Text(JP.time(plan.first)).font(.system(size: 72, weight: .heavy, design: p.fontDesign))
                         .foregroundStyle(p.text).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                 }
-                Text("あと \(WakeLogic.duration(plan.first.timeIntervalSince(model.now)))・段階\(plan.stages.count)つ（\(JP.time(plan.last))まで）")
+                Text("あと \(WakeLogic.duration(plan.first.timeIntervalSince(model.now)))・アラーム\(plan.stages.count)回（\(JP.time(plan.last))まで）")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(p.accent)
                 if let dep = plan.departure {
                     Text("出発 \(JP.time(dep))").font(.footnote.weight(.semibold)).foregroundStyle(p.sub)
@@ -147,7 +147,7 @@ struct WakeStageTimeline: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            WakeCardTitle(text: "段階アラーム", icon: "bell.and.waves.left.and.right.fill")
+            WakeCardTitle(text: "アラーム", icon: "bell.and.waves.left.and.right.fill")
             ForEach(plan.stages, id: \.number) { st in
                 let done = st.number <= reached
                 HStack(spacing: 14) {
@@ -157,7 +157,7 @@ struct WakeStageTimeline: View {
                     }
                     .frame(width: 36, height: 36)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(st.name).font(.body.weight(.semibold)).foregroundStyle(p.text).lineLimit(1)
+                        Text(st.name.isEmpty ? "\(st.number)回目" : st.name).font(.body.weight(.semibold)).foregroundStyle(p.text).lineLimit(1)
                         Text("\(st.score)点").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
                     }
                     Spacer(minLength: 0)
@@ -278,9 +278,9 @@ struct WakeWindowView: View {
         if reached == 0 { return "最初のアラームは \(JP.time(plan.first))" }
         let st = plan.stages[min(reached, plan.stages.count) - 1]
         if let next = plan.stages.first(where: { $0.at > model.now }) {
-            return "段階\(st.number)「\(st.name)」が鳴りました\n次は \(JP.time(next.at))（段階\(next.number)）"
+            return "\(st.number)回目のアラームが鳴りました\n次は \(JP.time(next.at))（\(next.number)回目）"
         }
-        return "最終段階が鳴りました"
+        return "最後のアラームが鳴りました"
     }
 }
 
@@ -326,7 +326,7 @@ struct WakeResultCard: View {
     private func stageText(_ s: WakeSession?) -> String {
         guard let s else { return "" }
         let streak = WakeLogic.streak(model.sessions)
-        let st = s.stage == 0 ? "アラームの前に起床" : "段階\(s.stage)で起床"
+        let st = s.stage == 0 ? "アラームの前に起床" : "\(s.stage)回目で起床"
         return streak > 1 ? "\(st)・\(streak)日連続" : st
     }
 }

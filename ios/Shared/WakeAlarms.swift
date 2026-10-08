@@ -94,7 +94,7 @@ enum WakeActions {
     private static func scheduleOne(id: UUID, stage: WakePlan.Stage, total: Int) async throws {
         let stop = AlarmButton(text: "止める", textColor: .white, systemImageName: "stop.circle")
         let up = AlarmButton(text: "起きた！", textColor: .white, systemImageName: "sun.max.fill")
-        let title = "段階\(stage.number)／\(total)：\(stage.name)"
+        let title = stage.name.isEmpty ? "起床アラーム \(stage.number)/\(total)" : "起床アラーム \(stage.number)/\(total)：\(stage.name)"
         let alert = AlarmPresentation.Alert(
             title: LocalizedStringResource(stringLiteral: title),
             stopButton: stop,
@@ -213,7 +213,7 @@ enum WakeActions {
         for plan in WakeLogic.plans(from: now, days: horizonDays, settings: s, state: state).dropFirst(0) where !plan.isSkipped {
             let bed = WakeLogic.bedtime(before: plan, settings: s)
             await add(id: "wake-bedtime-\(plan.day)", title: "そろそろ寝る時間です",
-                      body: "\(JP.date(plan.dayStart)) は \(JP.time(plan.first)) 起床・段階\(plan.stages.count)つ。スマホを充電しておきましょう。",
+                      body: "\(JP.date(plan.dayStart)) は \(JP.time(plan.first)) 起床・アラーム\(plan.stages.count)回。スマホを充電しておきましょう。",
                       at: bed.addingTimeInterval(-30 * 60), now: now)
         }
     }

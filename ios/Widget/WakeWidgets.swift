@@ -151,7 +151,7 @@ struct WakeWidgetView: View {
                 Text(JP.time(s.phase == .window ? (s.nextStage?.at ?? n.first) : n.first))
                     .font(.system(size: size, weight: .heavy, design: p.fontDesign))
                     .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
-                Text(s.phase == .window ? "段階\(s.reached)まで鳴りました" : "\(WakeLogic.dayLabel(n.first, now: entry.date))・段階\(n.stages.count)つ")
+                Text(s.phase == .window ? "\(s.reached)回目まで鳴りました" : "\(WakeLogic.dayLabel(n.first, now: entry.date))・アラーム\(n.stages.count)回")
                     .font(.caption.weight(.semibold)).foregroundStyle(p.accent).lineLimit(1)
             } else {
                 Text("予定なし").font(.title2.weight(.heavy)).foregroundStyle(p.text)
@@ -166,7 +166,7 @@ struct WakeWidgetView: View {
                 HStack(spacing: 6) {
                     Image(systemName: st.at <= entry.date ? "bell.fill" : "bell")
                         .font(.caption2).foregroundStyle(p.accent)
-                    Text("段階\(st.number)").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
+                    Text("\(st.number)回目").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
                     Spacer(minLength: 0)
                     Text(JP.time(st.at)).font(.caption.weight(.bold)).monospacedDigit().foregroundStyle(p.text)
                 }
@@ -262,14 +262,14 @@ struct WakeWidgetView: View {
             } else if !checked && s.phase == .window {
                 Button(intent: WakeCheckInIntent()) {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("段階\(s.reached)まで鳴りました").font(.caption2.weight(.semibold))
+                        Text("\(s.reached)回目まで鳴りました").font(.caption2.weight(.semibold))
                         Label("起きた！", systemImage: "sun.max.fill").font(.headline.weight(.heavy))
-                        Text(s.nextStage.map { "次は \(JP.time($0.at))" } ?? "最終段階").font(.caption2)
+                        Text(s.nextStage.map { "次は \(JP.time($0.at))" } ?? "最後のアラーム").font(.caption2)
                     }
                 }
                 .buttonStyle(.plain)
             } else if let n = s.next {
-                Text("次の起床・段階\(n.stages.count)つ").font(.caption2.weight(.semibold))
+                Text("次の起床・アラーム\(n.stages.count)回").font(.caption2.weight(.semibold))
                 Text("\(WakeLogic.dayLabel(n.first, now: entry.date)) \(JP.time(n.first))").font(.title3.weight(.heavy))
                 if let bed = s.bedtime, bed > entry.date {
                     Text("就寝 \(JP.time(bed))").font(.caption2)

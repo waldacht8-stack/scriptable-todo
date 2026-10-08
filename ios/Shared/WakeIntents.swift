@@ -5,7 +5,7 @@ import WidgetKit
 /// LiveActivityIntent なので、アプリを前に出さずにアプリの中で動き、アラームを取り消せる。
 struct WakeCheckInIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "起きた！（起床チェックイン）"
-    static var description = IntentDescription("今日の残りの段階アラームを止めて、起床を記録します。")
+    static var description = IntentDescription("今日の残りのアラームを止めて、起床を記録します。")
     static var openAppWhenRun: Bool = false
 
     init() {}
