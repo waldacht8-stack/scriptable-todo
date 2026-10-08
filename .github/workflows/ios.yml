@@ -21,6 +21,7 @@ jobs:
     defaults:
       run:
         working-directory: ios
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +35,9 @@ jobs:
       - name: 道具を入れる
         run: brew install xcodegen ldid
 
+      - name: アイコンを描く
+        run: swift Tools/MakeIcon.swift App/Assets.xcassets/AppIcon.appiconset/icon.png
+
       - name: Xcode プロジェクトを作る
         run: xcodegen generate
 
@@ -45,20 +49,22 @@ jobs:
       - name: シミュレーターで起動してスクリーンショット
         run: |
           mkdir -p shots
+          cp App/Assets.xcassets/AppIcon.appiconset/icon.png shots/icon.png
           UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print([x['udid'] for r,v in sorted(d.items()) if 'iOS' in r for x in v if x['name'].startswith('iPhone')][-1])")
           xcrun simctl boot "$UDID"
           xcrun simctl bootstatus "$UDID" -b
           APP=$(find build/sim -name 'TodoApp.app' -type d | head -1)
           xcrun simctl install "$UDID" "$APP"
-          for mode in light dark; do
-            xcrun simctl ui "$UDID" appearance $mode
-            xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp
-            sleep 6
-            xcrun simctl io "$UDID" screenshot "shots/todo-$mode.png"
-            xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -preview
-            sleep 6
-            xcrun simctl io "$UDID" screenshot "shots/widgets-$mode.png"
+          xcrun simctl ui "$UDID" appearance light
+          # 4つのデザインのホーム画面（見本データ）と設定画面
+          for theme in sky dial focus paper; do
+            xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -theme $theme -tab 0
+            sleep 7
+            xcrun simctl io "$UDID" screenshot "shots/home-$theme.png"
           done
+          xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -tab 2
+          sleep 6
+          xcrun simctl io "$UDID" screenshot "shots/settings.png"
 
       - name: 実機用にビルド（署名なし）して IPA を作る
         run: |
