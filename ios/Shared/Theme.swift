@@ -47,7 +47,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .dawn:
             Palette(background: [Color(red: 1.0, green: 0.93, blue: 0.86), Color(red: 0.99, green: 0.84, blue: 0.80)],
                     card: Color(red: 1.0, green: 0.98, blue: 0.95), text: Color(red: 0.24, green: 0.16, blue: 0.20),
-                    sub: Color(red: 0.50, green: 0.40, blue: 0.42), accent: Color(red: 0.91, green: 0.38, blue: 0.36),
+                    sub: Color(red: 0.50, green: 0.40, blue: 0.42), accent: Color(red: 0.78, green: 0.28, blue: 0.27),   // 白い文字と 4.5:1 以上
                     overdue: Color(red: 0.80, green: 0.25, blue: 0.10), onAccent: .white,
                     fontDesign: .rounded, radius: 30, scheme: .light)
         case .paper:
