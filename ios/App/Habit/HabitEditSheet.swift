@@ -44,7 +44,7 @@ struct HabitEditSheet: View {
                             Button { draft.icon = icon } label: {
                                 Image(systemName: icon).font(.system(size: 18, weight: .semibold))
                                     .frame(width: 42, height: 42)
-                                    .foregroundStyle(selected ? Color.white : draft.tint.color(p))
+                                    .foregroundStyle(selected ? draft.tint.onColor(p) : draft.tint.color(p))
                                     .background(selected ? draft.tint.color(p) : draft.tint.color(p).opacity(0.12), in: Circle())
                             }
                             .buttonStyle(.plain)
@@ -60,7 +60,7 @@ struct HabitEditSheet: View {
                                 ZStack {
                                     Circle().fill(c.color(p)).frame(width: 38, height: 38)
                                     if draft.tint == c {
-                                        Image(systemName: "checkmark").font(.system(size: 15, weight: .heavy)).foregroundStyle(.white)
+                                        Image(systemName: "checkmark").font(.system(size: 15, weight: .heavy)).foregroundStyle(c.onColor(p))
                                     }
                                 }
                             }

@@ -139,7 +139,7 @@ struct HabitWidgetView: View {
                     Circle().fill(row.done ? c : c.opacity(0.18))
                     Image(systemName: row.done ? "checkmark" : row.habit.icon)
                         .font(.system(size: compact ? 10 : 11, weight: .bold))
-                        .foregroundStyle(row.done ? Color.white : c)
+                        .foregroundStyle(row.done ? row.habit.tint.onColor(p) : c)
                 }
                 .frame(width: compact ? 22 : 24, height: compact ? 22 : 24)
                 Text(row.habit.name).font(.caption.weight(.semibold))

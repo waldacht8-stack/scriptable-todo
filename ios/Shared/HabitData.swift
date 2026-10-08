@@ -27,6 +27,15 @@ enum HabitColor: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// この色で塗った上に載せる文字・記号の色。明るい色に白は読みにくいので濃い色にする
+    func onColor(_ p: Palette) -> Color {
+        switch self {
+        case .accent: p.onAccent
+        case .indigo: Color.white
+        default: Color(red: 0.10, green: 0.09, blue: 0.10)
+        }
+    }
+
     var name: String {
         switch self {
         case .accent: "テーマの色"

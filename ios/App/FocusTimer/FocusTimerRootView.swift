@@ -222,6 +222,11 @@ struct FocusTimerRootView: View {
         model.state.phase.isBreak ? HabitColor.teal.color(p) : p.accent
     }
 
+    /// phaseColor の上に載せる記号の色
+    private var onPhaseColor: Color {
+        model.state.phase.isBreak ? HabitColor.teal.onColor(p) : p.onAccent
+    }
+
     private var dial: some View {
         let s = model.state
         let every = max(2, model.settings.longBreakEvery)
@@ -279,7 +284,7 @@ struct FocusTimerRootView: View {
                     .font(.system(size: 36, weight: .bold))
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: 96, height: 96)
-                    .foregroundStyle(p.onAccent)
+                    .foregroundStyle(onPhaseColor)
                     .background(phaseColor, in: Circle())
                     .shadow(color: phaseColor.opacity(0.35), radius: 14, y: 6)
             }

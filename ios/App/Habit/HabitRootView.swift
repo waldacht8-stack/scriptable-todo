@@ -299,14 +299,18 @@ struct HabitTodayCard: View {
         let c = habit.tint.color(p)
         let done = count >= habit.target
         let frac = min(1, Double(count) / Double(max(1, habit.target)))
-        let fg: Color = done ? .white : p.text
+        let on: Color = habit.tint.onColor(p)
+        let fg: Color = done ? on : p.text
+        let subColor: Color = done ? on.opacity(0.8) : p.sub
+        let ringColor: Color = done ? on : c
+        let ringTrack: Color? = done ? on.opacity(0.25) : nil
         Button(action: onTap) {
             HStack(spacing: 16) {
                 ZStack {
-                    HabitRing(fraction: frac, color: done ? .white : c, track: done ? Color.white.opacity(0.3) : nil, lineWidth: 6)
+                    HabitRing(fraction: frac, color: ringColor, track: ringTrack, lineWidth: 6)
                     Image(systemName: done ? "checkmark" : habit.icon)
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(done ? .white : c)
+                        .foregroundStyle(ringColor)
                         .contentTransition(.symbolEffect(.replace))
                         .symbolEffect(.bounce, value: count)
                 }
@@ -319,7 +323,7 @@ struct HabitTodayCard: View {
                         if let r = habit.reminderText { Label(r, systemImage: "bell.fill") }
                     }
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(done ? Color.white.opacity(0.85) : p.sub)
+                    .foregroundStyle(subColor)
                     .lineLimit(1)
                 }
                 Spacer(minLength: 4)
@@ -328,14 +332,14 @@ struct HabitTodayCard: View {
                         Text("\(count)").font(.system(size: 34, weight: .heavy, design: p.fontDesign))
                             .contentTransition(.numericText())
                         Text("/\(habit.target)\(habit.unit)").font(.subheadline.weight(.semibold))
-                            .foregroundStyle(done ? Color.white.opacity(0.85) : p.sub)
+                            .foregroundStyle(subColor)
                     }
                     .foregroundStyle(fg)
                     .lineLimit(1)
                     .fixedSize()
                 } else {
                     Text(done ? "できた" : "タップ").font(.subheadline.weight(.bold))
-                        .foregroundStyle(done ? Color.white : c)
+                        .foregroundStyle(ringColor)
                 }
             }
             .padding(18)
