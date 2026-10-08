@@ -86,6 +86,10 @@ jobs:
           SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -tab 4 -AppleLanguages "(ja)" -AppleLocale ja_JP
           sleep 6
           xcrun simctl io "$UDID" screenshot "shots/settings.png"
+          # ウィジェットの見本（構成 × 大きさ × 色合い）
+          SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch --terminate-running-process "$UDID" com.todoapp.TodoApp -demo -widgetpreview -AppleLanguages "(ja)" -AppleLocale ja_JP
+          sleep 7
+          xcrun simctl io "$UDID" screenshot "shots/widgets.png"
 
       - name: 実機用にビルド（署名なし）して IPA を作る
         run: |

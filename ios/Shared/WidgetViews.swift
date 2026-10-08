@@ -39,8 +39,16 @@ struct WidgetPaletteBackground: View {
 }
 
 struct TodoWidgetView: View {
-    @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetFamily) private var envFamily
     let data: TodoWidgetData
+    private let familyOverride: WidgetFamily?
+    private var family: WidgetFamily { familyOverride ?? envFamily }
+
+    /// familyOverride はアプリ内の見本画面用（環境の widgetFamily は書き換えられないため）
+    init(data: TodoWidgetData, familyOverride: WidgetFamily? = nil) {
+        self.data = data
+        self.familyOverride = familyOverride
+    }
     private var p: Palette { data.palette }
 
     var body: some View {

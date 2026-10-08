@@ -35,12 +35,18 @@ struct RootView: View {
 
     var body: some View {
         let p = store.theme.palette
-        TabView(selection: $tab) {
-            HomeView().tabItem { Label("今日", systemImage: "sun.horizon") }.tag(0)
-            WakeRootView().tabItem { Label("起床", systemImage: "alarm") }.tag(1)
-            HabitRootView().tabItem { Label("習慣", systemImage: "leaf") }.tag(2)
-            FocusTimerRootView().tabItem { Label("集中", systemImage: "timer") }.tag(3)
-            SettingsView().tabItem { Label("設定", systemImage: "gearshape") }.tag(4)
+        Group {
+            if ProcessInfo.processInfo.arguments.contains("-widgetpreview") {
+                WidgetPreviewScreen() // ウィジェットの見本（スクリーンショット用）
+            } else {
+                TabView(selection: $tab) {
+                    HomeView().tabItem { Label("今日", systemImage: "sun.horizon") }.tag(0)
+                    WakeRootView().tabItem { Label("起床", systemImage: "alarm") }.tag(1)
+                    HabitRootView().tabItem { Label("習慣", systemImage: "leaf") }.tag(2)
+                    FocusTimerRootView().tabItem { Label("集中", systemImage: "timer") }.tag(3)
+                    SettingsView().tabItem { Label("設定", systemImage: "gearshape") }.tag(4)
+                }
+            }
         }
         // デザイン（色合い）をすべての画面に渡す
         .environment(\.palette, p)
