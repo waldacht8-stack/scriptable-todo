@@ -67,12 +67,20 @@ jobs:
             xcrun simctl terminate "$UDID" com.todoapp.TodoApp 2>/dev/null || true
             sleep 2
             SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch "$UDID" com.todoapp.TodoApp "$@" -AppleLanguages "(ja)" -AppleLocale ja_JP
-            for i in 1 2 3 4; do
+            for i in 1 2 3 4 5 6; do
               sleep 8
               xcrun simctl io "$UDID" screenshot "$out"
               size=$(wc -c < "$out")
-              [ "$size" -gt 40000 ] && break
+              [ "$size" -gt 40000 ] && return 0
               echo "blank shot $out ($size bytes), retry $i"
+              if [ "$i" = 3 ]; then
+                # 動いているか・固まっているかを記録してから、起動し直す
+                xcrun simctl spawn "$UDID" launchctl list | grep -i todoapp || echo "diag: TodoApp is not running"
+                xcrun simctl spawn "$UDID" log show --last 40s --style compact --predicate 'process == "TodoApp"' 2>/dev/null | tail -15 | sed 's/^/diag: /'
+                xcrun simctl terminate "$UDID" com.todoapp.TodoApp 2>/dev/null || true
+                sleep 3
+                SIMCTL_CHILD_TZ=Asia/Tokyo xcrun simctl launch "$UDID" com.todoapp.TodoApp "$@" -AppleLanguages "(ja)" -AppleLocale ja_JP
+              fi
             done
           }
           # カレンダーの許可の確認が写真に重ならないよう、先に許可しておく
