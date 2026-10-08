@@ -21,11 +21,13 @@ struct HomeView: View {
         .environment(\.editTodo, EditTodoAction { addDraft = AddDraft(item: $0) })
         .environment(\.openList, OpenListAction { listTab = $0 })
         .overlay(alignment: .top) { UndoToast() }
-        .onAppear {
+        .task {
             // スクリーンショット用：-shotundo で「元に戻す」、-shotedit で先頭のTODOの編集画面を出す
             guard !shotArgsApplied else { return }
             shotArgsApplied = true
             let args = ProcessInfo.processInfo.arguments
+            guard args.contains("-shotedit") || args.contains("-shotundo") else { return }
+            try? await Task.sleep(for: .seconds(1))
             if args.contains("-shotedit"), let first = store.open.first { addDraft = AddDraft(item: first) }
             if args.contains("-shotundo"), let first = store.open.first { store.complete(first) }
         }
@@ -93,9 +95,9 @@ struct UndoToast: View {
                     Button {
                         withAnimation(.snappy) { store.undoLast() }
                     } label: {
-                        Text("元に戻す").font(.subheadline.weight(.bold)).foregroundStyle(p.accent)
-                            .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(Color.white.opacity(0.12), in: Capsule())
+                        Text("元に戻す").font(.subheadline.weight(.bold)).foregroundStyle(p.onAccent)
+                            .padding(.horizontal, 14).padding(.vertical, 7)
+                            .background(p.accent, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
