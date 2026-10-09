@@ -26,7 +26,7 @@ struct HabitWidgetData {
         let rows = habits.filter { $0.isActive(on: now) }.map { HabitWidgetRow(habit: $0, count: HabitData.count(log, $0, now)) }
         let theme: AppTheme = AppTheme.from(SettingsData.load().theme)
         return HabitWidgetData(rows: rows, progress: HabitData.dayProgress(habits, log, on: now),
-                               palette: theme.palette, motion: MotionStyle.from(theme))
+                               palette: AppTheme.current(), motion: MotionStyle.from(theme))
     }
 }
 

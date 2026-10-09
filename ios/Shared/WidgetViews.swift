@@ -25,7 +25,7 @@ struct TodoWidgetData {
             doneToday: all.filter { $0.done && ($0.doneAt.map { Calendar.current.isDateInToday($0) } ?? false) }.count,
             next: open.filter { !$0.isAllDay && ($0.due ?? .distantPast) > now }.min { ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) },
             layout: TodayLayout.from(s.layout),
-            palette: AppTheme.from(s.theme).palette,
+            palette: AppTheme.current(s),
             groupOK: SharedStore.isGroupAvailable,
             doneItems: all.filter { $0.done && ($0.doneAt.map { Calendar.current.isDateInToday($0) } ?? false) },
             showDone: s.showDone

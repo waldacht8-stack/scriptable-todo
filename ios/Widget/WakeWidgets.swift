@@ -13,7 +13,7 @@ struct WakeEntry: TimelineEntry {
 
 struct WakeProvider: TimelineProvider {
     private func entry(at d: Date) -> WakeEntry {
-        WakeEntry(date: d, snap: WakeSnapshot.make(now: d), palette: AppTheme.from(SettingsData.load().theme).palette)
+        WakeEntry(date: d, snap: WakeSnapshot.make(now: d), palette: AppTheme.current())
     }
 
     func placeholder(in context: Context) -> WakeEntry { entry(at: .now) }

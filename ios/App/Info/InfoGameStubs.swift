@@ -2,21 +2,7 @@ import SwiftUI
 
 // STUB: replaced by Splatoon/Steam agent
 // 統合のときにこのファイルは消す。本物は App/Info/Splatoon/・App/Info/Steam/ に同じ名前で置かれる。
-// 使う名前は SplatoonEntryCard・SplatoonHome・SteamEntryCard・SteamHome の4つだけ。
-
-// STUB: replaced by Splatoon/Steam agent
-struct SplatoonEntryCard: View {
-    @Environment(\.palette) private var p
-
-    var body: some View {
-        InfoStubCard(symbol: "drop.fill", title: "スプラトゥーン3", detail: "バトルの戦績・ステージ")
-    }
-}
-
-// STUB: replaced by Splatoon/Steam agent
-struct SplatoonHome: View {
-    var body: some View { InfoStubScreen(title: "スプラトゥーン3") }
-}
+// スプラトゥーンは本物（App/Info/Splatoon/）に置き換え済み。残りは SteamEntryCard・SteamHome の2つ。
 
 // STUB: replaced by Splatoon/Steam agent
 struct SteamEntryCard: View {

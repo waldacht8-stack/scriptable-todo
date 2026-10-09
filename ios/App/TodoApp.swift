@@ -65,7 +65,7 @@ struct RootView: View {
     @State private var showSettings = ProcessInfo.processInfo.arguments.contains("-settings")
 
     var body: some View {
-        let p = store.theme.palette
+        let p = store.theme.palette(with: SettingsData.load())
         Group {
             if ProcessInfo.processInfo.arguments.contains("-widgetpreview") {
                 WidgetPreviewScreen() // ウィジェットの見本（スクリーンショット用）
@@ -89,6 +89,7 @@ struct RootView: View {
         .fontDesign(p.fontDesign)
         .tint(p.accent)
         .preferredColorScheme(p.scheme)
+        .splatoonDemoLaunch()   // -splatdemo / -splatcard でスプラトゥーンを開く（スクリーンショット用）
     }
 }
 

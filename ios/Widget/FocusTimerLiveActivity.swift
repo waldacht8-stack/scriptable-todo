@@ -6,7 +6,7 @@ import AppIntents
 // 集中タイマーのライブアクティビティの見た目（ロック画面とダイナミックアイランド）
 
 struct FocusTimerLiveActivity: Widget {
-    static var palette: Palette { AppTheme.from(SettingsData.load().theme).palette }
+    static var palette: Palette { AppTheme.current() }
 
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: FocusTimerAttributes.self) { context in
@@ -15,7 +15,7 @@ struct FocusTimerLiveActivity: Widget {
                 .activitySystemActionForegroundColor(Self.palette.text)
         } dynamicIsland: { context in
             let s = context.state
-            let p = AppTheme.from(SettingsData.load().theme).palette
+            let p = AppTheme.current()
             let phase = FocusPhase(rawValue: s.phase) ?? .focus
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {

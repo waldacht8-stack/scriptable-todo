@@ -8,8 +8,8 @@ import AppIntents
 struct WakeLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WakeActivityAttributes.self) { context in
-            WakeActivityLockView(state: context.state, p: AppTheme.from(SettingsData.load().theme).palette)
-                .activityBackgroundTint(AppTheme.from(SettingsData.load().theme).palette.card)
+            WakeActivityLockView(state: context.state, p: AppTheme.current())
+                .activityBackgroundTint(AppTheme.current().card)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {

@@ -23,6 +23,8 @@ enum WakeActions {
 
     /// アラームの許可を求める。許可されていれば true
     static func authorizeAlarms() async -> Bool {
+        // 起動引数つき（-demo や画面写真用）のときは許可を求めない。英語の確認が出て画面写真を隠すため
+        if ProcessInfo.processInfo.arguments.count > 1 { return false }
         #if canImport(AlarmKit)
         if #available(iOS 26.0, *) {
             do {
