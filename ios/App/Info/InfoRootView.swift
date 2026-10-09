@@ -5,7 +5,7 @@ struct InfoRootView: View {
     @StateObject private var model = InfoModel()
     @Environment(\.palette) private var p
     @Environment(\.motion) private var motion
-    @State private var section: InfoSection = .topics
+    @State private var section: InfoSection = ProcessInfo.processInfo.arguments.contains("-infogames") ? .games : .topics
     @State private var opening: InfoOpenTarget?
     @State private var lastOpened: InfoArticle?
     @State private var openedAt = Date()
@@ -78,7 +78,7 @@ struct InfoTopicsScreen: View {
     let onOpen: (InfoArticle) -> Void
     let onOpenURL: (URL) -> Void
     @State private var filter: InfoFilter = .all
-    @State private var listMode = false
+    @State private var listMode = ProcessInfo.processInfo.arguments.contains("-infolist")   // スクリーンショット用
     @State private var editing: InfoTopicEdit?
     @Namespace private var chipSpace
 

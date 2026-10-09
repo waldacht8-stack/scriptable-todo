@@ -176,7 +176,7 @@ struct InfoDeckCard: View {
         VStack(alignment: .leading, spacing: 0) {
             InfoThumb(article: article, tint: tint)
                 .frame(maxWidth: .infinity)
-                .frame(height: 150)
+                .frame(minHeight: 56, maxHeight: 150)
             VStack(alignment: .leading, spacing: 10) {
                 metaRow
                 Text(model.title(article))
@@ -185,14 +185,18 @@ struct InfoDeckCard: View {
                     .lineLimit(3)
                     .minimumScaleFactor(0.7)
                     .contentTransition(.opacity)
-                    .fixedSize(horizontal: false, vertical: true)
                 if let s = article.summary, !s.isEmpty {
                     Text(s).font(.callout).foregroundStyle(p.sub).lineLimit(2)
                 }
-                Spacer(minLength: 0)
-                footer
+                if let reason { reasonLine(reason) }
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .layoutPriority(1)
+            Spacer(minLength: 0)
+            footer
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
         }
     }
 
@@ -219,7 +223,7 @@ struct InfoDeckCard: View {
             if article.image != nil {
                 InfoThumb(article: article, tint: tint, symbolSize: 24)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 110)
+                    .frame(minHeight: 40, maxHeight: 110)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             Spacer(minLength: 0)
@@ -256,12 +260,10 @@ struct InfoDeckCard: View {
             .foregroundStyle(tint)
     }
 
-    @ViewBuilder
     private var footer: some View {
-        if let reason { reasonLine(reason) }
         HStack {
-            if let s = InfoSource(rawValue: article.source), !article.isPost {
-                Label(s.short, systemImage: s.symbol).font(.caption.weight(.semibold)).foregroundStyle(p.sub)
+            if !article.isPost {
+                Label(article.sourceName, systemImage: InfoSource(rawValue: article.source)?.symbol ?? "flame").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
             }
             Spacer()
             translateToggle

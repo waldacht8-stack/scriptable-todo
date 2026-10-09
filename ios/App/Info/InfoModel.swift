@@ -39,6 +39,7 @@ final class InfoModel: ObservableObject {
             translations = InfoDemo.translations
             prefs = InfoDemo.prefs
             saved = [all[2]]
+            readIDs = [all[2].id]
         } else {
             topics = InfoData.load([InfoTopic].self, InfoData.topicsFile) ?? []
             cache = InfoData.load([String: InfoFeedCache].self, InfoData.cacheFile) ?? [:]
@@ -285,9 +286,9 @@ final class InfoModel: ObservableObject {
 
     private func learn(_ a: InfoArticle, weight: Double) {
         guard !isDemo else { return }
-        var words = Set(self.words(a))
-        if let t = topic(for: a) { words.insert(t.keyword.lowercased()) }
-        for w in words { prefs.tokens[w, default: 0] += weight * 0.5 }
+        var ws = Set(words(a))
+        if let t = topic(for: a) { ws.insert(t.keyword.lowercased()) }
+        for w in ws { prefs.tokens[w, default: 0] += weight * 0.5 }
         prefs.sources[a.source, default: 0] += weight * 0.2
         // 弱い言葉は減らし、数を抑える
         if prefs.tokens.count > 400 {

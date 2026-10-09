@@ -106,6 +106,10 @@ jobs:
           for tab in 1 2 3 4; do
             shot "shots/tab-$tab.png" -demo -theme focus -tab $tab
           done
+          # 情報タブ（一覧・ゲーム・ナイト）
+          shot shots/info-list.png -demo -theme focus -tab 4 -infolist
+          shot shots/info-games.png -demo -theme focus -tab 4 -infogames
+          shot shots/info-night.png -demo -theme night -tab 4
           shot shots/settings.png -settings
 
       - name: 実機用にビルド（署名なし）して IPA を作る
