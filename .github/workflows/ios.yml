@@ -56,6 +56,28 @@ jobs:
           tail -5 sim.log
           exit $code
 
+      - name: 単体テスト（シミュレーター）
+        run: |
+          set +e
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print([x['udid'] for r,v in sorted(d.items()) if 'iOS' in r for x in v if x['name'].startswith('iPhone')][-1])")
+          # TEST_RUNNER_TZ → テストを動かすアプリに TZ=Asia/Tokyo を渡す（日付の判定を日本時間で固定）
+          TEST_RUNNER_TZ=Asia/Tokyo xcodebuild test -project TodoApp.xcodeproj -scheme TodoApp \
+            -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath build/sim \
+            CODE_SIGNING_ALLOWED=NO > test.log 2>&1
+          code=$?
+          echo "---- コンパイルエラー ----"
+          grep -E "error:" test.log | grep -v "XCTAssert\|XCTUnwrap\|XCTFail" | sort -u | head -60
+          echo "---- 失敗したテスト ----"
+          grep -E "error: -\[|Test Case .* failed" test.log | sort -u | head -80
+          echo "---- 既知の不具合（XCTExpectFailure） ----"
+          grep -iE "expected failure" test.log | sort -u | head -40
+          echo "---- 結果 ----"
+          grep -E "Executed [0-9]+ test" test.log | tail -3
+          tail -5 test.log
+          # 次の手順（スクリーンショット）が同じシミュレーターを起動できるよう止めておく
+          xcrun simctl shutdown "$UDID" 2>/dev/null || true
+          exit $code
+
       - name: シミュレーターで起動してスクリーンショット
         run: |
           mkdir -p shots
