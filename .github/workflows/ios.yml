@@ -102,6 +102,19 @@ jobs:
           shot shots/done-list.png -demo -layout board -theme focus -tab 0 -donelist
           shot shots/undo.png -demo -layout board -theme focus -tab 0 -shotundo
           shot shots/edit.png -demo -layout board -theme focus -tab 0 -shotedit
+          # リリース3（TODO）：新しい構成・完了の表示・追加画面・ウィジェットの見本・件数が多いとき
+          shot shots/home-kanban-dawn.png -demo -layout kanban -theme dawn -tab 0
+          shot shots/home-checklist-paper.png -demo -layout checklist -theme paper -tab 0 -showdone
+          shot shots/home-checklist-many-night.png -demo -demomany -layout checklist -theme night -tab 0
+          shot shots/home-focus-showdone.png -demo -layout focus -theme focus -tab 0 -showdone
+          shot shots/home-board-showdone.png -demo -layout board -theme night -tab 0 -showdone
+          shot shots/home-thumb-showdone.png -demo -layout thumb -theme focus -tab 0 -showdone
+          shot shots/home-timeline-many.png -demo -demomany -layout timeline -theme dawn -tab 0 -showdone
+          shot shots/add-focus.png -demo -layout focus -theme focus -tab 0 -shotadd
+          shot shots/add-night.png -demo -layout kanban -theme night -tab 0 -shotadd
+          shot shots/edit-paper.png -demo -layout checklist -theme paper -tab 0 -shotedit
+          shot shots/todo-widgets.png -demo -theme focus -tab 0 -todowidgets
+          shot shots/todo-widgets-night.png -demo -theme night -tab 0 -todowidgets
           # 起床・習慣・集中・情報のタブ（見本データ）
           for tab in 1 2 3 4; do
             shot "shots/tab-$tab.png" -demo -theme focus -tab $tab

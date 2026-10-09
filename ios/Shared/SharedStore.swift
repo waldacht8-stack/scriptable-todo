@@ -134,6 +134,7 @@ struct AppSettings: Codable {
     var lookaheadDays: Int = 45
     var excludeCalendars: [String] = ["日本の祝日", "祝日", "誕生日", "Birthdays", "Japanese Holidays", "Holidays in Japan"]
     var lastBackup: Date? = nil
+    var showDone: Bool = false      // 「今日」の各構成に、今日完了したTODOも表示する
 
     init() {}
 
@@ -150,6 +151,7 @@ struct AppSettings: Codable {
         lookaheadDays = try c.decodeIfPresent(Int.self, forKey: .lookaheadDays) ?? d.lookaheadDays
         excludeCalendars = try c.decodeIfPresent([String].self, forKey: .excludeCalendars) ?? d.excludeCalendars
         lastBackup = try c.decodeIfPresent(Date.self, forKey: .lastBackup)
+        showDone = (try? c.decodeIfPresent(Bool.self, forKey: .showDone)) ?? d.showDone
     }
 
     // nil（オフ）を「項目なし」と区別して保存する
@@ -164,10 +166,12 @@ struct AppSettings: Codable {
         try c.encode(lookaheadDays, forKey: .lookaheadDays)
         try c.encode(excludeCalendars, forKey: .excludeCalendars)
         try c.encodeIfPresent(lastBackup, forKey: .lastBackup)
+        try c.encode(showDone, forKey: .showDone)
     }
 
     enum CodingKeys: String, CodingKey {
         case theme, layout, remindMinutes, morningHour, eveningHour, calendarImport, lookaheadDays, excludeCalendars, lastBackup
+        case showDone
     }
 }
 

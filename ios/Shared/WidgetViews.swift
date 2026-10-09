@@ -13,6 +13,7 @@ struct TodoWidgetData {
     var palette: Palette
     var groupOK: Bool
     var doneItems: [TodoItem] = []  // 今日の完了（ながれ構成で使う）
+    var showDone = false            // 今日の完了も出す（アプリの目のボタン。チェックリストで使う）
 
     static func load(now: Date = .now) -> TodoWidgetData {
         let all = TodoData.all()
@@ -26,7 +27,8 @@ struct TodoWidgetData {
             layout: TodayLayout.from(s.layout),
             palette: AppTheme.from(s.theme).palette,
             groupOK: SharedStore.isGroupAvailable,
-            doneItems: all.filter { $0.done && ($0.doneAt.map { Calendar.current.isDateInToday($0) } ?? false) }
+            doneItems: all.filter { $0.done && ($0.doneAt.map { Calendar.current.isDateInToday($0) } ?? false) },
+            showDone: s.showDone
         )
     }
 }
@@ -68,6 +70,8 @@ struct TodoWidgetView: View {
                     case .board: board
                     case .thumb: thumb
                     case .timeline: timeline
+                    case .kanban: kanban
+                    case .checklist: checklist
                     }
                 }
             }
@@ -198,6 +202,7 @@ struct TodoWidgetView: View {
                     Text(clock).font(clockFont).foregroundStyle(color).lineLimit(1).fixedSize()
                 }
                 Text(item.title).font(titleFont).foregroundStyle(p.text).lineLimit(small ? 2 : 1)
+                    .fixedSize(horizontal: false, vertical: true) // 縦につぶさない（入らない行は FitList が省く）
                 Spacer(minLength: 0)
                 if !small && !clock.isEmpty {
                     Text(clock).font(clockFont).foregroundStyle(p.sub).lineLimit(1).fixedSize()
@@ -231,11 +236,16 @@ struct TodoWidgetView: View {
             if family != .systemSmall {
                 Text("今日のやること \(todays.count)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
             }
-            ForEach(todays.prefix(limit)) { item in
-                itemLine(item, color: item.isOverdue() ? p.overdue : p.accent)
+            if todays.isEmpty {
+                emptyText("今日のやることはありません")
+                Spacer(minLength: 0)
+            } else {
+                // 入るだけ並べ、入らない分は「ほか n 件」（題名を縦につぶして途中で切らない）
+                FitList(items: todays, maxCount: limit, spacing: gap, moreColor: p.sub) { item in
+                    itemLine(item, color: item.isOverdue() ? p.overdue : p.accent)
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
             }
-            if todays.isEmpty { emptyText("今日のやることはありません") }
-            Spacer(minLength: 0)
         }
     }
 
@@ -364,6 +374,145 @@ struct TodoWidgetView: View {
         }
     }
 
+    // MARK: かんばん（今日・明日・あとで の列）
+
+    private func kanbanItems(_ c: WColumn) -> [TodoItem] { data.items.filter { WColumn.of($0) == c } }
+
+    /// 小：今日の列だけ（ほかの列は件数）。中・大：3列を並べる
+    @ViewBuilder private var kanban: some View {
+        if family == .systemSmall {
+            let todays: [TodoItem] = kanbanItems(.today)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("今日").font(.caption.weight(.heavy)).foregroundStyle(p.accent)
+                    Text("\(todays.count)").font(.system(size: 18, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
+                    Spacer(minLength: 0)
+                    Text("明日 \(kanbanItems(.tomorrow).count)・あとで \(kanbanItems(.later).count)")
+                        .font(.system(size: 9, weight: .bold)).foregroundStyle(p.sub).lineLimit(1).fixedSize()
+                }
+                if todays.isEmpty {
+                    emptyText("今日のTODOはありません")
+                    Spacer(minLength: 0)
+                } else {
+                    FitList(items: todays, maxCount: 3, spacing: 4, moreColor: p.sub) { kanbanCard($0) }
+                        .frame(maxHeight: .infinity, alignment: .top)
+                }
+            }
+        } else {
+            HStack(alignment: .top, spacing: 6) {
+                ForEach(WColumn.allCases, id: \.self) { c in kanbanColumn(c) }
+            }
+        }
+    }
+
+    private func kanbanColumn(_ c: WColumn) -> some View {
+        let items: [TodoItem] = kanbanItems(c)
+        let maxCount: Int = family == .systemLarge ? 7 : 3
+        let headColor: Color = c == .today ? p.accent : p.sub
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Text(c.name).font(.caption.weight(.heavy)).foregroundStyle(headColor)
+                Text("\(items.count)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+                Spacer(minLength: 0)
+            }
+            if items.isEmpty {
+                Text("なし").font(.caption2.weight(.semibold)).foregroundStyle(p.sub.opacity(0.7))
+                Spacer(minLength: 0)
+            } else {
+                FitList(items: items, maxCount: maxCount, spacing: 4, moreColor: p.sub) { kanbanCard($0) }
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func kanbanCard(_ item: TodoItem) -> some View {
+        let color: Color = item.isOverdue() ? p.overdue : p.accent
+        let shape = RoundedRectangle(cornerRadius: min(p.radius, 9), style: .continuous)
+        let titleFont: Font = Font.system(size: 11, weight: .semibold)
+        return Button(intent: ToggleTodoIntent(id: item.id)) {
+            HStack(alignment: .top, spacing: 4) {
+                Image(systemName: "circle").font(.system(size: 10, weight: .semibold)).foregroundStyle(color)
+                    .padding(.top, 1)
+                Text(item.title).font(titleFont).foregroundStyle(p.text).lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 5).padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(p.card, in: shape)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: チェックリスト（紙のリスト）
+
+    private var checklist: some View {
+        let rows: [TodoItem] = data.items + (data.showDone ? data.doneItems : [])
+        let maxCount: Int = family == .systemLarge ? 13 : (family == .systemMedium ? 5 : 5)
+        let shape = RoundedRectangle(cornerRadius: min(p.radius, 12), style: .continuous)
+        let marginX: CGFloat = family == .systemSmall ? 20 : 22
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Text("のこり \(data.items.count) 件").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+                Spacer(minLength: 0)
+                if data.doneToday > 0 {
+                    Text("完了 \(data.doneToday)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+                }
+            }
+            Group {
+                if rows.isEmpty {
+                    emptyText("やることはありません").padding(8)
+                    Spacer(minLength: 0)
+                } else {
+                    FitList(items: rows, maxCount: maxCount, spacing: 0, moreColor: p.sub) { checkRow($0) }
+                        .padding(.vertical, 2)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(alignment: .leading) {
+                Rectangle().fill(p.overdue.opacity(0.3)).frame(width: 1).padding(.leading, marginX)
+            }
+            .background(p.card, in: shape)
+            .clipShape(shape)
+        }
+    }
+
+    @ViewBuilder private func checkRow(_ item: TodoItem) -> some View {
+        if item.done {
+            checkRowBody(item)
+        } else {
+            Button(intent: ToggleTodoIntent(id: item.id)) { checkRowBody(item) }
+                .buttonStyle(.plain)
+        }
+    }
+
+    private func checkRowBody(_ item: TodoItem) -> some View {
+        let small: Bool = family == .systemSmall
+        let overdue: Bool = item.isOverdue()
+        let boxColor: Color = item.done ? p.sub : (overdue ? p.overdue : p.text.opacity(0.7))
+        let symbol: String = item.done ? "checkmark.square.fill" : "square"
+        let titleFont: Font = small ? Font.system(size: 12, weight: .semibold) : Font.caption.weight(.semibold)
+        let clock: String = item.done ? "" : JP.clock(item, none: "")
+        return VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: small ? 8 : 10) {
+                Image(systemName: symbol).font(.system(size: small ? 13 : 14, weight: .semibold)).foregroundStyle(boxColor)
+                Text(item.title).strikethrough(item.done, color: p.sub).font(titleFont)
+                    .foregroundStyle(item.done ? p.sub : p.text)
+                    .lineLimit(small ? 2 : 1)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if !small && !clock.isEmpty {
+                    Text(clock).font(.caption2.weight(.bold).monospacedDigit())
+                        .foregroundStyle(overdue ? p.overdue : p.sub).lineLimit(1).fixedSize()
+                }
+            }
+            .padding(.leading, small ? 5 : 6).padding(.trailing, 6).padding(.vertical, small ? 3 : 4)
+            Rectangle().fill(p.sub.opacity(0.18)).frame(height: 0.5)
+        }
+        .opacity(item.done ? 0.6 : 1)
+    }
+
     private var noShare: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("TODO", systemImage: "checklist").font(.headline).foregroundStyle(p.text)
@@ -442,4 +591,55 @@ private struct WGroupRow: Identifiable {
     let group: WGroup
     let count: Int
     let item: TodoItem?
+}
+
+// MARK: - かんばんの列（アプリの KanbanColumn と同じ考え方）
+
+private enum WColumn: Int, CaseIterable {
+    case today, tomorrow, later
+
+    var name: String {
+        switch self {
+        case .today: return "今日"
+        case .tomorrow: return "明日"
+        case .later: return "あとで"
+        }
+    }
+
+    static func of(_ item: TodoItem, now: Date = .now) -> WColumn {
+        guard let due = item.due else { return .later }
+        let cal = Calendar.current
+        let days: Int = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: due)).day ?? 0
+        if days <= 0 { return .today }
+        if days == 1 { return .tomorrow }
+        return .later
+    }
+}
+
+// MARK: - 入るだけ並べる一覧
+
+/// 行を入るだけ並べ、入らない分は「ほか n 件」にする（ViewThatFits で多い順に試す）。
+/// 行の文字は縦につぶさない（fixedSize）ので、題名が途中で切れて「…」になるのを防げる
+struct FitList<Row: View>: View {
+    let items: [TodoItem]
+    let maxCount: Int
+    var spacing: CGFloat = 4
+    var moreColor: Color = .secondary
+    @ViewBuilder let row: (TodoItem) -> Row
+
+    var body: some View {
+        let top: Int = min(maxCount, items.count)
+        let counts: [Int] = top > 0 ? Array((1...top).reversed()) : []
+        ViewThatFits(in: .vertical) {
+            ForEach(counts, id: \.self) { n in
+                VStack(alignment: .leading, spacing: spacing) {
+                    ForEach(items.prefix(n)) { item in row(item) }
+                    if items.count > n {
+                        Text("ほか \(items.count - n) 件").font(.system(size: 10, weight: .bold)).foregroundStyle(moreColor)
+                            .padding(.leading, 2)
+                    }
+                }
+            }
+        }
+    }
 }

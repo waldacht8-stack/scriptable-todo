@@ -7,17 +7,41 @@ final class TodoStore: ObservableObject {
     @Published var items: [TodoItem] = []
     @Published var theme: AppTheme = .focus
     @Published var layout: TodayLayout = .focus
+    /// 各構成に今日完了したTODOも出すか（設定に保存。目のボタンで切り替え）
+    @Published var showDone = false
     /// 直前の完了・延期・削除を取り消すための記録（しばらく「元に戻す」を出す）
     @Published var undo: UndoInfo?
 
     init() {
         let args = ProcessInfo.processInfo.arguments
-        if args.contains("-demo") { TodoData.save(TodoData.demo()) }
+        if args.contains("-demo") { TodoData.save(args.contains("-demomany") ? Self.manyDemo() : TodoData.demo()) }
         var s = SettingsData.load()
         if let v = Self.arg("-theme", args) { s.theme = v }
         if let v = Self.arg("-layout", args) { s.layout = v }
-        if args.contains("-theme") || args.contains("-layout") { SettingsData.save(s) }
+        // 見本データのときは -showdone の有無で決める（前の撮影の設定を持ち越さない）
+        if args.contains("-demo") || args.contains("-showdone") { s.showDone = args.contains("-showdone") }
+        if args.contains("-theme") || args.contains("-layout") || args.contains("-showdone") || args.contains("-demo") { SettingsData.save(s) }
         reload()
+    }
+
+    /// 画面確認用：件数が多く題名が長い見本（-demo -demomany。一般的な内容のみ）
+    private static func manyDemo(now: Date = .now) -> [TodoItem] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        func at(_ dayOffset: Int, _ h: Int, _ m: Int = 0) -> Date {
+            cal.date(byAdding: .minute, value: (dayOffset * 24 + h) * 60 + m, to: today) ?? today
+        }
+        var list = TodoData.demo(now: now)
+        list.append(TodoItem(title: "来月の旅行に持っていく物のリストを作って、足りない物を買いに行く", due: at(0, 20)))
+        list.append(TodoItem(title: "毎朝のストレッチ", due: at(0, 0), allDay: true, repeatRule: "daily"))
+        list.append(TodoItem(title: "期限の過ぎた手続き", due: at(-3, 0), allDay: true))
+        let names = ["洗濯物をたたむ", "植物に水をやる", "メールを返信する", "本を読む", "電球を替える", "靴を磨く",
+                     "写真を整理する", "冷蔵庫の中を片付ける", "郵便物を確認する", "週末の献立を考える", "自転車の空気を入れる",
+                     "部屋の模様替えを考える", "古い服を寄付する", "引き出しを整理する"]
+        for (i, n) in names.enumerated() {
+            list.append(TodoItem(title: n, due: i % 3 == 0 ? nil : at(i % 4, 9 + i % 10)))
+        }
+        return list
     }
 
     private static func arg(_ name: String, _ args: [String]) -> String? {
@@ -30,6 +54,7 @@ final class TodoStore: ObservableObject {
         let s = SettingsData.load()
         theme = AppTheme.from(s.theme)
         layout = TodayLayout.from(s.layout)
+        showDone = s.showDone
     }
 
     /// 未完了（期限切れ → 期限が近い順 → 期限なし。重要は先頭）
@@ -37,9 +62,14 @@ final class TodoStore: ObservableObject {
 
     var overdue: [TodoItem] { open.filter { $0.isOverdue() } }
 
+    /// 今日完了したもの（完了した順）
     var doneToday: [TodoItem] {
         items.filter { $0.done && ($0.doneAt.map { Calendar.current.isDateInToday($0) } ?? false) }
+            .sorted { ($0.doneAt ?? .distantPast) < ($1.doneAt ?? .distantPast) }
     }
+
+    /// 画面に出す今日の完了（目のボタンがオフなら空）
+    var shownDone: [TodoItem] { showDone ? doneToday : [] }
 
     var nextTimed: TodoItem? {
         open.filter { !$0.isAllDay && ($0.due ?? .distantPast) > .now }.min { ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) }
@@ -47,26 +77,82 @@ final class TodoStore: ObservableObject {
 
     /// 完了（繰り返しなら次の回もできる）
     func complete(_ item: TodoItem) {
-        guard let i = items.firstIndex(where: { $0.id == item.id }) else { return }
+        guard let i = items.firstIndex(where: { $0.id == item.id }), !items[i].done else { return }
         let before = items
         TodoActions.complete(&items, at: i)
-        remember("「\(item.title)」を完了", before: before)
+        remember("「\(item.title)」を完了しました", before: before)
         saveAndNotify()
     }
 
+    /// 未完了に戻す。繰り返しで次の回ができていたら、その回は消す（二重にならないように）
     func uncomplete(_ item: TodoItem) {
+        guard let i = items.firstIndex(where: { $0.id == item.id }), items[i].done else { return }
+        let old = items[i]
+        if old.repeatRule != nil, !old.isCalendar, let next = old.nextOccurrence(now: old.doneAt ?? .now),
+           let j = items.firstIndex(where: { $0.id != old.id && !$0.done && $0.title == old.title
+                                            && $0.repeatRule == old.repeatRule && $0.due == next }) {
+            items.remove(at: j)
+        }
         update(item.id) { $0.done = false; $0.doneAt = nil }
     }
 
-    /// 明日へ延期（期限なしは明日の終日にする）
+    /// 明日へ延期（期限なしは明日の終日。期限切れは時刻をそのままに明日へ。先の期限は1日あと）
     func postpone(_ item: TodoItem) {
         let before = items
+        let cal = Calendar.current
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: .now)) ?? .now
         update(item.id) {
-            let base = $0.due ?? Calendar.current.startOfDay(for: .now)
-            $0.due = Calendar.current.date(byAdding: .day, value: 1, to: base)
-            if item.due == nil { $0.allDay = true }
+            guard let due = $0.due else {
+                $0.due = tomorrow
+                $0.allDay = true
+                return
+            }
+            let h = cal.component(.hour, from: due), m = cal.component(.minute, from: due)
+            let sameTimeTomorrow = cal.date(bySettingHour: h, minute: m, second: 0, of: tomorrow) ?? tomorrow
+            let oneDayLater = cal.date(byAdding: .day, value: 1, to: due) ?? due
+            $0.due = max(oneDayLater, sameTimeTomorrow)
         }
-        remember("「\(item.title)」を明日へ", before: before)
+        remember("「\(item.title)」を明日に延期しました", before: before)
+    }
+
+    /// 期限の移し先（長押しメニュー・かんばん）
+    enum DueMove { case today, tomorrow, nextWeek, noDue }
+
+    /// 期限を移す。時刻つきなら時刻はそのまま、日だけ変える
+    func move(_ item: TodoItem, to target: DueMove) {
+        let before = items
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        let day: Date?
+        switch target {
+        case .today: day = today
+        case .tomorrow: day = cal.date(byAdding: .day, value: 1, to: today)
+        case .nextWeek: day = DueChoice.nextMonday(from: today)
+        case .noDue: day = nil
+        }
+        update(item.id) {
+            guard let day else {
+                $0.due = nil
+                $0.allDay = nil
+                $0.repeatRule = nil
+                return
+            }
+            if let due = $0.due, !$0.isAllDay {
+                let h = cal.component(.hour, from: due), m = cal.component(.minute, from: due)
+                $0.due = cal.date(bySettingHour: h, minute: m, second: 0, of: day) ?? day
+            } else {
+                $0.due = day
+                $0.allDay = true
+            }
+        }
+        let name: String
+        switch target {
+        case .today: name = "今日"
+        case .tomorrow: name = "明日"
+        case .nextWeek: name = "来週"
+        case .noDue: name = "期限なし"
+        }
+        remember(target == .noDue ? "「\(item.title)」を期限なしにしました" : "「\(item.title)」を\(name)に移しました", before: before)
     }
 
     /// 編集の保存（カレンダー由来でも中身はこのアプリで変えられる）
@@ -104,7 +190,7 @@ final class TodoStore: ObservableObject {
         let before = items
         if let key = item.eventID { CalendarSync.dismissed.insert(key) } // 取り込んだ予定は再取り込みしない
         items.removeAll { $0.id == item.id }
-        remember("「\(item.title)」を削除", before: before, dismissedKey: item.eventID)
+        remember("「\(item.title)」を削除しました", before: before, dismissedKey: item.eventID)
         saveAndNotify()
     }
 
@@ -149,6 +235,14 @@ final class TodoStore: ObservableObject {
         layout = l
         var s = SettingsData.load()
         s.layout = l.rawValue
+        SettingsData.save(s)
+    }
+
+    /// 今日完了したTODOを各構成に出すかどうか
+    func setShowDone(_ on: Bool) {
+        showDone = on
+        var s = SettingsData.load()
+        s.showDone = on
         SettingsData.save(s)
     }
 
