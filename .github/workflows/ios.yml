@@ -107,7 +107,7 @@ jobs:
             shot "shots/tab-$tab.png" -demo -theme focus -tab $tab
           done
           # 設定画面を色合いごとに（暗い色合い・下の見出し・カスタマイズも）。カスタマイズは保存されて残るので最後に。
-          # -demo を付けて、-demo なしの settings.png より前に撮る（起床のアラーム許可の確認が出ると、答えるまで写真に重なり続ける）
+          # どれも -demo を付ける（付けないと起床のアラーム許可の確認が出て、答えるまで以降の写真にも重なり続ける）
           shot shots/settings-night.png -settings -demo -theme night
           shot shots/settings-contrast.png -settings -demo -theme contrast -settingsSection custom
           shot shots/settings-ocean.png -settings -demo -theme ocean -settingsSection notify
