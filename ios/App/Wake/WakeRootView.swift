@@ -5,6 +5,8 @@ struct WakeRootView: View {
     @StateObject private var model = WakeViewModel()
     @Environment(\.palette) private var p
     @Environment(\.scenePhase) private var scene
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // 起動引数 -wakeShot settings|records で、その画面を開いた状態にする（画面写真用）
     @State private var path: [WakeRoute] = {
         let args = ProcessInfo.processInfo.arguments
@@ -22,13 +24,19 @@ struct WakeRootView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         WakeHeader(model: model)
-                        switch model.phase {
-                        case .before: WakeBeforeView(model: model)
-                        case .window: WakeWindowView(model: model)
-                        case .morning, .day: WakeMorningView(model: model)
-                        case .evening: WakeEveningView(model: model)
+                        // 時間帯が変わる（チェックイン・取り消し）ときは、テーマの動き方で入れ替える
+                        VStack(spacing: 16) {
+                            switch model.phase {
+                            case .before: WakeBeforeView(model: model)
+                            case .window: WakeWindowView(model: model)
+                            case .morning, .day: WakeMorningView(model: model)
+                            case .evening: WakeEveningView(model: model)
+                            }
                         }
+                        .id(model.phase)
+                        .transition(reduceMotion ? AnyTransition.opacity : motion.appear)
                     }
+                    .animation(reduceMotion ? Animation.easeInOut(duration: 0.2) : motion.change, value: model.phase)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 32)
                     .frame(maxWidth: .infinity)
@@ -38,10 +46,11 @@ struct WakeRootView: View {
                 .overlay(alignment: .bottom) {
                     if model.undoToast {
                         WakeUndoToast(model: model)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            .transition(reduceMotion ? AnyTransition.opacity
+                                        : AnyTransition.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-                .animation(.spring(duration: 0.3), value: model.undoToast)
+                .animation(reduceMotion ? Animation.easeInOut(duration: 0.2) : motion.change, value: model.undoToast)
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: WakeRoute.self) { route in
@@ -208,14 +217,34 @@ struct WakeNextCard: View {
 /// 段階の一覧（鳴った段階に印）
 struct WakeStageTimeline: View {
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let plan: WakePlan
     let reached: Int
+    /// 鳴った回の丸を順番に塗る（表示した数）
+    @State private var shown = 0
+
+    /// 1つずつ間をあけて塗る
+    private func fill(to target: Int) {
+        if reduceMotion || target <= shown {
+            withAnimation(Animation.easeInOut(duration: 0.2)) { shown = target }
+            return
+        }
+        let start = shown
+        let anim: Animation = motion.change
+        Task { @MainActor in
+            for n in (start + 1)...target {
+                withAnimation(anim) { shown = n }
+                try? await Task.sleep(nanoseconds: 180_000_000)
+            }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             WakeCardTitle(text: "アラーム", icon: "bell.and.waves.left.and.right.fill")
             ForEach(plan.stages, id: \.number) { st in
-                let done = st.number <= reached
+                let done = st.number <= shown
                 HStack(spacing: 14) {
                     ZStack {
                         Circle().fill(done ? p.accent : p.accent.opacity(0.14))
@@ -235,6 +264,31 @@ struct WakeStageTimeline: View {
             WakeAlarmHint()
         }
         .paletteCard(p)
+        .onAppear { fill(to: reached) }
+        .onChange(of: reached) { _, r in fill(to: r) }
+    }
+}
+
+/// 「起きた！」を押したときの朝日の広がり（光の輪と光線）。表示されたら外へ広がって消える
+struct WakeSunBurst: View {
+    let color: Color
+    @State private var go = false
+
+    var body: some View {
+        ZStack {
+            Circle().fill(color.opacity(go ? 0 : 0.35))
+                .scaleEffect(go ? 1.9 : 1)
+            Circle().strokeBorder(color.opacity(go ? 0 : 0.6), lineWidth: 6)
+                .scaleEffect(go ? 1.6 : 1)
+            ForEach(0..<12, id: .self) { i in
+                Capsule().fill(color.opacity(go ? 0 : 0.8))
+                    .frame(width: 6, height: 26)
+                    .offset(y: go ? -190 : -110)
+                    .rotationEffect(Angle.degrees(Double(i) * 30))
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear { withAnimation(Animation.easeOut(duration: 0.6)) { go = true } }
     }
 }
 
@@ -346,6 +400,20 @@ struct WakeMessage: View {
 struct WakeWindowView: View {
     @ObservedObject var model: WakeViewModel
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var burst = false
+
+    /// 押したら朝日が広がるように光らせてから、チェックインする
+    private func tapCheckIn() {
+        guard !burst else { return }
+        if reduceMotion {
+            model.checkIn()
+            return
+        }
+        withAnimation(motion.tap) { burst = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { model.checkIn() }
+    }
 
     var body: some View {
         let plan = model.todayPlan
@@ -353,15 +421,18 @@ struct WakeWindowView: View {
         VStack(spacing: 18) {
             Text(statusText(plan: plan, reached: reached)).font(.headline).foregroundStyle(p.sub)
                 .multilineTextAlignment(.center)
-            Button { model.checkIn() } label: {
+            Button { tapCheckIn() } label: {
                 VStack(spacing: 6) {
                     Image(systemName: "sun.max.fill").font(.system(size: 44, weight: .bold))
+                        .symbolEffect(.bounce, value: burst)
                     Text("起きた！").font(.system(size: 46, weight: .heavy, design: p.fontDesign))
                     Text("今なら \(WakeLogic.score(stage: reached))点").font(.headline)
                 }
                 .foregroundStyle(p.onAccent)
                 .frame(width: 240, height: 240)
                 .background(Circle().fill(p.accent).shadow(color: p.accent.opacity(0.4), radius: 20, y: 8))
+                .scaleEffect(burst ? 1.06 : 1)
+                .background { if burst { WakeSunBurst(color: p.accent) } }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("起きた！チェックイン")
@@ -415,7 +486,6 @@ struct WakeResultStrip: View {
     var body: some View {
         let s = model.todaySession
         let time: String = model.checkInAt.map { JP.time($0) } ?? "--:--"
-        let score: String = "\(s?.score ?? 0)点"
         let streak: Int = WakeLogic.streak(model.sessions)
         HStack(spacing: 12) {
             Image(systemName: "sun.max.fill").font(Font.title3).foregroundStyle(p.accent)
@@ -424,11 +494,43 @@ struct WakeResultStrip: View {
                 Text("\(streak)日連続").font(Font.footnote.weight(.semibold)).foregroundStyle(p.sub)
             }
             Spacer(minLength: 0)
-            Text(score).font(Font.headline.weight(.heavy)).foregroundStyle(p.onAccent)
+            HStack(spacing: 1) {
+                WakeCountUp(value: s?.score ?? 0, font: Font.headline.weight(.heavy), color: p.onAccent)
+                Text("点").font(Font.caption.weight(.bold)).foregroundStyle(p.onAccent)
+            }
                 .padding(.horizontal, 12).padding(.vertical, 6)
                 .background(p.accent, in: Capsule())
         }
         .paletteCard(p, padding: 16)
+    }
+}
+
+/// 数字を0から数え上げて見せる（点数など）。動きを減らす設定のときはすぐに表示
+struct WakeCountUp: View {
+    let value: Int
+    let font: Font
+    let color: Color
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = 0
+
+    var body: some View {
+        Text("\(shown)").font(font).foregroundStyle(color).monospacedDigit()
+            .contentTransition(.numericText(value: Double(shown)))
+            .onAppear { count() }
+            .onChange(of: value) { _, _ in count() }
+    }
+
+    private func count() {
+        let target = value
+        if reduceMotion || target == 0 { shown = target; return }
+        let anim: Animation = motion.tap
+        Task { @MainActor in
+            for i in 1...8 {
+                withAnimation(anim) { shown = target * i / 8 }
+                try? await Task.sleep(nanoseconds: 70_000_000)
+            }
+        }
     }
 }
 
@@ -448,7 +550,7 @@ struct WakeResultCard: View {
             }
             Spacer(minLength: 0)
             VStack(spacing: 0) {
-                Text("\(s?.score ?? 0)").font(.system(size: 40, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.onAccent)
+                WakeCountUp(value: s?.score ?? 0, font: Font.system(size: 40, weight: .heavy, design: p.fontDesign), color: p.onAccent)
                 Text("点").font(.caption.weight(.bold)).foregroundStyle(p.onAccent)
             }
             .frame(width: 96, height: 96)
@@ -469,6 +571,8 @@ struct WakeResultCard: View {
 struct WakeCountdownCard: View {
     @ObservedObject var model: WakeViewModel
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let departure: Date
 
     var body: some View {
@@ -479,7 +583,9 @@ struct WakeCountdownCard: View {
             let late = Int((now.addingTimeInterval(Double(need) * 60).timeIntervalSince(departure) / 60).rounded(.up))
             VStack(alignment: .leading, spacing: 6) {
                 WakeCardTitle(text: "出発まで", icon: "figure.walk.departure")
-                Text(format(left)).font(.system(size: 64, weight: .heavy, design: p.fontDesign))
+                Text(format(left)).font(Font.system(size: 64, weight: .heavy, design: p.fontDesign))
+                    .contentTransition(.numericText(countsDown: true))
+                    .animation(reduceMotion ? nil : motion.tap, value: Int(left))
                     .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
                 HStack {
                     Text("出発 \(JP.time(departure))").font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
@@ -509,6 +615,7 @@ struct WakeCountdownCard: View {
 struct WakeRoutineCard: View {
     @ObservedObject var model: WakeViewModel
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
 
     var body: some View {
         let next = model.remainingRoutine.first?.id
@@ -522,7 +629,7 @@ struct WakeRoutineCard: View {
             ForEach(model.settings.routine) { item in
                 let done = model.state.routineDone.contains(item.id)
                 let isNext = item.id == next
-                Button { model.toggleRoutine(item) } label: {
+                Button { withAnimation(motion.tap) { model.toggleRoutine(item) } } label: {
                     HStack(spacing: 14) {
                         CheckMark(done: done, size: 30)
                         Text(item.name).font(isNext ? .title3.weight(.bold) : .body.weight(.semibold))
@@ -544,6 +651,7 @@ struct WakeRoutineCard: View {
 struct WakeBelongingsCard: View {
     @ObservedObject var model: WakeViewModel
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -551,7 +659,7 @@ struct WakeBelongingsCard: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 ForEach(model.settings.belongings) { item in
                     let done = model.state.belongingsDone.contains(item.id)
-                    Button { model.toggleBelonging(item) } label: {
+                    Button { withAnimation(motion.tap) { model.toggleBelonging(item) } } label: {
                         HStack(spacing: 8) {
                             Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title3)
                             Text(item.name).font(.body.weight(.semibold)).lineLimit(1)
