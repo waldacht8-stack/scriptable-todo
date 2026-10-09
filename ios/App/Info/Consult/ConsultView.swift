@@ -37,6 +37,86 @@ enum ConsultMood: Int, CaseIterable, Identifiable, Codable {
     }
 }
 
+/// 相談の目的。目的ごとに AI の答え方を変える
+enum ConsultPurpose: String, CaseIterable, Identifiable, Codable {
+    case vent       // 吐き出す：ストレス発散。聞くことに徹する
+    case reflect    // ふり返る：自己分析。問いかけで気持ちや理由を言葉にする
+    case change     // 変わる：自己改革。小さな行動を1つ決めて、TODO にできる
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .vent: "吐き出す"
+        case .reflect: "ふり返る"
+        case .change: "変わる"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .vent: "wind"
+        case .reflect: "magnifyingglass"
+        case .change: "figure.walk"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .vent: "思ったことをそのまま。ただ聞きます"
+        case .reflect: "なぜそう感じたのか、問いかけで一緒に整理"
+        case .change: "変えたいことを、今日できる一歩にします"
+        }
+    }
+
+    var placeholder: String {
+        switch self {
+        case .vent: "いま、もやもやしていること"
+        case .reflect: "気になっている出来事や気持ち"
+        case .change: "変えたいこと・なりたい自分"
+        }
+    }
+
+    /// AI への指示
+    var rules: String {
+        switch self {
+        case .vent:
+            return """
+            目的：ストレス発散。ユーザーが思いを吐き出せるように聞き役に徹する。
+            - 共感と受け止めを中心に、2〜4文で短く返す。アドバイスや解決策は、求められない限り言わない
+            - 気持ちを言葉にして返し（例：それはしんどかったね）、ときどき「ほかにもある？」と続きを促す
+            """
+        case .reflect:
+            return """
+            目的：自己分析。ユーザーが自分の気持ちや行動の理由を言葉にできるよう手伝う。
+            - まず受け止め、そのうえで考えを深める問いを1つだけ投げかける（例：そのとき本当はどうしてほしかった？）
+            - 繰り返し出てくる考え方のくせや、大事にしている価値観に気づいたら、決めつけずに「〜を大事にしているのかも」と返す
+            - 3〜5文
+            """
+        case .change:
+            return """
+            目的：自己改革。なりたい姿に近づく、続けられる小さな行動を一緒に決める。
+            - 受け止めたうえで、理想と今の差を短く整理し、5分〜15分でできる具体的な行動を1つだけ提案する
+            - 返事の最後の行は必ず「【今日の一歩】」に続けて、その行動を20字以内で書く（例：【今日の一歩】机の上を5分だけ片づける）
+            - 4〜6文
+            """
+        }
+    }
+}
+
+/// 「変わる」の返事から【今日の一歩】を取り出す（TODO に追加するボタン用）
+enum ConsultStep {
+    static let mark = "【今日の一歩】"
+
+    static func extract(_ text: String) -> String? {
+        guard let r = text.range(of: mark, options: .backwards) else { return nil }
+        let rest = text[r.upperBound...]
+        let line: String = rest.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true).first.map { String($0) } ?? ""
+        let step = line.trimmingCharacters(in: CharacterSet(charactersIn: " 　：:。"))
+        return step.isEmpty ? nil : String(step.prefix(40))
+    }
+}
+
 /// 記録の要約（AI に渡す文と、画面のチップに使う）
 struct ConsultContext: Equatable {
     var openCount = 0
@@ -93,6 +173,9 @@ final class ConsultModel: ObservableObject {
     @Published private(set) var sending = false
     @Published var error: String?
     @Published private(set) var hasKey: Bool
+    @Published var purpose: ConsultPurpose = .vent {
+        didSet { if !isDemo { UserDefaults.standard.set(purpose.rawValue, forKey: "consult.purpose") } }
+    }
 
     let isDemo = ProcessInfo.processInfo.arguments.contains("-demo")
 
@@ -100,11 +183,20 @@ final class ConsultModel: ObservableObject {
         if isDemo {
             hasKey = true
             mood = .okay
+            purpose = .change
             messages = ConsultDemo.messages()
         } else {
+            purpose = ConsultPurpose(rawValue: UserDefaults.standard.string(forKey: "consult.purpose") ?? "") ?? .vent
             hasKey = InfoSecrets.has(Self.keyName)
             messages = SplatFiles.load([ConsultMessage].self, Self.historyFile) ?? []
+            mood = MoodData.today()
         }
+    }
+
+    /// 今日の気分を選ぶ（記録に残す。同じ日は上書き。気分の記録と分析：ConsultMoodStats.swift）
+    func pick(_ m: ConsultMood) {
+        mood = m
+        if !isDemo { MoodData.record(m) }
     }
 
     func saveKey(_ raw: String) {
@@ -163,9 +255,12 @@ final class ConsultModel: ObservableObject {
     private func systemPrompt(_ c: ConsultContext) -> String {
         var s = """
         あなたは「日和」という生活管理アプリの中の、やさしい相談相手です。日本語で、話し言葉で答えてください。
-        - まず気持ちを受け止める。説教や決めつけはしない
-        - 返事は短く（3〜6文）。箇条書きは最大3つ
-        - 最後に「今日できる小さな一歩」を1つだけ提案する
+        このアプリの相談は「ストレス発散・自己分析・自己改革」のためのものです。いまの目的に合わせて答えます。
+
+        \(purpose.rules)
+
+        共通のきまり:
+        - 説教や決めつけはしない。箇条書きは最大3つ
         - 医療・法律・お金の判断が必要そうなときは、専門家や公的な窓口に相談することをすすめる
         - 命に関わるほどつらそうなときは、すぐに身近な人や「いのちの電話」などの相談窓口に連絡するよう、やさしく伝える
         - 名前などの個人情報を聞き出さない
@@ -250,7 +345,7 @@ enum ConsultDemo {
     static func messages(now: Date = .now) -> [ConsultMessage] {
         [
             ConsultMessage(fromUser: true, text: "最近やる気が出なくて、TODO がたまってしまっています", date: now.addingTimeInterval(-300)),
-            ConsultMessage(fromUser: false, text: "たまっていくのを見ると、それだけで気持ちが重くなりますよね。今週は朝が少しつらそうなので、疲れがたまっているのかもしれません。\n\n全部を片づけようとせず、期限切れの2件だけ明日に回して、今日は「歯医者」の1件だけにしぼってみませんか。",
+            ConsultMessage(fromUser: false, text: "たまっていくのを見ると、それだけで気持ちが重くなりますよね。今週は朝が少しつらそうなので、疲れがたまっているのかもしれません。\n\n全部を片づけようとせず、期限切れの2件だけ明日に回して、今日は1件だけにしぼってみませんか。\n【今日の一歩】TODOを1件だけ選んで終える",
                            date: now.addingTimeInterval(-280)),
         ]
     }
@@ -267,6 +362,7 @@ struct ConsultView: View {
     @State private var draft = ""
     @State private var showKeySheet = false
     @State private var confirmClear = false
+    @State private var showStats = ProcessInfo.processInfo.arguments.contains("-moodstats")
     @FocusState private var typing: Bool
     /// 記録の要約（開いたときと TODO の数が変わったときに作り直す。打つたびには読まない）
     @State private var ctx = ConsultContext()
@@ -278,6 +374,7 @@ struct ConsultView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         moodCard
+                        purposePicker
                         chips(ctx)
                         if !model.hasKey { keyCard }
                         if model.messages.isEmpty && model.hasKey { emptyHint }
@@ -286,8 +383,8 @@ struct ConsultView: View {
                                 .id(m.id)
                                 .transition(motion.appear)
                         }
-                        if model.messages.last?.fromUser == false, ctx.overdueCount > 0 {
-                            actions(ctx)
+                        if let last = model.messages.last, !last.fromUser {
+                            actions(ctx, reply: last)
                         }
                         if model.sending { typingIndicator.id("typing") }
                         if let e = model.error {
@@ -310,6 +407,9 @@ struct ConsultView: View {
         .sheet(isPresented: $showKeySheet) {
             ConsultKeySheet(model: model).environment(\.palette, p)
         }
+        .sheet(isPresented: $showStats) {
+            MoodStatsView(model: model).environment(\.palette, p).environment(\.motion, motion)
+        }
         .confirmationDialog("会話を消しますか？", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("会話を消す", role: .destructive) { withAnimation(motion.change) { model.clear() } }
         }
@@ -321,7 +421,15 @@ struct ConsultView: View {
             HStack {
                 Text("今日の気分は？").font(.subheadline.weight(.bold)).foregroundStyle(p.sub)
                 Spacer()
+                Button { showStats = true } label: {
+                    Label("記録と分析", systemImage: "chart.xyaxis.line")
+                        .font(.caption.weight(.bold)).foregroundStyle(p.accent)
+                        .padding(.horizontal, 10).frame(height: 32)
+                        .background(p.accent.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(.plain)
                 Menu {
+                    Button { showStats = true } label: { Label("気分の記録と分析", systemImage: "chart.xyaxis.line") }
                     Button { showKeySheet = true } label: { Label("API キーの設定", systemImage: "key") }
                     Button(role: .destructive) { confirmClear = true } label: { Label("会話を消す", systemImage: "trash") }
                         .disabled(model.messages.isEmpty)
@@ -344,7 +452,7 @@ struct ConsultView: View {
         let on: Bool = model.mood == m
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         return Button {
-            withAnimation(reduceMotion ? nil : motion.tap) { model.mood = on ? nil : m }
+            withAnimation(reduceMotion ? nil : motion.tap) { model.pick(m) }
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: m.symbol).font(.body)
@@ -357,6 +465,7 @@ struct ConsultView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("気分：\(m.title)")
+        .accessibilityHint("今日の気分として記録します")
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
@@ -392,24 +501,78 @@ struct ConsultView: View {
     private var emptyHint: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("話を聞くよ").font(.title3.weight(.heavy)).foregroundStyle(p.text)
-            Text("気になっていること、疲れていること、なんでも書いてください。記録の数字（件数や平均点）だけを参考にして返事をします。")
+            Text("いまの目的は「\(model.purpose.title)」。\(model.purpose.summary)。記録の数字（件数や平均点）だけを参考にして返事をします。")
                 .font(.subheadline).foregroundStyle(p.sub)
         }
         .padding(.vertical, 8)
     }
 
-    private func actions(_ ctx: ConsultContext) -> some View {
+    /// 目的：吐き出す・ふり返る・変わる
+    private var purposePicker: some View {
         HStack(spacing: 6) {
-            Button {
-                withAnimation(motion.change) { for t in store.overdue { store.postpone(t) } }
-            } label: {
-                Label("期限切れ\(ctx.overdueCount)件を明日へ", systemImage: "arrow.turn.up.right")
-                    .font(.caption.weight(.bold)).foregroundStyle(p.accent)
-                    .padding(.horizontal, 10).padding(.vertical, 7)
-                    .overlay(Capsule().strokeBorder(p.accent, lineWidth: 1))
+            ForEach(ConsultPurpose.allCases) { pu in
+                purposeButton(pu)
             }
-            .buttonStyle(.plain)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("相談の目的")
+    }
+
+    private func purposeButton(_ pu: ConsultPurpose) -> some View {
+        let on: Bool = model.purpose == pu
+        let fill: AnyShapeStyle = on ? AnyShapeStyle(p.accent) : AnyShapeStyle(p.card)
+        return Button {
+            withAnimation(reduceMotion ? nil : motion.tap) { model.purpose = pu }
+        } label: {
+            Label(pu.title, systemImage: pu.symbol)
+                .font(.subheadline.weight(.bold))
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .foregroundStyle(on ? p.onAccent : p.text)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .background(fill, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(pu.summary)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// 返事の下のボタン：【今日の一歩】を TODO に・期限切れを明日へ
+    private func actions(_ ctx: ConsultContext, reply: ConsultMessage) -> some View {
+        let step: String? = ConsultStep.extract(reply.text)
+        let added: Bool = step.map { s in store.items.contains { t in t.title == s && !t.done } } ?? false
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                if let step {
+                    Button {
+                        let today = Calendar.current.startOfDay(for: .now)
+                        withAnimation(motion.change) { store.add(step, due: today, allDay: true) }
+                    } label: {
+                        actionLabel(added ? "TODO に追加しました" : "「\(step)」を TODO に", symbol: added ? "checkmark" : "plus", filled: !added)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(added)
+                }
+                if ctx.overdueCount > 0 {
+                    Button {
+                        withAnimation(motion.change) { for t in store.overdue { store.postpone(t) } }
+                    } label: {
+                        actionLabel("期限切れ\(ctx.overdueCount)件を明日へ", symbol: "arrow.turn.up.right", filled: false)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func actionLabel(_ text: String, symbol: String, filled: Bool) -> some View {
+        let bg: Color = filled ? p.accent : Color.clear
+        return Label(text, systemImage: symbol)
+            .font(.caption.weight(.bold))
+            .lineLimit(1)
+            .foregroundStyle(filled ? p.onAccent : p.accent)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(bg, in: Capsule())
+            .overlay(Capsule().strokeBorder(p.accent, lineWidth: 1))
     }
 
     private var typingIndicator: some View {
@@ -425,7 +588,7 @@ struct ConsultView: View {
             Text("Gemini（無料枠）を使います。内容が Google の改善に使われることがあります。名前などは書かないでください。")
                 .font(.caption2).foregroundStyle(p.sub).multilineTextAlignment(.center)
             HStack(spacing: 8) {
-                TextField("話したいことを書く", text: $draft, axis: .vertical)
+                TextField(model.purpose.placeholder, text: $draft, axis: .vertical)
                     .lineLimit(1...4)
                     .focused($typing)
                     .padding(.horizontal, 16).padding(.vertical, 12)

@@ -169,6 +169,9 @@ jobs:
           shot shots/info-games-steam.png -demo -theme night -tab 4 -infogames
           shot shots/consult.png -demo -theme focus -tab 4 -consult
           shot shots/consult-dawn.png -demo -theme dawn -tab 4 -consult
+          shot shots/consult-stats.png -demo -theme focus -tab 4 -consult -moodstats
+          shot shots/consult-stats-night.png -demo -theme night -tab 4 -consult -moodstats -moodscroll weekday
+          shot shots/consult-stats-ai.png -demo -theme dawn -tab 4 -consult -moodstats -moodscroll ai
           # 世界観（-world。-demo のたびに「なし」へ戻る）
           for world in hinata brutal aurora bento clay swiss; do
             shot "shots/world-$world.png" -demo -layout focus -world $world -tab 0
