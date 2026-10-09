@@ -59,12 +59,13 @@ struct InfoSafariView: UIViewControllerRepresentable {
 
 /// 上部の切り替え（話題 / ゲーム）。3つめの項目を足せる形にしてある
 enum InfoSection: String, CaseIterable, Identifiable {
-    case topics, games
+    case topics, games, consult
     var id: String { rawValue }
     var title: String {
         switch self {
         case .topics: "話題"
         case .games: "ゲーム"
+        case .consult: "相談"
         }
     }
 }

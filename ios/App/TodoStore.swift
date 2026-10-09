@@ -20,7 +20,10 @@ final class TodoStore: ObservableObject {
         if let v = Self.arg("-layout", args) { s.layout = v }
         // 見本データのときは -showdone の有無で決める（前の撮影の設定を持ち越さない）
         if args.contains("-demo") || args.contains("-showdone") { s.showDone = args.contains("-showdone") }
-        if args.contains("-theme") || args.contains("-layout") || args.contains("-showdone") || args.contains("-demo") { SettingsData.save(s) }
+        // 世界観も同じ（-world が無ければ「なし」に戻す）
+        if args.contains("-demo") || args.contains("-world") { s.world = Self.arg("-world", args) ?? "none" }
+        if args.contains("-theme") || args.contains("-layout") || args.contains("-showdone") || args.contains("-demo")
+            || args.contains("-world") { SettingsData.save(s) }
         reload()
     }
 

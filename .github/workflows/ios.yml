@@ -164,6 +164,21 @@ jobs:
           # スプラトゥーン3（見本データ。RootView に .splatoonDemoLaunch() が入ると全画面で開く）
           shot shots/splatoon.png -demo -splatdemo
           shot shots/splatoon-records.png -demo -splatdemo -splatscroll records
+          # Steam（見本データ）・相談（見本の会話）
+          shot shots/steam.png -demo -steamdemo
+          shot shots/info-games-steam.png -demo -theme night -tab 4 -infogames
+          shot shots/consult.png -demo -theme focus -tab 4 -consult
+          shot shots/consult-dawn.png -demo -theme dawn -tab 4 -consult
+          # 世界観（-world。-demo のたびに「なし」へ戻る）
+          for world in hinata brutal aurora bento clay swiss; do
+            shot "shots/world-$world.png" -demo -layout focus -world $world -tab 0
+          done
+          shot shots/world-brutal-habit.png -demo -world brutal -tab 2
+          shot shots/world-swiss-wake.png -demo -world swiss -tab 1
+          shot shots/world-aurora-info.png -demo -world aurora -tab 4
+          shot shots/world-clay-checklist.png -demo -layout checklist -world clay -tab 0
+          shot shots/world-bento-focus.png -demo -world bento -tab 3
+          shot shots/settings-world.png -settings -demo -world hinata -settingsSection world
           # 設定画面を色合いごとに（暗い色合い・下の見出し・カスタマイズも）。カスタマイズは保存されて残るので最後に。
           # どれも -demo を付ける（付けないと起床のアラーム許可の確認が出て、答えるまで以降の写真にも重なり続ける）
           shot shots/settings-night.png -settings -demo -theme night

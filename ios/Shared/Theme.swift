@@ -70,7 +70,8 @@ enum AppTheme: String, CaseIterable, Identifiable {
 
     /// この色合いに、設定のカスタマイズ（強調色・角の丸み・書体・表示の密度）を重ねる
     func palette(with s: AppSettings) -> Palette {
-        var p = palette
+        // 世界観を選んでいれば、その色の組を土台にする（World.swift）
+        var p = World.from(s.world).palette ?? palette
         if let c = AccentChoice.from(s.accentColor).colors(for: p) {
             p.accent = c.accent
             p.onAccent = c.onAccent
@@ -160,6 +161,7 @@ struct Palette {
     var scheme: ColorScheme?     // nil なら端末の外観に合わせる
     var outline: Color? = nil    // カードの枠線（モノクロ・ハイコントラスト）
     var density: Density = .regular  // 表示の密度（@Environment(\.density) でも読める）
+    var world: World = .none     // 世界観（背景・カード・大きな数字・動きを描き分ける。World.swift）
 
     /// 常に暗い色合いか（端末の外観に合わせる色合いは false）
     var isDark: Bool { scheme == .dark }
@@ -339,24 +341,15 @@ extension EnvironmentValues {
 extension View {
     /// デザインの背景を全画面に敷く
     func paletteBackground(_ p: Palette) -> some View {
-        background(
-            LinearGradient(colors: p.background.count > 1 ? p.background : [p.background[0], p.background[0]],
-                           startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-        )
+        background(WorldBackground(p: p).ignoresSafeArea())
     }
 
-    /// デザインのカード（全幅・角丸・やわらかい影。余白は表示の密度に合わせる）
+    /// デザインのカード（全幅・角丸・やわらかい影。余白は表示の密度に合わせる。面の描き方は世界観ごと）
     func paletteCard(_ p: Palette, padding: CGFloat = 18) -> some View {
-        let shape = RoundedRectangle(cornerRadius: p.radius, style: .continuous)
-        let shadow: Color = .black.opacity(p.scheme == .dark || p.outline != nil ? 0 : 0.06)
-        let fill = shape.fill(p.card).shadow(color: shadow, radius: 12, y: 4)
-        let border = shape.strokeBorder(p.outline ?? .clear, lineWidth: p.outline == nil ? 0 : 1.5)
-        return self
+        self
             .padding((padding * p.density.scale).rounded())
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(fill)
-            .overlay(border)
+            .background(WorldCardSurface(p: p))
     }
 }
 
@@ -370,7 +363,9 @@ struct BigCount: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(prefix).font(.title3.weight(.semibold)).foregroundStyle(p.sub)
-            Text("\(value)").font(.system(size: 56, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
+            Text("\(value)").font(.system(size: p.world.bigNumberSize, weight: .heavy, design: p.fontDesign))
+                .tracking(p.world.bigNumberTracking)
+                .foregroundStyle(p.world.bigNumberAccent ? p.accent : p.text)
                 .contentTransition(.numericText())
             Text(suffix).font(.title3.weight(.semibold)).foregroundStyle(p.sub)
             Spacer()

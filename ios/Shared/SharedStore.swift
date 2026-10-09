@@ -140,6 +140,7 @@ struct AppSettings: Codable {
     var fontStyle: String = "theme"     // 書体（FontChoice）
     var density: String = "regular"     // 表示の密度（Density）
     var showDone: Bool = false      // 「今日」の各構成に、今日完了したTODOも表示する
+    var world: String = "none"      // 世界観（World。"none" は色合いのまま）
 
     init() {}
 
@@ -162,6 +163,7 @@ struct AppSettings: Codable {
         fontStyle = try c.decodeIfPresent(String.self, forKey: .fontStyle) ?? d.fontStyle
         density = try c.decodeIfPresent(String.self, forKey: .density) ?? d.density
         showDone = (try? c.decodeIfPresent(Bool.self, forKey: .showDone)) ?? d.showDone
+        world = (try? c.decodeIfPresent(String.self, forKey: .world)) ?? d.world
     }
 
     // nil（オフ）を「項目なし」と区別して保存する
@@ -182,12 +184,14 @@ struct AppSettings: Codable {
         try c.encode(fontStyle, forKey: .fontStyle)
         try c.encode(density, forKey: .density)
         try c.encode(showDone, forKey: .showDone)
+        try c.encode(world, forKey: .world)
     }
 
     enum CodingKeys: String, CodingKey {
         case theme, layout, remindMinutes, morningHour, eveningHour, calendarImport, lookaheadDays, excludeCalendars, lastBackup
         case accentColor, cornerStyle, fontStyle, density   // デザインのカスタマイズ
         case showDone
+        case world
     }
 }
 

@@ -85,11 +85,12 @@ struct RootView: View {
         }
         // デザイン（色合い）をすべての画面に渡す
         .environment(\.palette, p)
-        .environment(\.motion, MotionStyle.from(store.theme))
+        .environment(\.motion, p.world.motion ?? MotionStyle.from(store.theme))
         .fontDesign(p.fontDesign)
         .tint(p.accent)
         .preferredColorScheme(p.scheme)
         .splatoonDemoLaunch()   // -splatdemo / -splatcard でスプラトゥーンを開く（スクリーンショット用）
+        .steamDemoLaunch()      // -steamdemo で Steam を開く（スクリーンショット用）
     }
 }
 

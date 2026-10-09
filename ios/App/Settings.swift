@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - 設定
 // 画面全体を、選んでいる色合い（＋カスタマイズ）で描く。色を変えるとこの画面もその場で変わる。
-// 起動引数（スクリーンショット用）：-settingsSection <design|custom|todo|notify|calendar|data|info> でその見出しまで送る。
+// 起動引数（スクリーンショット用）：-settingsSection <design|world|custom|todo|notify|calendar|data|info> でその見出しまで送る。
 // -accent / -corner / -font / -density <値> でカスタマイズを設定する。
 
 struct SettingsView: View {
@@ -36,7 +36,7 @@ struct SettingsView: View {
             }
         }
         .environment(\.palette, p)
-        .environment(\.motion, MotionStyle.from(store.theme))
+        .environment(\.motion, p.world.motion ?? MotionStyle.from(store.theme))
         .fontDesign(p.fontDesign)
         .tint(p.accent)
         .preferredColorScheme(p.scheme)
@@ -49,6 +49,7 @@ struct SettingsView: View {
         fresh.cornerStyle = s.cornerStyle
         fresh.fontStyle = s.fontStyle
         fresh.density = s.density
+        fresh.world = s.world
         SettingsData.save(fresh)
         s = fresh
         store.objectWillChange.send() // 後ろの画面（RootView）も描き直す
@@ -87,10 +88,14 @@ private struct SettingsContent: View {
         VStack(alignment: .leading, spacing: 30 * p.density.scale) {
             SettingsSection("デザイン", icon: "paintpalette.fill") {
                 PalettePreview()
+                SubHeading("世界観", note: "背景・カード・数字・動きまで、アプリ全体の雰囲気が変わります。選ぶと色合いより優先されます。").id("world")
+                worldGrid
                 SubHeading("構成（今日の画面）", note: "ボタンの位置と操作のしかたが変わります。")
                 layoutGrid
-                SubHeading("色合い", note: "すべての画面とウィジェットに反映されます。")
+                SubHeading("色合い", note: !World.from(s.world).isOn ? "すべての画面とウィジェットに反映されます。"
+                           : "世界観を「なし」にすると使えます。")
                 themeGrid
+                    .opacity(!World.from(s.world).isOn ? 1 : 0.45)
                 SubHeading("カスタマイズ", note: "色合いの上に重ねて、好みに合わせられます。").id("custom")
                 CustomizeCard(s: $s, save: save)
             }
@@ -102,6 +107,27 @@ private struct SettingsContent: View {
         }
         .sensoryFeedback(.selection, trigger: store.theme)
         .sensoryFeedback(.selection, trigger: store.layout)
+        .sensoryFeedback(.selection, trigger: s.world)
+    }
+
+    private var worldGrid: some View {
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(World.allCases) { world in
+                let wp: Palette = (world.palette ?? store.theme.palette)
+                Button {
+                    withAnimation(pick(world.motion ?? MotionStyle.from(store.theme))) {
+                        s.world = world.rawValue
+                        save()
+                    }
+                } label: {
+                    ChoiceCard(title: world.name, summary: world.summary, selected: World.from(s.world) == world, ring: ring("world")) {
+                        WorldThumb(palette: wp)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("世界観：\(world.name)")
+            }
+        }
     }
 
     /// 選んだ枠が次のカードへ動く（「視差効果を減らす」がオンなら動かさずに切り替える）
@@ -630,6 +656,40 @@ private struct MatchedRing: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// 世界観の見本（その世界観の背景・カード・大きな数字を小さく描く）
+struct WorldThumb: View {
+    @Environment(\.colorScheme) private var deviceScheme
+    let palette: Palette
+
+    var body: some View {
+        let p = palette
+        var small = p
+        small.radius = min(p.radius, 12)
+        let num: Color = p.world.bigNumberAccent ? p.accent : p.text
+        return ZStack {
+            WorldBackground(p: p)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text("あと").font(.system(.caption2, design: p.fontDesign).weight(.bold)).foregroundStyle(p.sub)
+                    Text("3").font(.system(size: p.world == .swiss ? 30 : 22, weight: .heavy, design: p.fontDesign))
+                        .foregroundStyle(num)
+                    Spacer(minLength: 0)
+                    Circle().fill(p.accent).frame(width: 14, height: 14)
+                }
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 4).strokeBorder(p.accent, lineWidth: 2).frame(width: 12, height: 12)
+                    Text("歯医者").font(.system(.caption, design: p.fontDesign).weight(.semibold)).foregroundStyle(p.text)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 7)
+                .background(WorldCardSurface(p: small))
+            }
+            .padding(10)
+        }
+        .environment(\.colorScheme, p.scheme ?? deviceScheme)
     }
 }
 

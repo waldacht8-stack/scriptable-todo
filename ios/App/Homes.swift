@@ -474,7 +474,7 @@ struct FocusHome: View {
                 .frame(maxHeight: .infinity)
                 if !store.open.isEmpty {
                     HStack {
-                        Label("明日へ", systemImage: "arrow.left").foregroundStyle(p.overdue)
+                        Label(p.world.postponeWord, systemImage: "arrow.left").foregroundStyle(p.overdue)
                         Spacer()
                         Label("完了", systemImage: "arrow.right").labelStyle(TrailingIcon()).foregroundStyle(p.accent)
                     }
@@ -605,15 +605,38 @@ struct FocusCard: View {
         .padding(26)
         .frame(maxWidth: .infinity)
         .frame(minHeight: 200, maxHeight: 360)
-        .background(RoundedRectangle(cornerRadius: p.radius + 4, style: .continuous).fill(p.card)
-            .shadow(color: .black.opacity(0.12), radius: 18, y: 8))
+        .background(surface)
         .overlay(alignment: .topTrailing) {
-            if drag.width > 30 { stamp("完了", p.accent) } else if drag.width < -30 { stamp("明日へ", p.overdue) }
+            if drag.width > 30 { stamp("完了", p.accent) } else if drag.width < -30 { stamp(p.world.postponeWord, p.overdue) }
         }
         .padding(.horizontal, 24)
         .scaleEffect(1 - CGFloat(index) * 0.05)
         .offset(x: drag.width, y: CGFloat(index) * 16 + drag.height * 0.1)
         .rotationEffect(.degrees(Double(drag.width) / 20))
+    }
+
+    /// カードの面。世界観があればその描き方。日なたは先頭の1件にだけ日が当たり、後ろは日陰になる
+    @ViewBuilder
+    private var surface: some View {
+        let shape = RoundedRectangle(cornerRadius: p.radius + 4, style: .continuous)
+        if !p.world.isOn {
+            shape.fill(p.card).shadow(color: .black.opacity(0.12), radius: 18, y: 8)
+        } else {
+            let q: Palette = { var q = p; q.radius = p.radius + 4; return q }()
+            ZStack {
+                WorldCardSurface(p: q)
+                if p.world == .hinata {
+                    if index == 0 {
+                        let sun = RadialGradient(colors: [Color(red: 1, green: 0.85, blue: 0.55).opacity(0.75), .clear],
+                                                 center: .topTrailing, startRadius: 0, endRadius: 320)
+                        shape.fill(sun)
+                            .shadow(color: Color(red: 1, green: 0.62, blue: 0.25).opacity(0.45), radius: 28, y: 6)
+                    } else {
+                        shape.fill(Color(red: 0.24, green: 0.23, blue: 0.32).opacity(0.22))
+                    }
+                }
+            }
+        }
     }
 
     private func stamp(_ text: String, _ color: Color) -> some View {

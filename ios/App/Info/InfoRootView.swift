@@ -1,11 +1,15 @@
 import SwiftUI
 
-/// 「情報」タブ：好きな話題の記事・投稿をカードの山で読む。ゲーム（スプラトゥーン3・Steam）への入口
+/// 「情報」タブ：好きな話題の記事・投稿をカードの山で読む。ゲーム（スプラトゥーン3・Steam）への入口。相談（AI）
 struct InfoRootView: View {
     @StateObject private var model = InfoModel()
     @Environment(\.palette) private var p
     @Environment(\.motion) private var motion
-    @State private var section: InfoSection = ProcessInfo.processInfo.arguments.contains("-infogames") ? .games : .topics
+    @State private var section: InfoSection = {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-consult") { return .consult }
+        return args.contains("-infogames") ? .games : .topics
+    }()
     @State private var opening: InfoOpenTarget?
     @State private var lastOpened: InfoArticle?
     @State private var openedAt = Date()
@@ -26,6 +30,9 @@ struct InfoRootView: View {
                         .transition(motion.appear)
                 case .games:
                     InfoGameSection()
+                        .transition(motion.appear)
+                case .consult:
+                    ConsultView()
                         .transition(motion.appear)
                 }
             }
