@@ -5,6 +5,8 @@ import SwiftUI
 struct ChecklistHome: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduce
     let onAdd: () -> Void
     @State private var draft = ""
     @FocusState private var writing: Bool
@@ -67,7 +69,7 @@ struct ChecklistHome: View {
                     let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !text.isEmpty else { writing = false; return }
                     let q = QuickParse.parse(text)
-                    withAnimation(.snappy) { store.add(q.title, due: q.due, allDay: q.allDay, repeatRule: q.repeatRule) }
+                    withAnimation(motion.change(reduce: reduce)) { store.add(q.title, due: q.due, allDay: q.allDay, repeatRule: q.repeatRule) }
                     draft = ""
                     writing = true
                 }
@@ -81,6 +83,9 @@ struct ChecklistRow: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
     @Environment(\.editTodo) private var editTodo
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduce
+    @State private var sweeping = false
     let item: TodoItem
     @Binding var feedback: Int
 
@@ -89,11 +94,11 @@ struct ChecklistRow: View {
         let boxColor: Color = item.done ? p.sub : (overdue ? p.overdue : p.text.opacity(0.75))
         HStack(alignment: .center, spacing: 14) {
             Button {
-                withAnimation(.snappy) {
-                    if item.done { store.uncomplete(item) } else { store.complete(item); feedback += 1 }
-                }
+                // 赤ペンで線を引くように消してから完了
+                if !item.done { feedback += 1 }
+                CompleteMotion.toggle(item, store: store, motion: motion, reduce: reduce, sweeping: $sweeping)
             } label: {
-                CheckMark(done: item.done, color: boxColor, size: 30, square: true)
+                CheckMark(done: item.done || sweeping, color: boxColor, size: 30, square: true)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(item.done ? "未完了に戻す" : "完了にする")
@@ -106,6 +111,7 @@ struct ChecklistRow: View {
                     .foregroundStyle(item.done ? p.sub : p.text)
                     .strikethrough(item.done, color: p.sub)
                     .lineLimit(2)
+                    .sweepLine(sweeping && !item.done, color: p.accent)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             trailing(overdue: overdue)
@@ -114,7 +120,7 @@ struct ChecklistRow: View {
         .opacity(item.done ? 0.55 : 1)
         .contentShape(Rectangle())
         .onTapGesture { editTodo(item) }
-        .todoSwipes(item, store: store)
+        .todoSwipes(item, store: store, animation: motion.change(reduce: reduce))
         .todoMenu(item)
     }
 

@@ -46,11 +46,17 @@ enum KanbanColumn: Int, CaseIterable, Identifiable, Hashable {
     }
 }
 
+
+/// かんばん：上の見出し（色の札がすべって移る）と、横にめくる3列。
+/// カードは完了で右へ抜け、列を移すと移った列のほうへすべる
 struct KanbanHome: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduce
     let onAdd: (AddDraft) -> Void
     @State private var column: KanbanColumn? = .today
+    @Namespace private var pill
 
     var body: some View {
         VStack(spacing: 0) {
@@ -76,6 +82,7 @@ struct KanbanHome: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .paletteBackground(p)
+        .animation(motion.change(reduce: reduce), value: column)
         .sensoryFeedback(.selection, trigger: column)
     }
 
@@ -85,16 +92,22 @@ struct KanbanHome: View {
             ForEach(KanbanColumn.allCases) { col in
                 let selected: Bool = (column ?? .today) == col
                 let n: Int = store.open.filter { KanbanColumn.of($0) == col }.count
-                Button { withAnimation(.snappy) { column = col } } label: {
+                Button { withAnimation(motion.change(reduce: reduce)) { column = col } } label: {
                     HStack(spacing: 5) {
                         Text(col.name).font(.subheadline.weight(.bold))
                         Text("\(n)").font(.caption.weight(.heavy)).monospacedDigit()
+                            .contentTransition(.numericText())
                             .padding(.horizontal, 6).padding(.vertical, 1)
                             .background((selected ? p.onAccent : p.sub).opacity(0.2), in: Capsule())
                     }
                     .foregroundStyle(selected ? p.onAccent : p.text)
                     .frame(maxWidth: .infinity).frame(height: 38)
-                    .background(selected ? p.accent : p.card, in: Capsule())
+                    .background {
+                        ZStack {
+                            Capsule().fill(p.card)
+                            if selected { Capsule().fill(p.accent).matchedGeometryEffect(id: "tab", in: pill) }
+                        }
+                    }
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -138,7 +151,7 @@ struct KanbanColumnView: View {
     }
 
     private var emptyMessage: String? {
-        column == .today ? "長押しの「期限を移す」で、ほかの列から移せます" : nil
+        column == .today ? "カードの ⇄ で、ほかの列から移せます" : nil
     }
 
     private var addButton: some View {
@@ -153,28 +166,39 @@ struct KanbanColumnView: View {
     }
 }
 
-/// かんばんのカード：左にチェック、右上に移動のメニュー
+/// かんばんのカード：左にチェック、右に列を移すボタン
 struct KanbanCard: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
     @Environment(\.editTodo) private var editTodo
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduce
     let item: TodoItem
     let column: KanbanColumn
+    @State private var sweeping = false
+    /// 移す先の向き（右の列へなら右へ、左の列へなら左へ抜ける）
+    @State private var exitEdge: Edge = .trailing
 
     var body: some View {
         let overdue: Bool = item.isOverdue()
+        let shownDone: Bool = item.done || sweeping
         let tint: Color = item.done ? p.sub : (overdue ? p.overdue : p.accent)
         let shape = RoundedRectangle(cornerRadius: min(p.radius, 20), style: .continuous)
         HStack(alignment: .top, spacing: 12) {
-            Button { withAnimation(.snappy) { item.done ? store.uncomplete(item) : store.complete(item) } } label: {
-                CheckMark(done: item.done, color: tint, size: 28)
+            Button {
+                exitEdge = .trailing
+                CompleteMotion.toggle(item, store: store, motion: motion, reduce: reduce, sweeping: $sweeping)
+            } label: {
+                CheckMark(done: shownDone, color: tint, size: 28)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(item.done ? "未完了に戻す" : "完了にする")
+            .sensoryFeedback(.success, trigger: sweeping) { _, new in new }
             VStack(alignment: .leading, spacing: 6) {
-                Text(item.title).font(.body.weight(.semibold)).foregroundStyle(item.done ? p.sub : p.text)
+                Text(item.title).font(.body.weight(.semibold)).foregroundStyle(shownDone ? p.sub : p.text)
                     .strikethrough(item.done, color: p.sub)
                     .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                    .sweepLine(sweeping && !item.done, color: p.sub)
                 HStack(spacing: 6) {
                     if item.isImportant && !item.done {
                         Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow)
@@ -192,23 +216,38 @@ struct KanbanCard: View {
             if overdue { Capsule().fill(p.overdue).frame(width: 4).padding(.vertical, 14) }
         }
         .opacity(item.done ? 0.6 : 1)
+        .scaleEffect(sweeping && !reduce ? 0.97 : 1)
         .contentShape(shape)
         .onTapGesture { editTodo(item) }
         .todoMenu(item)
+        .transition(cardTransition)
+    }
+
+    private var cardTransition: AnyTransition {
+        if reduce { return .opacity }
+        let out: AnyTransition = AnyTransition.move(edge: exitEdge).combined(with: .opacity)
+        return .asymmetric(insertion: motion.appear, removal: out)
+    }
+
+    private func move(_ target: TodoStore.DueMove, edge: Edge) {
+        exitEdge = edge
+        withAnimation(motion.change(reduce: reduce)) { store.move(item, to: target) }
     }
 
     /// ほかの列へ移す
     private var moveMenu: some View {
         Menu {
             if column != .today {
-                Button { withAnimation(.snappy) { store.move(item, to: .today) } } label: { Label("今日へ", systemImage: "sun.max") }
+                Button { move(.today, edge: .leading) } label: { Label("今日へ", systemImage: "sun.max") }
             }
             if column != .tomorrow {
-                Button { withAnimation(.snappy) { store.move(item, to: .tomorrow) } } label: { Label("明日へ", systemImage: "sunrise") }
+                Button { move(.tomorrow, edge: column == .today ? .trailing : .leading) } label: {
+                    Label("明日へ", systemImage: "sunrise")
+                }
             }
             if column != .later || item.due != nil {
-                Button { withAnimation(.snappy) { store.move(item, to: .nextWeek) } } label: { Label("来週の月曜へ", systemImage: "calendar") }
-                Button { withAnimation(.snappy) { store.move(item, to: .noDue) } } label: { Label("期限なしにする", systemImage: "tray") }
+                Button { move(.nextWeek, edge: .trailing) } label: { Label("来週の月曜へ", systemImage: "calendar") }
+                Button { move(.noDue, edge: .trailing) } label: { Label("期限なしにする", systemImage: "tray") }
             }
         } label: {
             Image(systemName: "arrow.left.arrow.right")

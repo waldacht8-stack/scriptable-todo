@@ -8,6 +8,8 @@ struct AddSheet: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduce
     let draft: AddDraft
 
     @State private var title = ""
@@ -139,14 +141,17 @@ struct AddSheet: View {
             parsePreview
         }
         .paletteCard(p, padding: 16)
+        .animation(motion.change(reduce: reduce), value: QuickParse.summary(parsed))
     }
 
     private var importantButton: some View {
-        Button { withAnimation(.snappy) { important.toggle() } } label: {
+        Button { withAnimation(motion.tap(reduce: reduce)) { important.toggle() } } label: {
             VStack(spacing: 2) {
                 Image(systemName: important ? "star.fill" : "star")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(important ? Color.yellow : p.sub)
+                    .symbolEffect(.bounce, value: important)
+                    .symbolEffectsRemoved(reduce)
                 Text("重要").font(.caption2.weight(.bold)).foregroundStyle(important ? p.text : p.sub)
             }
             .frame(width: 48, height: 48)
@@ -247,7 +252,7 @@ struct AddSheet: View {
     private func toggleDatePicker() {
         touch()
         if day == nil { day = Calendar.current.startOfDay(for: .now) }
-        withAnimation(.snappy) { showDatePicker.toggle() }
+        withAnimation(motion.tap(reduce: reduce)) { showDatePicker.toggle() }
     }
 
     private func choose(_ c: DueChoice) {
@@ -255,7 +260,7 @@ struct AddSheet: View {
         touch()
         if wasSelected { clearDue(); return }
         let r = c.resolve()
-        withAnimation(.snappy) {
+        withAnimation(motion.tap(reduce: reduce)) {
             day = r.day
             picked = c
             if c == .tonight {
@@ -269,7 +274,7 @@ struct AddSheet: View {
 
     private func clearDue() {
         touch()
-        withAnimation(.snappy) {
+        withAnimation(motion.tap(reduce: reduce)) {
             day = nil
             time = nil
             repeatRule = ""
@@ -300,14 +305,14 @@ struct AddSheet: View {
                 ForEach(TimeChoice.allCases) { c in
                     ChoiceChip(title: c.name, selected: !showTimePicker && sameTime(effTime, c.time)) {
                         touch()
-                        withAnimation(.snappy) { time = c.time; showTimePicker = false }
+                        withAnimation(motion.tap(reduce: reduce)) { time = c.time; showTimePicker = false }
                     }
                 }
                 ChoiceChip(title: customTimeLabel ?? "時刻を選ぶ", icon: "clock.badge",
                            selected: showTimePicker || customTimeLabel != nil) {
                     touch()
                     if time == nil { time = DateComponents(hour: 9, minute: 0) }
-                    withAnimation(.snappy) { showTimePicker.toggle() }
+                    withAnimation(motion.tap(reduce: reduce)) { showTimePicker.toggle() }
                 }
             }
             if showTimePicker {
@@ -372,7 +377,7 @@ struct AddSheet: View {
 
     private var calendarCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Toggle(isOn: $toCalendar.animation(.snappy)) {
+            Toggle(isOn: $toCalendar.animation(motion.change(reduce: reduce))) {
                 Label("カレンダーにも予定として登録", systemImage: "calendar.badge.plus")
                     .font(.body.weight(.semibold)).foregroundStyle(p.text)
             }

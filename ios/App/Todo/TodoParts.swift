@@ -25,6 +25,7 @@ struct TodoHeader<Title: View>: View {
                 if let subtitle {
                     Text(subtitle).font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
                         .lineLimit(1).minimumScaleFactor(0.8)
+                        .contentTransition(.numericText())
                 }
                 Spacer(minLength: 8)
                 DoneControls()
@@ -49,6 +50,8 @@ struct DoneControls: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
     @Environment(\.openList) private var openList
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduce
 
     var body: some View {
         let on: Bool = store.showDone
@@ -57,8 +60,13 @@ struct DoneControls: View {
             Button { openList(.done) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "checkmark.circle")
+                        .symbolEffect(.bounce, value: count)
+                        .symbolEffectsRemoved(reduce)
                     Text("完了済み")
-                    if count > 0 { Text("\(count)").monospacedDigit().foregroundStyle(p.sub) }
+                    if count > 0 {
+                        Text("\(count)").monospacedDigit().foregroundStyle(p.sub)
+                            .contentTransition(.numericText())
+                    }
                 }
                 .font(.subheadline.weight(.semibold)).foregroundStyle(p.text)
                 .lineLimit(1).fixedSize()
@@ -68,8 +76,9 @@ struct DoneControls: View {
             .buttonStyle(.plain)
             .accessibilityLabel("完了済みの一覧")
             Rectangle().fill(p.sub.opacity(0.3)).frame(width: 1, height: 18)
-            Button { withAnimation(.snappy) { store.setShowDone(!on) } } label: {
+            Button { withAnimation(motion.change(reduce: reduce)) { store.setShowDone(!on) } } label: {
                 Image(systemName: on ? "eye.fill" : "eye.slash")
+                    .contentTransition(.symbolEffect(.replace))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(on ? p.accent : p.sub)
                     .frame(width: 40, height: 36)
@@ -302,5 +311,82 @@ enum TimeChoice: String, CaseIterable, Identifiable {
         case .evening: DateComponents(hour: 18, minute: 0)
         case .night: DateComponents(hour: 21, minute: 0)
         }
+    }
+}
+
+// MARK: - 動き（テーマの MotionStyle。「視差効果を減らす」がオンなら短いフェードだけ）
+
+extension MotionStyle {
+    func tap(reduce: Bool) -> Animation { reduce ? .easeInOut(duration: 0.2) : tap }
+    func change(reduce: Bool) -> Animation { reduce ? .easeInOut(duration: 0.25) : change }
+    func appear(reduce: Bool) -> AnyTransition { reduce ? .opacity : appear }
+}
+
+/// 完了にするとき、題名に左から線を引く（引き終わってから完了にする）
+struct SweepLine: ViewModifier {
+    let on: Bool
+    let color: Color
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .leading) {
+            Rectangle().fill(color).frame(height: 1.5)
+                .scaleEffect(x: on ? 1 : 0, anchor: .leading)
+                .opacity(on ? 1 : 0)
+        }
+    }
+}
+
+extension View {
+    func sweepLine(_ on: Bool, color: Color) -> some View { modifier(SweepLine(on: on, color: color)) }
+}
+
+/// 完了の操作をそろえる：線を引く → 少し待って完了（行が消える・薄くなる）。戻すときはすぐ
+@MainActor
+enum CompleteMotion {
+    static func toggle(_ item: TodoItem, store: TodoStore, motion: MotionStyle, reduce: Bool,
+                       sweeping: Binding<Bool>, onDone: @escaping () -> Void = {}) {
+        if item.done {
+            withAnimation(motion.change(reduce: reduce)) { store.uncomplete(item) }
+            return
+        }
+        if reduce {
+            withAnimation(motion.change(reduce: true)) { store.complete(item) }
+            onDone()
+            return
+        }
+        withAnimation(.easeOut(duration: 0.28)) { sweeping.wrappedValue = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+            withAnimation(motion.change) { store.complete(item) }
+            sweeping.wrappedValue = false
+            onDone()
+        }
+    }
+}
+
+/// 完了したときに広がる輪（ながれの丸など）
+struct RippleRing: ViewModifier {
+    let trigger: Int
+    let color: Color
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        content.keyframeAnimator(initialValue: CGFloat(0), trigger: trigger) { view, v in
+            view.overlay {
+                Circle().stroke(color, lineWidth: 2)
+                    .scaleEffect(1 + v * 1.6)
+                    .opacity(enabled && v > 0 ? Double(1 - v) : 0)
+            }
+        } keyframes: { _ in
+            KeyframeTrack {
+                LinearKeyframe(CGFloat(1), duration: 0.55)
+                LinearKeyframe(CGFloat(0), duration: 0.01)
+            }
+        }
+    }
+}
+
+extension View {
+    func rippleRing(_ trigger: Int, color: Color, enabled: Bool = true) -> some View {
+        modifier(RippleRing(trigger: trigger, color: color, enabled: enabled))
     }
 }
