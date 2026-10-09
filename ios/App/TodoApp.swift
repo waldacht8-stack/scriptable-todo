@@ -55,12 +55,14 @@ enum BackgroundRefresh {
 
 struct RootView: View {
     @EnvironmentObject var store: TodoStore
-    // 起動引数 -tab 0/1/2（シミュレーターのスクリーンショット用）
+    // 起動引数 -tab 0〜4（0 今日・1 起床・2 習慣・3 集中・4 情報。シミュレーターのスクリーンショット用）
     @State private var tab: Int = {
         let args = ProcessInfo.processInfo.arguments
         if let i = args.firstIndex(of: "-tab"), i + 1 < args.count { return Int(args[i + 1]) ?? 0 }
         return 0
     }()
+    // 設定は各画面の右上の歯車から開く（起動引数 -settings で開いた状態にする：スクリーンショット用）
+    @State private var showSettings = ProcessInfo.processInfo.arguments.contains("-settings")
 
     var body: some View {
         let p = store.theme.palette
@@ -73,7 +75,11 @@ struct RootView: View {
                     WakeRootView().tabItem { Label("起床", systemImage: "alarm") }.tag(1)
                     HabitRootView().tabItem { Label("習慣", systemImage: "leaf") }.tag(2)
                     FocusTimerRootView().tabItem { Label("集中", systemImage: "timer") }.tag(3)
-                    SettingsView().tabItem { Label("設定", systemImage: "gearshape") }.tag(4)
+                    InfoRootView().tabItem { Label("情報", systemImage: "newspaper") }.tag(4)
+                }
+                .environment(\.openAppSettings, OpenAppSettingsAction { showSettings = true })
+                .sheet(isPresented: $showSettings) {
+                    SettingsView().environmentObject(store).environment(\.palette, p)
                 }
             }
         }
@@ -85,3 +91,35 @@ struct RootView: View {
     }
 }
 
+
+// MARK: - 設定を開く（各画面の右上に SettingsButton を置く）
+
+struct OpenAppSettingsAction {
+    var run: () -> Void = {}
+    func callAsFunction() { run() }
+}
+
+private struct OpenAppSettingsKey: EnvironmentKey { static let defaultValue = OpenAppSettingsAction() }
+
+extension EnvironmentValues {
+    var openAppSettings: OpenAppSettingsAction {
+        get { self[OpenAppSettingsKey.self] }
+        set { self[OpenAppSettingsKey.self] = newValue }
+    }
+}
+
+/// 各画面の右上に置く歯車ボタン（アプリ全体の設定を開く）
+struct SettingsButton: View {
+    @Environment(\.openAppSettings) private var openAppSettings
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        Button { openAppSettings() } label: {
+            Image(systemName: "gearshape.fill").font(.title3.weight(.semibold)).foregroundStyle(p.text)
+                .frame(width: 44, height: 44)
+                .background(p.card, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("設定")
+    }
+}

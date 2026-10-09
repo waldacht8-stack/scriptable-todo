@@ -102,11 +102,11 @@ jobs:
           shot shots/done-list.png -demo -layout board -theme focus -tab 0 -donelist
           shot shots/undo.png -demo -layout board -theme focus -tab 0 -shotundo
           shot shots/edit.png -demo -layout board -theme focus -tab 0 -shotedit
-          # 起床・習慣・集中のタブ（見本データ）
-          for tab in 1 2 3; do
+          # 起床・習慣・集中・情報のタブ（見本データ）
+          for tab in 1 2 3 4; do
             shot "shots/tab-$tab.png" -demo -theme focus -tab $tab
           done
-          shot shots/settings.png -tab 4
+          shot shots/settings.png -settings
 
       - name: 実機用にビルド（署名なし）して IPA を作る
         run: |

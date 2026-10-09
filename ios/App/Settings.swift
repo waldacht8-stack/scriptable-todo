@@ -1,130 +1,11 @@
 import SwiftUI
 
-// MARK: - 追加・編集（draft.item があれば編集）
-
-struct AddSheet: View {
-    @EnvironmentObject var store: TodoStore
-    @Environment(\.dismiss) private var dismiss
-    let draft: AddDraft
-    @State private var title = ""
-    @State private var hasDue = false
-    @State private var allDay = false
-    @State private var due = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
-    @State private var note = ""
-    @State private var repeatRule = ""
-    @State private var important = false
-    @State private var toCalendar = false
-    @State private var calendarTitle = ""
-    @FocusState private var focused: Bool
-    @State private var confirmDelete = false
-
-    private var editing: TodoItem? { draft.item }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("やること", text: $title).focused($focused).submitLabel(.done)
-                    if editing == nil, !hasDue, let preview = QuickParse.summary(QuickParse.parse(title)) {
-                        Label(preview, systemImage: "wand.and.stars").font(.footnote.weight(.semibold)).foregroundStyle(.tint)
-                    }
-                    Toggle(isOn: $important) { Label("重要（先頭に固定）", systemImage: "star") }
-                }
-                Section {
-                    Toggle("期限を決める", isOn: $hasDue.animation())
-                    if hasDue {
-                        Toggle("終日", isOn: $allDay)
-                        DatePicker("期限", selection: $due, displayedComponents: allDay ? [.date] : [.date, .hourAndMinute])
-                        Picker("繰り返し", selection: $repeatRule) {
-                            Text("なし").tag("")
-                            ForEach(RepeatRule.allCases) { Text($0.name).tag($0.rawValue) }
-                        }
-                        if CalendarSync.authorized && editing == nil {
-                            Toggle("カレンダーにも予定として登録", isOn: $toCalendar.animation())
-                            if toCalendar {
-                                Picker("登録先", selection: $calendarTitle) {
-                                    Text("いつものカレンダー").tag("")
-                                    ForEach(CalendarSync.writableCalendars(), id: \.calendarIdentifier) { Text($0.title).tag($0.title) }
-                                }
-                            }
-                        }
-                    }
-                }
-                Section("メモ") { TextField("メモ（任意）", text: $note, axis: .vertical).lineLimit(2...5) }
-                if let item = editing {
-                    Section {
-                        Button {
-                            if item.done { store.uncomplete(item) } else { store.complete(item) }
-                            dismiss()
-                        } label: {
-                            Label(item.done ? "未完了に戻す" : "完了にする", systemImage: item.done ? "arrow.uturn.backward" : "checkmark")
-                        }
-                        Button(role: .destructive) { confirmDelete = true } label: { Label("削除", systemImage: "trash") }
-                    } footer: {
-                        if item.isCalendar { Text("カレンダーから取り込んだTODOです。ここで変えた内容はカレンダーには反映されません。") }
-                    }
-                }
-            }
-            .navigationTitle(editing == nil ? "TODOを追加" : "TODOを編集")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(editing == nil ? "追加" : "保存") {
-                        let q = QuickParse.parse(title)
-                        if editing == nil && !hasDue && q.hasSchedule { // 期限を手で決めていなければ、文から読み取った期限を使う
-                            store.add(q.title, due: q.due, allDay: q.allDay, note: note, repeatRule: q.repeatRule, important: important)
-                            dismiss()
-                            return
-                        }
-                        let d = allDay ? Calendar.current.startOfDay(for: due) : due
-                        if var item = editing {
-                            item.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                            item.due = hasDue ? d : nil
-                            item.allDay = hasDue && allDay ? true : nil
-                            item.note = note.isEmpty ? nil : note
-                            item.repeatRule = hasDue && !repeatRule.isEmpty ? repeatRule : nil
-                            item.important = important ? true : nil
-                            store.save(item)
-                        } else {
-                            store.add(title, due: hasDue ? d : nil, allDay: hasDue && allDay, note: note,
-                                      repeatRule: hasDue && !repeatRule.isEmpty ? repeatRule : nil, important: important,
-                                      toCalendar: hasDue && toCalendar ? calendarTitle : nil)
-                        }
-                        dismiss()
-                    }
-                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-            .onAppear {
-                if let item = editing {
-                    title = item.title
-                    important = item.isImportant
-                    hasDue = item.due != nil
-                    allDay = item.isAllDay
-                    if let d = item.due { due = d }
-                    note = item.note ?? ""
-                    repeatRule = item.repeatRule ?? ""
-                } else {
-                    if let d = draft.due { due = d; hasDue = true }
-                    focused = true
-                }
-            }
-            .confirmationDialog("このTODOを削除しますか？", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("削除", role: .destructive) {
-                    if let item = editing { store.delete(item) }
-                    dismiss()
-                }
-            }
-        }
-    }
-}
-
 // MARK: - 設定
 
 struct SettingsView: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
+    @Environment(\.dismiss) private var dismiss
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
     var body: some View {
@@ -176,6 +57,8 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("設定")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("閉じる") { dismiss() } } }
         }
     }
 }
@@ -204,73 +87,6 @@ struct ChoiceCard<Thumb: View>: View {
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 2.5))
     }
-}
-
-/// 画面構成の見本（ボタンの位置がわかる簡単な図）
-struct LayoutThumb: View {
-    let layout: TodayLayout
-    private let ink = Color.secondary.opacity(0.35)
-    private let accent = Color.accentColor
-
-    var body: some View {
-        ZStack {
-            Color(.tertiarySystemGroupedBackground)
-            switch layout {
-            case .focus:
-                ZStack(alignment: .bottomTrailing) {
-                    ZStack {
-                        ForEach(0..<3, id: \.self) { i in
-                            RoundedRectangle(cornerRadius: 8).fill(Color(.systemBackground)).shadow(radius: 1)
-                                .frame(width: 70 - CGFloat(i) * 6, height: 56).offset(y: CGFloat(i) * 5).zIndex(Double(-i))
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    Circle().fill(accent).frame(width: 18, height: 18).padding(8)
-                }
-            case .board:
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach([Color.red, accent, ink], id: \.self) { c in
-                        HStack(spacing: 4) { RoundedRectangle(cornerRadius: 1).fill(c).frame(width: 3, height: 8); Capsule().fill(ink).frame(width: 24, height: 4) }
-                        RoundedRectangle(cornerRadius: 3).fill(Color(.systemBackground)).frame(height: 12)
-                    }
-                    Spacer(minLength: 0)
-                    HStack(spacing: 4) { Capsule().fill(Color(.systemBackground)).frame(height: 12); Circle().fill(accent).frame(width: 12, height: 12) }
-                }
-                .padding(10)
-            case .thumb:
-                ZStack(alignment: .bottomTrailing) {
-                    VStack(spacing: 6) {
-                        HStack(spacing: 3) {
-                            ForEach(0..<7, id: \.self) { i in RoundedRectangle(cornerRadius: 3).fill(i == 0 ? accent : Color(.systemBackground)).frame(height: 16) }
-                        }
-                        ForEach(0..<3, id: \.self) { _ in
-                            HStack(spacing: 5) { Capsule().fill(accent.opacity(0.6)).frame(width: 14, height: 5); Capsule().fill(ink).frame(height: 5) }
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(10)
-                    Circle().fill(accent).frame(width: 16, height: 16).padding(8)
-                }
-            case .timeline:
-                ZStack(alignment: .topLeading) {
-                    Rectangle().fill(ink).frame(width: 2).padding(.leading, 31).padding(.vertical, 10)
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(0..<4, id: \.self) { i in
-                            if i == 2 { Rectangle().fill(Color.red).frame(height: 2).padding(.leading, 18) }
-                            HStack(spacing: 5) {
-                                Capsule().fill(ink).frame(width: 12, height: 3)
-                                Circle().fill(i < 2 ? ink : accent).frame(width: 8, height: 8)
-                                RoundedRectangle(cornerRadius: 3).fill(Color(.systemBackground)).frame(height: 12)
-                            }
-                        }
-                    }
-                    .padding(10)
-                }
-            }
-        }
-    }
-
-    private var tileShape: some View { RoundedRectangle(cornerRadius: 5).fill(Color(.systemBackground)).frame(height: 24) }
 }
 
 /// 色合いの見本

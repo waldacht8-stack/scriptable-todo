@@ -194,6 +194,7 @@ struct ListButtons: View {
     var body: some View {
         HStack(spacing: 8) {
             chip("完了済み", "checkmark.circle") { openList(.done) }
+            SettingsButton()
         }
     }
 
@@ -321,6 +322,7 @@ struct FocusHome: View {
                             .background(p.card, in: Capsule())
                     }
                     .foregroundStyle(p.text)
+                    SettingsButton()
                 }
                 .padding(.horizontal, 24).padding(.top, 24)
                 ZStack {
