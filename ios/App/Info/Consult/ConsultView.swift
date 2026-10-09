@@ -55,8 +55,8 @@ struct ConsultContext: Equatable {
         c.overdueCount = store.overdue.count
         c.doneToday = store.doneToday.count
         let sessions = WakeStore.sessions()
-        c.wakeAverage = WakeStore.average(sessions, days: 7, now: now)
-        c.wakeStreak = WakeStore.streak(sessions)
+        c.wakeAverage = WakeLogic.average(sessions, days: 7, now: now)
+        c.wakeStreak = WakeLogic.streak(sessions)
         let habits = HabitData.habits()
         let log = HabitData.log()
         c.habitCount = habits.count
