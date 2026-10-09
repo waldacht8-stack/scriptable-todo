@@ -38,6 +38,8 @@ enum InfoFetcher {
             items = try await bluesky(q, japanese: !InfoText.isForeign(keyword))
         case .reddit:
             items = try await reddit(q)
+        case .fivech:
+            items = try await fivech(q)
         }
         for i in items.indices { items[i].feedKey = feedKey }
         return items
@@ -59,6 +61,25 @@ enum InfoFetcher {
         guard let url = URL(string: urlString) else { throw FetchError.badURL }
         let data = try await get(url)
         return InfoFeedParser.parse(data, source: source)
+    }
+
+    // MARK: 5ch（スレッドの題名の検索。ff5ch.syoboi.jp の RSS）
+    // 本文は取り込まない（5ch の規約：本文まで読む専用ブラウザは許諾が要る）。
+    // リンクは公式の read.cgi のページで、タップするとアプリ内のブラウザで開く。
+
+    static func fivech(_ q: String) async throws -> [InfoArticle] {
+        var items = try await rss("https://ff5ch.syoboi.jp/?q=\(q)&alt=rss", source: InfoSource.fivech.rawValue)
+        for i in items.indices {
+            // http で返るので https にする。板の名前（read.cgi/<板>/<キー>）を媒体名に
+            if items[i].link.hasPrefix("http://") { items[i].link = "https://" + items[i].link.dropFirst("http://".count) }
+            let parts = items[i].link.components(separatedBy: "/read.cgi/")
+            if parts.count == 2, let board = parts[1].split(separator: "/").first {
+                items[i].site = "5ch・\(board)"
+            }
+            items[i].summary = nil
+            items[i].image = nil
+        }
+        return items.filter { $0.link.contains(".5ch.") }
     }
 
     // MARK: Hacker News（Algolia の検索 API）

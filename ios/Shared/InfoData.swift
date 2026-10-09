@@ -12,6 +12,7 @@ enum InfoSource: String, Codable, CaseIterable, Identifiable {
     case hackerNews      // Hacker News（Algolia）
     case bluesky         // Bluesky の公開投稿
     case reddit          // Reddit（つながれば）
+    case fivech          // 5ch のスレッド（題名だけ。本文は公式の Web ページをアプリ内で開く）
 
     var id: String { rawValue }
 
@@ -23,6 +24,7 @@ enum InfoSource: String, Codable, CaseIterable, Identifiable {
         case .hackerNews: "Hacker News"
         case .bluesky: "Bluesky"
         case .reddit: "Reddit"
+        case .fivech: "5ch"
         }
     }
 
@@ -35,6 +37,7 @@ enum InfoSource: String, Codable, CaseIterable, Identifiable {
         case .hackerNews: "Hacker News"
         case .bluesky: "Bluesky"
         case .reddit: "Reddit"
+        case .fivech: "5ch"
         }
     }
 
@@ -46,6 +49,7 @@ enum InfoSource: String, Codable, CaseIterable, Identifiable {
         case .hackerNews: "海外の技術系の話題（日本語に翻訳）"
         case .bluesky: "日本語の公開投稿"
         case .reddit: "海外の掲示板（つながるときだけ）"
+        case .fivech: "5ch のスレッド（題名で検索・アプリ内で開く）"
         }
     }
 
@@ -56,6 +60,7 @@ enum InfoSource: String, Codable, CaseIterable, Identifiable {
         case .hackerNews: "chevron.left.forwardslash.chevron.right"
         case .bluesky: "bubble.left.and.bubble.right"
         case .reddit: "text.bubble"
+        case .fivech: "list.bullet.rectangle"
         }
     }
 
@@ -190,7 +195,7 @@ enum InfoData {
 
 enum InfoDemo {
     static let topics: [InfoTopic] = [
-        InfoTopic(id: "demo-cat", keyword: "猫", color: 0, sourceIDs: ["googleNews", "hatena", "bluesky"]),
+        InfoTopic(id: "demo-cat", keyword: "猫", color: 0, sourceIDs: ["googleNews", "hatena", "bluesky", "fivech"]),
         InfoTopic(id: "demo-phone", keyword: "iPhone", color: 1, sourceIDs: ["googleNews", "hatena", "googleNewsEN", "hackerNews"]),
         InfoTopic(id: "demo-camp", keyword: "キャンプ", color: 3, sourceIDs: ["googleNews", "hatena"]),
     ]
@@ -218,6 +223,7 @@ enum InfoDemo {
             a("New study suggests cats recognize their names even from strangers", "demo-cat", "googleNewsEN", "Sample Science", 14),
             a("保護猫の譲渡会、週末に駅前ひろばで開催へ　初めての人向けの相談コーナーも", "demo-cat", "googleNews", "みほん新聞", 25,
               "地域のボランティア団体が主催。飼う前に知っておきたいことを相談できるコーナーを設ける。"),
+            a("【見本】猫と暮らしてる人、朝のルーティン教えて", "demo-cat", "fivech", "5ch・見本板", 40),
             a("スマホの写真を整理するコツ　アルバム分けは「月ごと」が続けやすい", "demo-phone", "hatena", "サンプル技術ブログ", 48),
             a("Developers share tips for longer battery life on older phones", "demo-phone", "hackerNews", "Hacker News", 70),
             a("初心者向けキャンプ道具、最初にそろえるべき5つ", "demo-camp", "hatena", "みほんアウトドア", 95,
