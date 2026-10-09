@@ -36,6 +36,7 @@ struct SettingsView: View {
             }
         }
         .environment(\.palette, p)
+        .environment(\.motion, MotionStyle.from(store.theme))
         .fontDesign(p.fontDesign)
         .tint(p.accent)
         .preferredColorScheme(p.scheme)
@@ -75,6 +76,8 @@ struct SettingsView: View {
 private struct SettingsContent: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var ringSpace
     @Binding var s: AppSettings
     let save: () -> Void
 
@@ -97,13 +100,25 @@ private struct SettingsContent: View {
 
             InfoSection().id("info")
         }
+        .sensoryFeedback(.selection, trigger: store.theme)
+        .sensoryFeedback(.selection, trigger: store.layout)
+    }
+
+    /// 選んだ枠が次のカードへ動く（「視差効果を減らす」がオンなら動かさずに切り替える）
+    private func ring(_ id: String) -> SelectionRing? {
+        reduceMotion ? nil : SelectionRing(id: id, space: ringSpace)
+    }
+
+    /// 選び直したときの動き。色合いは「新しい色合いの動き方」で全画面の色をなめらかに切り替える
+    private func pick(_ motion: MotionStyle) -> Animation {
+        reduceMotion ? .easeInOut(duration: 0.2) : motion.change
     }
 
     private var layoutGrid: some View {
         LazyVGrid(columns: columns, spacing: 12) {
             ForEach(TodayLayout.allCases) { layout in
-                Button { withAnimation(.snappy) { store.setLayout(layout) } } label: {
-                    ChoiceCard(title: layout.name, summary: layout.summary, selected: store.layout == layout) {
+                Button { withAnimation(pick(MotionStyle.from(store.theme))) { store.setLayout(layout) } } label: {
+                    ChoiceCard(title: layout.name, summary: layout.summary, selected: store.layout == layout, ring: ring("layout")) {
                         LayoutThumb(layout: layout)
                     }
                 }
@@ -115,8 +130,8 @@ private struct SettingsContent: View {
     private var themeGrid: some View {
         LazyVGrid(columns: columns, spacing: 12) {
             ForEach(AppTheme.allCases) { theme in
-                Button { withAnimation(.snappy) { store.setTheme(theme) } } label: {
-                    ChoiceCard(title: theme.name, summary: theme.summary, selected: store.theme == theme) {
+                Button { withAnimation(pick(MotionStyle.from(theme))) { store.setTheme(theme) } } label: {
+                    ChoiceCard(title: theme.name, summary: theme.summary, selected: store.theme == theme, ring: ring("theme")) {
                         PaletteThumb(palette: theme.palette(with: s))
                     }
                 }
@@ -184,6 +199,8 @@ private struct PreviewRow: View {
 
 private struct CustomizeCard: View {
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var store: TodoStore
     @Binding var s: AppSettings
     let save: () -> Void
@@ -215,7 +232,7 @@ private struct CustomizeCard: View {
             }
             if isCustomized {
                 Button {
-                    withAnimation(.snappy) {
+                    withAnimation(anim) {
                         s.accentColor = "theme"; s.cornerStyle = "theme"; s.fontStyle = "theme"; s.density = Density.regular.rawValue
                         save()
                     }
@@ -228,13 +245,19 @@ private struct CustomizeCard: View {
             }
         }
         .paletteCard(p)
+        .sensoryFeedback(.selection, trigger: s.accentColor)
+        .sensoryFeedback(.selection, trigger: s.cornerStyle)
+        .sensoryFeedback(.selection, trigger: s.fontStyle)
+        .sensoryFeedback(.selection, trigger: s.density)
     }
+
+    private var anim: Animation { reduceMotion ? .easeInOut(duration: 0.2) : motion.change }
 
     /// 文字列で保存している設定を、選択肢の型で読み書きする
     private func binding<V: RawRepresentable>(_ key: WritableKeyPath<AppSettings, String>, _ from: @escaping (String) -> V) -> Binding<V>
     where V.RawValue == String {
         Binding(get: { from(s[keyPath: key]) },
-                set: { v in withAnimation(.snappy) { s[keyPath: key] = v.rawValue; save() } })
+                set: { v in withAnimation(anim) { s[keyPath: key] = v.rawValue; save() } })
     }
 
     private var swatches: some View {
@@ -246,7 +269,7 @@ private struct CustomizeCard: View {
                 let color: Color = pair?.accent ?? base.accent
                 let mark: Color = pair?.onAccent ?? base.onAccent
                 Button {
-                    withAnimation(.snappy) { s.accentColor = a.rawValue; save() }
+                    withAnimation(anim) { s.accentColor = a.rawValue; save() }
                 } label: {
                     SwatchDot(color: color, mark: mark, isTheme: a == .theme, selected: AccentChoice.from(s.accentColor) == a)
                 }
@@ -549,13 +572,13 @@ struct ChoiceCard<Thumb: View>: View {
     let title: String
     let summary: String
     let selected: Bool
+    var ring: SelectionRing? = nil
     @ViewBuilder let thumb: () -> Thumb
 
     var body: some View {
         let r: CGFloat = min(max(p.radius * 0.7, 10), 22)
         let shape = RoundedRectangle(cornerRadius: r, style: .continuous)
-        let border: Color = selected ? p.accent : (p.outline ?? p.sub.opacity(0.15))
-        let lineWidth: CGFloat = selected ? 2.5 : 1
+        let border: Color = p.outline ?? p.sub.opacity(0.15)
         VStack(alignment: .leading, spacing: 8) {
             thumb()
                 .frame(height: 104)
@@ -568,7 +591,10 @@ struct ChoiceCard<Thumb: View>: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 0)
-                if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(p.accent) }
+                if selected {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(p.accent)
+                        .transition(.scale(scale: 0.4).combined(with: .opacity))
+                }
             }
             Text(summary)
                 .font(.caption)
@@ -578,9 +604,32 @@ struct ChoiceCard<Thumb: View>: View {
         }
         .padding(10)
         .background(p.card, in: shape)
-        .overlay(shape.strokeBorder(border, lineWidth: lineWidth))
+        .overlay(shape.strokeBorder(border, lineWidth: 1))
+        .overlay {
+            if selected {
+                shape.strokeBorder(p.accent, lineWidth: 2.5).modifier(MatchedRing(ring: ring))
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// 選択の枠を、選び直したカードへ動かすための名前（matchedGeometryEffect）
+struct SelectionRing {
+    let id: String
+    let space: Namespace.ID
+}
+
+private struct MatchedRing: ViewModifier {
+    let ring: SelectionRing?
+
+    func body(content: Content) -> some View {
+        if let ring {
+            content.matchedGeometryEffect(id: ring.id, in: ring.space)
+        } else {
+            content
+        }
     }
 }
 

@@ -7,6 +7,7 @@ enum MotionStyle: String {
     case smooth     // ゆったり滑らか（ナイト）
     case bouncy     // 弾む（朝焼け）
     case gentle     // 控えめ（手帳）
+    case crisp      // 弾まず短く・まっすぐ（モノクロ・ハイコントラスト）
 
     /// テーマから決める。新しいテーマを足したら、ここにも1行足す（未登録はきびきび）
     static func from(_ theme: AppTheme) -> MotionStyle {
@@ -14,6 +15,10 @@ enum MotionStyle: String {
         case "night": .smooth
         case "dawn": .bouncy
         case "paper": .gentle
+        case "forest", "coffee": .gentle
+        case "ocean", "lavender": .smooth
+        case "sakura": .bouncy
+        case "mono", "contrast": .crisp
         default: .snappy
         }
     }
@@ -25,6 +30,7 @@ enum MotionStyle: String {
         case .smooth: .smooth(duration: 0.45)
         case .bouncy: .bouncy(duration: 0.4, extraBounce: 0.15)
         case .gentle: .easeOut(duration: 0.3)
+        case .crisp: .linear(duration: 0.12)
         }
     }
 
@@ -35,6 +41,7 @@ enum MotionStyle: String {
         case .smooth: .smooth(duration: 0.55)
         case .bouncy: .spring(duration: 0.5, bounce: 0.3)
         case .gentle: .easeInOut(duration: 0.35)
+        case .crisp: .easeInOut(duration: 0.18)
         }
     }
 
@@ -45,6 +52,7 @@ enum MotionStyle: String {
         case .smooth: .opacity.combined(with: .offset(y: 12))
         case .bouncy: .scale(scale: 0.85).combined(with: .opacity)
         case .gentle: .opacity
+        case .crisp: .opacity
         }
     }
 }
