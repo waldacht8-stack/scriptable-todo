@@ -56,4 +56,11 @@ final class FormatTests: TokyoTestCase {
         for l in TodayLayout.allCases { XCTAssertFalse(l.name.isEmpty); XCTAssertFalse(l.summary.isEmpty) }
         for r in RepeatRule.allCases { XCTAssertFalse(r.name.isEmpty) }
     }
+
+    func testMotionPerTheme() {
+        XCTAssertEqual(MotionStyle.from(.focus), .snappy)
+        XCTAssertEqual(MotionStyle.from(.night), .smooth)
+        XCTAssertEqual(MotionStyle.from(.dawn), .bouncy)
+        XCTAssertEqual(MotionStyle.from(.paper), .gentle)
+    }
 }
