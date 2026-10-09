@@ -114,6 +114,8 @@ jobs:
           shot shots/habit-edit-night.png -demo -theme night -tab 2 -habitedit
           shot shots/focus-night.png -demo -theme night -tab 3
           shot shots/focus-settings-dawn.png -demo -theme dawn -tab 3 -focussettings
+          shot shots/focus-celebrate-paper.png -demo -theme paper -tab 3 -focuscelebrate
+          shot shots/focus-celebrate-dawn.png -demo -theme dawn -tab 3 -focuscelebrate
           shot shots/settings.png -settings
 
       - name: 実機用にビルド（署名なし）して IPA を作る

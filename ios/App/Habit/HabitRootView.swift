@@ -122,6 +122,8 @@ enum HabitPage: Hashable {
 /// 習慣タブの入口
 struct HabitRootView: View {
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var phase
     @StateObject private var model = HabitModel()
     @State private var editing: HabitEditTarget?
@@ -140,7 +142,11 @@ struct HabitRootView: View {
                 } else {
                     summary
                     HabitSegment(selection: $page, options: [(HabitPage.today, "今日"), (HabitPage.records, "記録")])
-                    if page == .today { todayList } else { records }
+                    VStack(alignment: .leading, spacing: 16) {
+                        if page == .today { todayList } else { records }
+                    }
+                    .id(page)
+                    .transition(motion.appear(reduced: reduceMotion))
                 }
             }
             .padding(.horizontal, 20)
@@ -183,7 +189,7 @@ struct HabitRootView: View {
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
                             titleVisibility: .visible) {
             Button("削除", role: .destructive) {
-                if let d = deleting { withAnimation { model.delete(d) } }
+                if let d = deleting { withAnimation(motion.change(reduced: reduceMotion)) { model.delete(d) } }
                 deleting = nil
             }
             Button("キャンセル", role: .cancel) { deleting = nil }
@@ -238,7 +244,7 @@ struct HabitRootView: View {
                     .contentTransition(.numericText())
             }
             .frame(width: 76, height: 76)
-            .animation(.spring(duration: 0.5), value: model.progress)
+            .animation(motion.change(reduced: reduceMotion), value: model.progress)
             .accessibilityHidden(true)
         }
         .paletteCard(p)
@@ -251,7 +257,7 @@ struct HabitRootView: View {
         }
         ForEach(model.today) { h in
             HabitTodayCard(habit: h, count: model.count(h), streak: HabitData.currentStreak(h, model.log)) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
+                withAnimation(motion.tap(reduced: reduceMotion)) {
                     if model.tap(h) { doneFeedback += 1 } else { tapFeedback += 1 }
                 }
             }
@@ -325,10 +331,10 @@ struct HabitRootView: View {
     private func menu(_ h: Habit) -> some View {
         Button { editing = HabitEditTarget(habit: h, isNew: false) } label: { Label("編集", systemImage: "pencil") }
         if h.isCount && model.count(h) > 0 {
-            Button { withAnimation { model.decrement(h) } } label: { Label("1つ戻す", systemImage: "minus.circle") }
+            Button { withAnimation(motion.tap(reduced: reduceMotion)) { model.decrement(h) } } label: { Label("1つ戻す", systemImage: "minus.circle") }
         }
         if model.count(h) > 0 {
-            Button { withAnimation { model.resetToday(h) } } label: { Label("今日の記録を消す", systemImage: "arrow.counterclockwise") }
+            Button { withAnimation(motion.tap(reduced: reduceMotion)) { model.resetToday(h) } } label: { Label("今日の記録を消す", systemImage: "arrow.counterclockwise") }
         }
         Button(role: .destructive) { deleting = h } label: { Label("削除", systemImage: "trash") }
     }
@@ -373,6 +379,8 @@ struct HabitCircleButton: View {
 /// 2〜3択の切り替え（色合いに合わせた見た目）
 struct HabitSegment<Value: Hashable>: View {
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var selection: Value
     let options: [(Value, String)]
 
@@ -391,7 +399,7 @@ struct HabitSegment<Value: Hashable>: View {
         let fg: Color = on ? p.onAccent : p.sub
         let bg: Color = on ? p.accent : Color.clear
         return Button {
-            withAnimation(.snappy) { selection = value }
+            withAnimation(motion.change(reduced: reduceMotion)) { selection = value }
         } label: {
             Text(title).font(.subheadline.weight(.bold)).foregroundStyle(fg)
                 .lineLimit(1).minimumScaleFactor(0.8)
@@ -441,6 +449,8 @@ struct HabitNote: View {
 /// 今日の習慣の大きなカード。タップで1回分チェック
 struct HabitTodayCard: View {
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let habit: Habit
     let count: Int
     let streak: Int
@@ -455,8 +465,8 @@ struct HabitTodayCard: View {
         let subColor: Color = done ? on.opacity(0.8) : p.sub
         let ringColor: Color = done ? on : c
         let ringTrack: Color? = done ? on.opacity(0.25) : nil
-        let fill: Color = done ? c : p.card
         let shape = RoundedRectangle(cornerRadius: p.radius, style: .continuous)
+        let fillAnimation: Animation? = motion.fill(reduced: reduceMotion)
         return Button(action: onTap) {
             HStack(spacing: 14) {
                 ZStack {
@@ -466,6 +476,7 @@ struct HabitTodayCard: View {
                         .foregroundStyle(ringColor)
                         .contentTransition(.symbolEffect(.replace))
                         .symbolEffect(.bounce, value: count)
+                        .symbolEffectsRemoved(reduceMotion)
                 }
                 .frame(width: 56, height: 56)
                 VStack(alignment: .leading, spacing: 4) {
@@ -473,7 +484,14 @@ struct HabitTodayCard: View {
                         .lineLimit(2).multilineTextAlignment(.leading)
                     HStack(spacing: 10) {
                         if streak > 0 {
-                            Label("\(streak)日連続", systemImage: "flame.fill")
+                            Label {
+                                HStack(spacing: 0) {
+                                    Text("\(streak)").contentTransition(.numericText(value: Double(streak)))
+                                    Text("日連続")
+                                }
+                            } icon: {
+                                Image(systemName: "flame.fill")
+                            }
                         } else {
                             Text(habit.weekdayText)
                         }
@@ -488,7 +506,7 @@ struct HabitTodayCard: View {
                     HStack(alignment: .firstTextBaseline, spacing: 2) {
                         Text("\(count)").font(.system(size: 30, weight: .heavy, design: p.fontDesign))
                             .foregroundStyle(fg)
-                            .contentTransition(.numericText())
+                            .contentTransition(.numericText(value: Double(count)))
                         Text("/\(habit.target)\(habit.unit)").font(.subheadline.weight(.semibold))
                             .foregroundStyle(subColor)
                     }
@@ -498,9 +516,17 @@ struct HabitTodayCard: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(fillAnimation, value: done)
             .background(
-                shape.fill(fill)
-                    .shadow(color: .black.opacity(p.scheme == .dark ? 0 : 0.06), radius: 12, y: 4)
+                ZStack {
+                    shape.fill(p.card)
+                        .shadow(color: .black.opacity(p.scheme == .dark ? 0 : 0.06), radius: 12, y: 4)
+                    // 達成すると、習慣の色が下から満ちる（戻すと引いていく）
+                    HabitLiquid(level: done ? 1 : 0)
+                        .fill(c)
+                        .clipShape(shape)
+                        .animation(fillAnimation, value: done)
+                }
             )
             .contentShape(shape)
         }
@@ -543,6 +569,7 @@ struct HabitStatsCard: View {
             Text(title).font(.caption.weight(.semibold)).foregroundStyle(p.sub).lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(value).font(.system(size: 26, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
+                    .contentTransition(.numericText())
                 Text(unit).font(.caption.weight(.semibold)).foregroundStyle(p.sub)
             }
         }

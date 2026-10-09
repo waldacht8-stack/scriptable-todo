@@ -11,14 +11,30 @@ final class FocusTimerModel: ObservableObject {
     @Published var now = Date.now
     @Published var finishedTodo: FocusTimerState?   // 集中が終わったTODO（完了にするか聞く）
     @Published var finishCount = 0
+    @Published var celebration: FocusCelebrationInfo?   // 集中を1回終えたときのお祝い
+    private var pendingTodo: FocusTimerState?            // お祝いのあとで「完了にする？」と聞くTODO
     private static var demoInstalled = false
 
     init() {
-        if ProcessInfo.processInfo.arguments.contains("-demo") && !Self.demoInstalled {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-demo") && !Self.demoInstalled {
             Self.demoInstalled = true
             FocusTimerData.installDemo()
         }
         reload()
+        // 画面確認用：お祝いを出したままにする
+        if args.contains("-focuscelebrate") {
+            celebration = FocusCelebrationInfo(minutes: settings.focusMinutes, title: "企画書の下書き", stays: true)
+        }
+    }
+
+    /// お祝いを閉じる。TODO に取り組んでいたら、そのあとで完了にするか聞く
+    func endCelebration() {
+        celebration = nil
+        if let t = pendingTodo {
+            pendingTodo = nil
+            finishedTodo = t
+        }
     }
 
     func reload() {
@@ -38,7 +54,10 @@ final class FocusTimerModel: ObservableObject {
             sessions = FocusTimerData.sessions()
             finishCount += 1
             live()
-            if f.phase == .focus, f.todoID != nil { finishedTodo = f }
+            if f.phase == .focus {
+                if f.todoID != nil { pendingTodo = f }
+                celebration = FocusCelebrationInfo(minutes: Int((f.total / 60).rounded()), title: f.title, stays: false)
+            }
         } else {
             let s = FocusTimerData.state()   // ほかの場所（ウィジェットなど）で変わった分も反映
             if s != state { state = s }
@@ -118,6 +137,8 @@ final class FocusTimerModel: ObservableObject {
 /// 集中タブの入口
 struct FocusTimerRootView: View {
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scene
     @EnvironmentObject private var store: TodoStore
     @StateObject private var model = FocusTimerModel()
@@ -149,6 +170,15 @@ struct FocusTimerRootView: View {
             viewHeight = h
         }
         .paletteBackground(p)
+        .overlay {
+            if let info = model.celebration {
+                FocusCelebrationView(info: info) {
+                    withAnimation(motion.change(reduced: reduceMotion)) { model.endCelebration() }
+                }
+                .transition(motion.appear(reduced: reduceMotion))
+            }
+        }
+        .animation(motion.change(reduced: reduceMotion), value: model.celebration)
         .onReceive(ticker) { _ in model.tick() }
         .onChange(of: scene) { _, s in if s == .active { model.reload() } }
         .onAppear {
@@ -170,7 +200,7 @@ struct FocusTimerRootView: View {
                 .environment(\.palette, p)
                 .presentationDetents([.medium, .large])
         }
-        .alert("おつかれさまでした", isPresented: Binding(get: { model.finishedTodo != nil }, set: { if !$0 { model.finishedTodo = nil } })) {
+        .alert("TODOを完了にしますか？", isPresented: Binding(get: { model.finishedTodo != nil }, set: { if !$0 { model.finishedTodo = nil } })) {
             Button("完了にする") {
                 if let id = model.finishedTodo?.todoID, let item = store.items.first(where: { $0.id == id }) {
                     store.complete(item)
@@ -231,9 +261,9 @@ struct FocusTimerRootView: View {
         return min(320, max(210, room))
     }
 
-    /// 文字盤とボタンの色（色合いの強調色。休憩中も同じ色で、表示の文字とアイコンで区別する）
-    private var phaseColor: Color { p.accent }
-    private var onPhaseColor: Color { p.onAccent }
+    /// 文字盤とボタンの色。集中は強調色、休憩は本文の色（どちらも色合いの色）。切り替わるときは色が溶け合う
+    private var phaseColor: Color { model.state.phase.isBreak ? p.text : p.accent }
+    private var onPhaseColor: Color { model.state.phase.isBreak ? p.card : p.onAccent }
 
     private var dial: some View {
         let s = model.state
@@ -241,14 +271,8 @@ struct FocusTimerRootView: View {
         let size: CGFloat = dialSize
         let line: CGFloat = size >= 280 ? 22 : 16
         let clockSize: CGFloat = (size * 0.225).rounded()
-        let ringStyle: StrokeStyle = StrokeStyle(lineWidth: line, lineCap: .round)
         return ZStack {
-            Circle().stroke(phaseColor.opacity(0.14), lineWidth: line)
-            Circle()
-                .trim(from: 0, to: max(0.001, min(1, 1 - model.progress)))
-                .stroke(phaseColor, style: ringStyle)
-                .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 1), value: model.progress)
+            FocusDialRing(state: s, now: model.now, color: phaseColor, line: line, smooth: !reduceMotion)
             VStack(spacing: 8) {
                 Label(s.isPaused ? "一時停止中" : s.phase.name, systemImage: s.isPaused ? "pause.circle.fill" : s.phase.icon)
                     .font(.headline).foregroundStyle(s.isPaused ? p.sub : phaseColor)
@@ -276,6 +300,8 @@ struct FocusTimerRootView: View {
         .frame(width: size, height: size)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
+        .animation(motion.change(reduced: reduceMotion), value: s.phase)
+        .animation(motion.change(reduced: reduceMotion), value: s.isPaused)
     }
 
     private var controls: some View {
@@ -283,11 +309,11 @@ struct FocusTimerRootView: View {
         return HStack(spacing: 28) {
             roundButton("stop.fill", size: 64, label: "終了", enabled: s.isRunning) {
                 actionFeedback += 1
-                withAnimation { model.stop() }
+                withAnimation(motion.tap(reduced: reduceMotion)) { model.stop() }
             }
             Button {
                 actionFeedback += 1
-                withAnimation(.spring(duration: 0.35)) {
+                withAnimation(motion.tap(reduced: reduceMotion)) {
                     if s.isRunning { model.togglePause() } else { model.start(title: title, todoID: todoID) }
                 }
             } label: {
@@ -298,11 +324,12 @@ struct FocusTimerRootView: View {
                     .foregroundStyle(onPhaseColor)
                     .background(phaseColor, in: Circle())
                     .shadow(color: phaseColor.opacity(0.35), radius: 14, y: 6)
+                    .animation(motion.change(reduced: reduceMotion), value: s.phase)
             }
             .accessibilityLabel(s.isRunning ? (s.isPaused ? "再開" : "一時停止") : "開始")
             roundButton("forward.end.fill", size: 64, label: "スキップ", enabled: true) {
                 actionFeedback += 1
-                withAnimation { model.skip() }
+                withAnimation(motion.tap(reduced: reduceMotion)) { model.skip() }
             }
         }
         .frame(maxWidth: .infinity)
