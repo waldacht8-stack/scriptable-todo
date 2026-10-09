@@ -179,11 +179,11 @@ final class QuickParseTests: TokyoTestCase {
     }
 
     func testTitleStartingWithParticleCharacterIsKept() {
-        // BUG-2：題名の先頭の「に・の」を助詞として消すので、「にんじん」「のり」の頭が欠ける
-        knownBug("BUG-2 QuickParse.swift:93 題名の先頭の「に」「の」を常に消す") {
-            XCTAssertEqual(p("にんじんを買う").title, "にんじんを買う")
-            XCTAssertEqual(p("のりを買う 明日").title, "のりを買う")
-        }
+        // BUG-2（直した）：題名の先頭の「に・の」は、元から先頭にあれば残す
+        XCTAssertEqual(p("にんじんを買う").title, "にんじんを買う")
+        XCTAssertEqual(p("のりを買う 明日").title, "のりを買う")
+        XCTAssertEqual(p("明日 にんじんを買う").title, "にんじんを買う")
+        XCTAssertEqual(p("明日15時に買い物").title, "買い物")
     }
 
     // MARK: 確認の一行

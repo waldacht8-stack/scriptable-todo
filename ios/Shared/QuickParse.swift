@@ -90,7 +90,9 @@ enum QuickParse {
 
         // 題名（取り出した語を除く）
         var title = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
-        while title.count > 1, let f = title.first, "にの、,".contains(f) {
+        // 先頭の「に・の」は、日時などを取り出したあとに残った助詞だけ消す（「にんじん」「のり」のように元から先頭なら残す）
+        let original = normalize(input).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        while title.count > 1, !original.hasPrefix(title), !original.contains(" " + title), let f = title.first, "にの、,".contains(f) {
             title = String(title.dropFirst()).trimmingCharacters(in: .whitespaces)
         }
         if title.isEmpty { title = input.trimmingCharacters(in: .whitespacesAndNewlines) }
