@@ -200,9 +200,10 @@ final class SplatImageCache {
         if let img = cached(url) { return img }
         var req = URLRequest(url: url, timeoutInterval: 30)
         req.setValue(SplatAPI.userAgent, forHTTPHeaderField: "User-Agent")
-        guard let (data, res) = try? await URLSession.shared.data(for: req),
-              (res as? HTTPURLResponse)?.statusCode ?? 200 < 300,
-              let img = UIImage(data: data) else { return nil }
+        guard let result = try? await URLSession.shared.data(for: req) else { return nil }
+        let data = result.0
+        let code = (result.1 as? HTTPURLResponse)?.statusCode ?? 200
+        guard code < 300, let img = UIImage(data: data) else { return nil }
         try? data.write(to: file(url), options: .atomic)
         memory.setObject(img, forKey: url.absoluteString as NSString)
         return img
@@ -308,9 +309,11 @@ struct SplatDropletRow: View {
         HStack(spacing: spacing) {
             ForEach(Array(results.enumerated()), id: \.offset) { i, r in
                 let visible = reduceMotion || i < shown
+                let anim: Animation = .spring(response: 0.32, dampingFraction: 0.45).delay(Double(i) * 0.07)
                 InkDroplet(win: r, size: size)
                     .scaleEffect(visible ? 1 : 0.2, anchor: .bottom)
                     .opacity(visible ? 1 : 0)
+                    .animation(reduceMotion ? nil : anim, value: shown)
             }
         }
         .onAppear { play() }
@@ -319,11 +322,12 @@ struct SplatDropletRow: View {
 
     private func play() {
         guard !reduceMotion else { shown = results.count; return }
-        shown = 0
-        for i in 0..<results.count {
-            let anim: Animation = .spring(response: 0.32, dampingFraction: 0.45).delay(Double(i) * 0.07)
-            withAnimation(anim) { shown = max(shown, i + 1) }
-        }
+        // いったん隠してから、次の描画で順に出す（遅れは滴ごとの animation で付ける）
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { shown = 0 }
+        let count = results.count
+        DispatchQueue.main.async { shown = count }
     }
 }
 
