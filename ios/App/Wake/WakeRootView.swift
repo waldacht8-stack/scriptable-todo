@@ -284,7 +284,7 @@ struct WakeSunBurst: View {
                 .scaleEffect(go ? 1.9 : 1)
             Circle().strokeBorder(color.opacity(go ? 0 : 0.6), lineWidth: 6)
                 .scaleEffect(go ? 1.6 : 1)
-            ForEach(0..<12, id: .self) { i in
+            ForEach(0..<12, id: \.self) { i in
                 Capsule().fill(color.opacity(go ? 0 : 0.8))
                     .frame(width: 6, height: 26)
                     .offset(y: go ? -190 : -110)
