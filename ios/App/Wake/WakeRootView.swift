@@ -149,11 +149,13 @@ struct WakeCardTitle: View {
 struct WakeBeforeView: View {
     @ObservedObject var model: WakeViewModel
     var body: some View {
-        // 夜中（就寝の3時間前から最初のアラームまで）は就寝を先頭に
-        if let plan = model.nextPlan, model.now > WakeLogic.bedtime(before: plan, settings: model.settings).addingTimeInterval(-3 * 3600) {
-            WakeBedtimeCard(plan: plan, bed: WakeLogic.bedtime(before: plan, settings: model.settings), now: model.now)
+        // 就寝の前後（3時間前〜2時間後）は就寝を先頭に。明け方は次のアラームを主役に
+        let bed: Date? = model.nextPlan.map { WakeLogic.bedtime(before: $0, settings: model.settings) }
+        let nearBed: Bool = bed.map { model.now > $0.addingTimeInterval(-3 * 3600) && model.now < $0.addingTimeInterval(2 * 3600) } ?? false
+        if nearBed, let plan = model.nextPlan, let bed {
+            WakeBedtimeCard(plan: plan, bed: bed, now: model.now)
         }
-        WakeNextCard(model: model)
+        WakeNextCard(model: model, compact: nearBed)
         if let plan = model.nextPlan { WakeStageTimeline(plan: plan, reached: 0) }
         if model.nextPlanAny != nil { WakeSkipCard(model: model) }
         WakeSummaryRow(model: model)
@@ -164,6 +166,8 @@ struct WakeBeforeView: View {
 /// 次の起床時刻（大きな数字）
 struct WakeNextCard: View {
     @ObservedObject var model: WakeViewModel
+    /// 就寝のカードの下に置くときは、数字を一回り小さく
+    var compact: Bool = false
     @Environment(\.palette) private var p
 
     var body: some View {
@@ -171,8 +175,8 @@ struct WakeNextCard: View {
             WakeCardTitle(text: "次のアラーム", icon: "alarm.fill")
             if let plan = model.nextPlan {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(WakeLogic.dayLabel(plan.first, now: model.now)).font(.title3.weight(.bold)).foregroundStyle(p.sub)
-                    Text(JP.time(plan.first)).font(.system(size: 72, weight: .heavy, design: p.fontDesign))
+                    Text(WakeLogic.dayLabel(plan.first, now: model.now)).font(Font.title3.weight(.bold)).foregroundStyle(p.sub)
+                    Text(JP.time(plan.first)).font(Font.system(size: compact ? 52 : 72, weight: .heavy, design: p.fontDesign))
                         .foregroundStyle(p.text).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                 }
                 let left: String = "あと \(WakeLogic.duration(plan.first.timeIntervalSince(model.now)))"
@@ -729,7 +733,7 @@ struct WakeEveningView: View {
         if let plan = model.nextPlan {
             WakeBedtimeCard(plan: plan, bed: WakeLogic.bedtime(before: plan, settings: model.settings), now: model.now)
         }
-        WakeNextCard(model: model)
+        WakeNextCard(model: model, compact: model.nextPlan != nil)
         if model.nextPlanAny != nil { WakeSkipCard(model: model) }
         if model.todaySession != nil { WakeResultCard(model: model) }
         WakeSummaryRow(model: model)

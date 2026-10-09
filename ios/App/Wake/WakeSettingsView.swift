@@ -8,6 +8,8 @@ struct WakeSettingsView: View {
     @State private var newRoutineMinutes = 5
     @State private var newBelonging = ""
     @State private var testMessage = ""
+    /// 並べ替え・削除のモード（英語の「Edit」ボタンの代わり）
+    @State private var editMode: EditMode = .inactive
 
     static let weekdayNames = ["日", "月", "火", "水", "木", "金", "土"]
     /// 月曜から並べる
@@ -79,7 +81,7 @@ struct WakeSettingsView: View {
             } header: {
                 Text("朝のルーティン")
             } footer: {
-                Text("右上の「編集」で並べ替え・削除ができます。")
+                Text("右上の「並べ替え」で、順番の入れ替えと削除ができます。")
             }
             .listRowBackground(p.card)
 
@@ -140,7 +142,14 @@ struct WakeSettingsView: View {
         .navigationTitle("起床の設定")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
-        .toolbar { EditButton() }
+        .environment(\.editMode, $editMode)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(editMode == .active ? "完了" : "並べ替え") {
+                    withAnimation { editMode = (editMode == .active) ? .inactive : .active }
+                }
+            }
+        }
     }
 
     private func dayRow(_ i: Int) -> some View {
