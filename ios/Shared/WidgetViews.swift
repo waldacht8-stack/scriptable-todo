@@ -302,8 +302,9 @@ struct TodoWidgetView: View {
         let daySize: CGFloat = small ? 11 : 15
         let shape = RoundedRectangle(cornerRadius: small ? 6 : 9, style: .continuous)
         return VStack(spacing: 1) {
-            Text(wd).font(.system(size: wdSize, weight: .bold))
+            Text(wd).font(.system(size: wdSize, weight: .bold)).lineLimit(1).minimumScaleFactor(0.6)
             Text("\(cal.component(.day, from: d))").font(.system(size: daySize, weight: .heavy).monospacedDigit())
+                .lineLimit(1).minimumScaleFactor(0.5)
             Circle().fill(dot).frame(width: 4, height: 4)
         }
         .foregroundStyle(fg)
@@ -471,7 +472,7 @@ struct TodoWidgetView: View {
             HStack(alignment: .top, spacing: 4) {
                 checkIcon("circle", size: 10, color: color)
                     .padding(.top, 1)
-                Text(item.title).font(titleFont).foregroundStyle(p.text).lineLimit(2)
+                Text(item.title).font(titleFont).foregroundStyle(p.text).lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
@@ -504,7 +505,7 @@ struct TodoWidgetView: View {
                     emptyText("やることはありません").padding(8)
                     Spacer(minLength: 0)
                 } else {
-                    FitList(items: rows, maxCount: maxCount, spacing: 0, moreColor: p.sub) { checkRow($0) }
+                    FitList(items: rows, maxCount: maxCount, spacing: 0, moreColor: p.sub, moreIndent: marginX + 6) { checkRow($0) }
                         .padding(.vertical, 2)
                 }
             }
@@ -667,6 +668,7 @@ struct FitList<Row: View>: View {
     let maxCount: Int
     var spacing: CGFloat = 4
     var moreColor: Color = .secondary
+    var moreIndent: CGFloat = 2
     @ViewBuilder let row: (TodoItem) -> Row
 
     var body: some View {
@@ -678,7 +680,7 @@ struct FitList<Row: View>: View {
                     ForEach(items.prefix(n)) { item in row(item) }
                     if items.count > n {
                         Text("ほか \(items.count - n) 件").font(.system(size: 10, weight: .bold)).foregroundStyle(moreColor)
-                            .padding(.leading, 2)
+                            .padding(.leading, moreIndent)
                     }
                 }
             }

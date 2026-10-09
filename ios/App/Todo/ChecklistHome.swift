@@ -42,6 +42,7 @@ struct ChecklistHome: View {
         }
         .scrollContentBackground(.hidden)
         .listSectionSpacing(.compact)
+        .contentMargins(.top, 4, for: .scrollContent)
         .environment(\.defaultMinListRowHeight, 46)
         .scrollDismissesKeyboard(.interactively)
         .paletteBackground(p)

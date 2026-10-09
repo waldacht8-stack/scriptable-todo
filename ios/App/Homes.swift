@@ -422,7 +422,7 @@ struct SectionBar: View {
 
 /// 見出しの2段目に出す件数（のこり・今日の完了）
 func countLine(open: Int, done: Int) -> String {
-    done > 0 ? "のこり \(open) 件・今日の完了 \(done) 件" : "のこり \(open) 件"
+    done > 0 ? "のこり \(open) 件・完了 \(done) 件" : "のこり \(open) 件"
 }
 
 // MARK: - ① フォーカス：1件ずつ大きなカード。右スワイプで完了、左で明日へ。右下の＋で追加
@@ -715,6 +715,7 @@ struct GroupHome: View {
             }
             .scrollContentBackground(.hidden)
             .listSectionSpacing(.compact)
+            .contentMargins(.top, 4, for: .scrollContent)
             inputBar
         }
         .paletteBackground(p)
@@ -743,7 +744,7 @@ struct GroupHome: View {
 
     private var inputBar: some View {
         HStack(spacing: 10) {
-            TextField("何をする？（例：明日15時 買い物）", text: $draft)
+            TextField("例：明日15時 買い物", text: $draft)
                 .submitLabel(.done)
                 .onSubmit {
                     let q = QuickParse.parse(draft)
