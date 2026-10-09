@@ -44,7 +44,7 @@ private struct InfoStubCard: View {
                 .background(p.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.headline).foregroundStyle(p.text)
-                Text(detail).font(.subheadline).foregroundStyle(p.sub).lineLimit(1)
+                Text(detail).font(.subheadline).foregroundStyle(p.sub).lineLimit(2)
             }
             Spacer(minLength: 4)
             Text("準備中").font(.caption.weight(.bold)).foregroundStyle(p.sub)

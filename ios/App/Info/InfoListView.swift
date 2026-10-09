@@ -41,6 +41,7 @@ struct InfoListView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        .contentMargins(.top, 4, for: .scrollContent)
         .animation(reduceMotion ? nil : motion.change, value: items.map(\.id))
         .refreshable { await model.refresh() }
     }
