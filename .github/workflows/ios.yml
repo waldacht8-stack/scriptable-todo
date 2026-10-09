@@ -144,7 +144,14 @@ jobs:
           shot shots/focus-settings-dawn.png -demo -theme dawn -tab 3 -focussettings
           shot shots/focus-celebrate-paper.png -demo -theme paper -tab 3 -focuscelebrate
           shot shots/focus-celebrate-dawn.png -demo -theme dawn -tab 3 -focuscelebrate
-          shot shots/settings.png -settings
+          # 設定画面を色合いごとに（暗い色合い・下の見出し・カスタマイズも）。カスタマイズは保存されて残るので最後に。
+          # どれも -demo を付ける（付けないと起床のアラーム許可の確認が出て、答えるまで以降の写真にも重なり続ける）
+          shot shots/settings-night.png -settings -demo -theme night
+          shot shots/settings-contrast.png -settings -demo -theme contrast -settingsSection custom
+          shot shots/settings-ocean.png -settings -demo -theme ocean -settingsSection notify
+          shot shots/settings-coffee.png -settings -demo -theme coffee -settingsSection data -density compact
+          shot shots/settings-sakura.png -settings -demo -theme sakura -accent purple -corner small -font serif -density regular
+          shot shots/settings.png -settings -demo -theme focus -accent theme -corner theme -font theme -density regular
 
       - name: 実機用にビルド（署名なし）して IPA を作る
         run: |
