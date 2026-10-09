@@ -106,14 +106,14 @@ jobs:
           for tab in 1 2 3 4; do
             shot "shots/tab-$tab.png" -demo -theme focus -tab $tab
           done
-          shot shots/settings.png -settings
           # 設定画面を色合いごとに（暗い色合い・下の見出し・カスタマイズも）。カスタマイズは保存されて残るので最後に。
-          # -demo を付ける（付けないと起床のアラーム許可の確認が出て、写真に重なる）
+          # -demo を付けて、-demo なしの settings.png より前に撮る（起床のアラーム許可の確認が出ると、答えるまで写真に重なり続ける）
           shot shots/settings-night.png -settings -demo -theme night
           shot shots/settings-contrast.png -settings -demo -theme contrast -settingsSection custom
           shot shots/settings-ocean.png -settings -demo -theme ocean -settingsSection notify
           shot shots/settings-coffee.png -settings -demo -theme coffee -settingsSection data -density compact
           shot shots/settings-sakura.png -settings -demo -theme sakura -accent purple -corner small -font serif -density regular
+          shot shots/settings.png -settings -demo -theme focus -accent theme -corner theme -font theme -density regular
 
       - name: 実機用にビルド（署名なし）して IPA を作る
         run: |
