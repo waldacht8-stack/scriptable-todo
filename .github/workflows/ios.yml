@@ -134,6 +134,16 @@ jobs:
           shot shots/wake-evening.png -demo -theme night -tab 1 -wakePhase evening
           shot shots/wake-settings.png -demo -theme paper -tab 1 -wakeShot settings
           shot shots/wake-records.png -demo -theme focus -tab 1 -wakeShot records
+          # 習慣・集中：色合い・空・20件と長い名前・記録・編集・時間の設定
+          shot shots/habit-night.png -demo -theme night -tab 2
+          shot shots/habit-records-paper.png -demo -theme paper -tab 2 -habitrecords
+          shot shots/habit-empty-dawn.png -habitempty -theme dawn -tab 2
+          shot shots/habit-many.png -habitmany -theme focus -tab 2
+          shot shots/habit-edit-night.png -demo -theme night -tab 2 -habitedit
+          shot shots/focus-night.png -demo -theme night -tab 3
+          shot shots/focus-settings-dawn.png -demo -theme dawn -tab 3 -focussettings
+          shot shots/focus-celebrate-paper.png -demo -theme paper -tab 3 -focuscelebrate
+          shot shots/focus-celebrate-dawn.png -demo -theme dawn -tab 3 -focuscelebrate
           shot shots/settings.png -settings
 
       - name: 実機用にビルド（署名なし）して IPA を作る

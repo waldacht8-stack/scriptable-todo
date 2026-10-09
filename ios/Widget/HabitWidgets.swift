@@ -15,6 +15,7 @@ struct HabitWidgetData {
     var rows: [HabitWidgetRow]
     var progress: Double
     var palette: Palette
+    var motion: MotionStyle = .snappy
 
     var doneCount: Int { rows.filter(\.done).count }
     var next: HabitWidgetRow? { rows.first { !$0.done } }
@@ -23,8 +24,9 @@ struct HabitWidgetData {
         let habits = HabitData.habits()
         let log = HabitData.log()
         let rows = habits.filter { $0.isActive(on: now) }.map { HabitWidgetRow(habit: $0, count: HabitData.count(log, $0, now)) }
+        let theme: AppTheme = AppTheme.from(SettingsData.load().theme)
         return HabitWidgetData(rows: rows, progress: HabitData.dayProgress(habits, log, on: now),
-                               palette: AppTheme.from(SettingsData.load().theme).palette)
+                               palette: theme.palette, motion: MotionStyle.from(theme))
     }
 }
 
@@ -69,8 +71,11 @@ struct HabitWidget: Widget {
 
 struct HabitWidgetView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let data: HabitWidgetData
     private var p: Palette { data.palette }
+    /// 前の表示からの変化の動き（テーマに合わせる。「動きを減らす」ではなし）
+    private var change: Animation? { data.motion.change(reduced: reduceMotion) }
 
     var body: some View {
         Group {
@@ -92,6 +97,7 @@ struct HabitWidgetView: View {
                 ring(size: 30, line: 5)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text("\(data.doneCount)").font(.system(size: 22, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
+                        .contentTransition(.numericText(value: Double(data.doneCount)))
                     Text("/\(data.rows.count)").font(.caption.weight(.bold)).foregroundStyle(p.sub)
                 }
                 Spacer(minLength: 0)
@@ -109,6 +115,7 @@ struct HabitWidgetView: View {
                     ring(size: 76, line: 9)
                     VStack(spacing: 0) {
                         Text("\(data.doneCount)").font(.system(size: 26, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
+                            .contentTransition(.numericText(value: Double(data.doneCount)))
                         Text("/ \(data.rows.count)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
                     }
                 }
@@ -129,6 +136,7 @@ struct HabitWidgetView: View {
 
     private func ring(size: CGFloat, line: CGFloat) -> some View {
         HabitRing(fraction: data.progress, color: p.accent, lineWidth: line).frame(width: size, height: size)
+            .animation(change, value: data.progress)
     }
 
     private func rowButton(_ row: HabitWidgetRow, compact: Bool) -> some View {
@@ -140,18 +148,23 @@ struct HabitWidgetView: View {
                     Image(systemName: row.done ? "checkmark" : row.habit.icon)
                         .font(.system(size: compact ? 10 : 11, weight: .bold))
                         .foregroundStyle(row.done ? row.habit.tint.onColor(p) : c)
+                        .contentTransition(.symbolEffect(.replace))
                 }
                 .frame(width: compact ? 22 : 24, height: compact ? 22 : 24)
+                .animation(change, value: row.done)
                 Text(row.habit.name).font(.caption.weight(.semibold))
                     .foregroundStyle(row.done ? p.sub : p.text).lineLimit(1)
                 Spacer(minLength: 0)
                 if row.habit.isCount {
                     Text("\(row.count)/\(row.habit.target)").font(.caption2.monospacedDigit().weight(.bold))
                         .foregroundStyle(row.done ? c : p.sub)
+                        .contentTransition(.numericText(value: Double(row.count)))
                 }
             }
         }
         .buttonStyle(.plain)
+        // 押してから描き直されるまでの間、押した行を薄くして「受け付けた」ことを見せる
+        .invalidatableContent()
     }
 
     // MARK: ロック画面
@@ -164,6 +177,7 @@ struct HabitWidgetView: View {
                     Image(systemName: next.habit.icon)
                 } currentValueLabel: {
                     Text("\(data.doneCount)/\(data.rows.count)")
+                        .contentTransition(.numericText(value: Double(data.doneCount)))
                 }
                 .gaugeStyle(.accessoryCircularCapacity)
             }
@@ -195,6 +209,7 @@ struct HabitWidgetView: View {
                 Text(data.rows.isEmpty ? "習慣はありません" : "すべて達成！").font(.caption.weight(.bold))
             }
             ProgressView(value: data.progress)
+                .animation(change, value: data.progress)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

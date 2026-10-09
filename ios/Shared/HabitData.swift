@@ -276,6 +276,42 @@ enum HabitData {
         }
         return (habits, log)
     }
+
+    /// 画面確認用（起動引数 -habitmany）：20件、とても長い名前も含む
+    static func demoMany(now: Date = .now) -> ([Habit], HabitLog) {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        let created = cal.date(byAdding: .day, value: -60, to: today) ?? today
+        let names: [String] = [
+            "寝る前にスマートフォンを置いて、ゆっくり深呼吸を十回する", "水を飲む", "朝のストレッチ", "読書", "英単語",
+            "散歩", "日記を書く", "早起き", "筋トレ", "瞑想",
+            "部屋の片づけ", "野菜を食べる", "ピアノの練習", "家計簿をつける", "階段を使う",
+            "ビタミンを飲む", "夜ふかししない", "姿勢を正す", "植物に水やり", "週末の作り置き",
+        ]
+        let icons: [String] = ["moon.stars.fill", "drop.fill", "figure.flexibility", "book.fill", "character.book.closed.fill",
+                               "figure.walk", "pencil", "sun.max.fill", "dumbbell.fill", "brain.head.profile"]
+        let colors: [HabitColor] = HabitColor.allCases
+        var habits: [Habit] = []
+        for (i, n) in names.enumerated() {
+            let isCount: Bool = i % 5 == 1
+            let days: [Int] = i == 19 ? [1, 7] : Array(1...7)
+            habits.append(Habit(name: n, icon: icons[i % icons.count], color: colors[i % colors.count],
+                                target: isCount ? 8 : 1, unit: isCount ? "杯" : "", weekdays: days, createdAt: created))
+        }
+        var log: HabitLog = [:]
+        for back in 0...59 {
+            guard let d = cal.date(byAdding: .day, value: -back, to: today) else { continue }
+            for (i, h) in habits.enumerated() where h.isActive(on: d) {
+                let roll: Int = (back * 31 + i * 17) % 10
+                if back == 0 {
+                    set(&log, h, d, i % 3 == 0 ? h.target : (h.isCount ? 3 : 0))
+                } else if roll < 7 {
+                    set(&log, h, d, h.target)
+                }
+            }
+        }
+        return (habits, log)
+    }
 }
 
 // MARK: - 共通の部品（アプリとウィジェット）
@@ -300,4 +336,55 @@ struct HabitRing: View {
                 .opacity(shown > 0 ? 1 : 0)
         }
     }
+}
+
+/// 下から満ちていく液体の形。level（0〜1）だけで動き、途中は水面が波打つ（0 と 1 では平ら）
+struct HabitLiquid: Shape {
+    var level: Double
+
+    var animatableData: Double {
+        get { level }
+        set { level = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let lv: Double = max(0, min(1, level))
+        var path = Path()
+        guard lv > 0 else { return path }
+        // 水面の高さ。波の分だけ上下に余裕を持たせ、1 のときは全体を覆う
+        let amplitude: Double = sin(lv * .pi) * Double(min(10, rect.height * 0.12))
+        let surface: Double = Double(rect.maxY) - (Double(rect.height) + amplitude) * lv
+        let phase: Double = lv * .pi * 3
+        let width: Double = Double(rect.width)
+        let steps: Int = 24
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        for i in 0...steps {
+            let x: Double = width * Double(i) / Double(steps)
+            let y: Double = surface + amplitude * sin(phase + x / max(1, width) * .pi * 2)
+            path.addLine(to: CGPoint(x: Double(rect.minX) + x, y: y))
+        }
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - 動き（テーマごとの MotionStyle に、習慣・集中で使う分を足す）
+
+extension MotionStyle {
+    /// 習慣を達成したときに色が満ちる速さ（テーマの性格に合わせる）
+    var fill: Animation {
+        switch self {
+        case .snappy: .easeInOut(duration: 0.5)
+        case .smooth: .smooth(duration: 0.9)
+        case .bouncy: .spring(duration: 0.8, bounce: 0.35)
+        case .gentle: .easeOut(duration: 0.6)
+        }
+    }
+
+    /// 「動きを減らす」のときは nil（すぐ切り替える）
+    func tap(reduced: Bool) -> Animation? { reduced ? nil : tap }
+    func change(reduced: Bool) -> Animation? { reduced ? nil : change }
+    func fill(reduced: Bool) -> Animation? { reduced ? nil : fill }
+    func appear(reduced: Bool) -> AnyTransition { reduced ? .opacity : appear }
 }
