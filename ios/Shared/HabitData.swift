@@ -379,6 +379,7 @@ extension MotionStyle {
         case .smooth: .smooth(duration: 0.9)
         case .bouncy: .spring(duration: 0.8, bounce: 0.35)
         case .gentle: .easeOut(duration: 0.6)
+        case .crisp: .linear(duration: 0.2)
         }
     }
 

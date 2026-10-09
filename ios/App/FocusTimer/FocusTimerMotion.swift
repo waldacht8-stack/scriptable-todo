@@ -152,7 +152,7 @@ struct FocusCelebrationView: View {
             // クリーン：輪が一度だけ広がる
             Circle().fill(p.accent.opacity(0.14))
                 .scaleEffect(shown ? 1 : 0.3)
-        case .gentle:
+        case .gentle, .crisp:   // 手帳・モノクロ・ハイコントラスト：飾りなし
             EmptyView()
         }
     }
