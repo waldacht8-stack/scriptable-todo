@@ -78,6 +78,9 @@ struct WakeWidgetView: View {
             default: small
             }
         }
+        // チェックインの前後で、下から押し上げるように切り替える
+        .id(checked ? "after" : "before")
+        .transition(.push(from: .bottom))
         .fontDesign(p.fontDesign)
     }
 
@@ -88,6 +91,7 @@ struct WakeWidgetView: View {
             if let dep = departureAhead {
                 Text("出発まで").font(.caption.weight(.bold)).foregroundStyle(p.sub)
                 Text(dep, style: .timer).font(.system(size: 30, weight: .heavy, design: p.fontDesign))
+                    .contentTransition(.numericText())
                     .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
                 Spacer(minLength: 0)
                 stepButton
@@ -95,7 +99,7 @@ struct WakeWidgetView: View {
                 Text("今朝の起床").font(.caption.weight(.bold)).foregroundStyle(p.sub)
                 Text(s.checkInAt.map { JP.time($0) } ?? "").font(.system(size: 30, weight: .heavy, design: p.fontDesign))
                     .foregroundStyle(p.text)
-                Text("\(s.score ?? 0)点").font(.headline).foregroundStyle(p.accent)
+                Text("\(s.score ?? 0)点").font(.headline).foregroundStyle(p.accent).contentTransition(.numericText())
                 Spacer(minLength: 0)
                 nextLine
             } else {
@@ -112,13 +116,14 @@ struct WakeWidgetView: View {
                 if let dep = departureAhead {
                     Text("出発まで").font(.caption.weight(.bold)).foregroundStyle(p.sub)
                     Text(dep, style: .timer).font(.system(size: 36, weight: .heavy, design: p.fontDesign))
-                        .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
+                        .contentTransition(.numericText())
+                    .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
                     Text("出発 \(JP.time(dep))").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
                 } else if checked {
                     Text("今朝の起床").font(.caption.weight(.bold)).foregroundStyle(p.sub)
                     Text(s.checkInAt.map { JP.time($0) } ?? "").font(.system(size: 36, weight: .heavy, design: p.fontDesign))
                         .foregroundStyle(p.text)
-                    Text("\(s.score ?? 0)点").font(.headline).foregroundStyle(p.accent)
+                    Text("\(s.score ?? 0)点").font(.headline).foregroundStyle(p.accent).contentTransition(.numericText())
                 } else {
                     nextAlarmBlock(size: 40)
                 }
@@ -144,18 +149,35 @@ struct WakeWidgetView: View {
         }
     }
 
+    /// 起床中の一言（まだ鳴っていなければ「まもなく」）
+    private var windowNote: String {
+        if s.reached == 0 { return "1回目のアラームの前です" }
+        if s.nextStage == nil { return "最後のアラームが鳴りました" }
+        return "\(s.reached)回目まで鳴りました"
+    }
+
     private func nextAlarmBlock(size: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Label(s.phase == .window ? "起床中" : "次のアラーム", systemImage: "alarm.fill")
-                .font(.caption.weight(.bold)).foregroundStyle(p.sub)
-            if let n = s.next {
-                Text(JP.time(s.phase == .window ? (s.nextStage?.at ?? n.first) : n.first))
-                    .font(.system(size: size, weight: .heavy, design: p.fontDesign))
+            Label(s.phase == .window ? "起床中" : "次のアラーム",
+                  systemImage: s.phase == .window ? "alarm.waves.left.and.right.fill" : "alarm.fill")
+                .contentTransition(.symbolEffect(.replace))
+                .font(Font.caption.weight(.bold)).foregroundStyle(p.sub)
+            if s.phase == .window, let t = s.nextStage?.at ?? s.today?.last {
+                // 起床中は今日の次のアラーム（全部鳴った後は最後の時刻）
+                Text(JP.time(t))
+                    .font(Font.system(size: size, weight: .heavy, design: p.fontDesign))
+                    .contentTransition(.numericText())
                     .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
-                Text(s.phase == .window ? "\(s.reached)回目まで鳴りました" : "\(WakeLogic.dayLabel(n.first, now: entry.date))・アラーム\(n.stages.count)回")
-                    .font(.caption.weight(.semibold)).foregroundStyle(p.accent).lineLimit(1)
+                Text(windowNote).font(Font.caption.weight(.semibold)).foregroundStyle(p.accent).lineLimit(1)
+            } else if let n = s.next {
+                Text(JP.time(n.first))
+                    .font(Font.system(size: size, weight: .heavy, design: p.fontDesign))
+                    .contentTransition(.numericText())
+                    .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
+                let note: String = "\(WakeLogic.dayLabel(n.first, now: entry.date))・アラーム\(n.stages.count)回"
+                Text(note).font(Font.caption.weight(.semibold)).foregroundStyle(p.accent).lineLimit(1)
             } else {
-                Text("予定なし").font(.title2.weight(.heavy)).foregroundStyle(p.text)
+                Text("アラームなし").font(.title2.weight(.heavy)).foregroundStyle(p.text)
             }
         }
     }
@@ -178,7 +200,7 @@ struct WakeWidgetView: View {
     private var nextLine: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("次の起床").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
-            Text(s.next.map { "\(WakeLogic.dayLabel($0.first, now: entry.date)) \(JP.time($0.first))" } ?? "予定なし")
+            Text(s.next.map { "\(WakeLogic.dayLabel($0.first, now: entry.date)) \(JP.time($0.first))" } ?? "アラームなし")
                 .font(.caption.weight(.bold)).foregroundStyle(p.text).lineLimit(1)
         }
     }
@@ -191,6 +213,7 @@ struct WakeWidgetView: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
                     .background(p.accent, in: RoundedRectangle(cornerRadius: min(p.radius, 12), style: .continuous))
                     .foregroundStyle(p.onAccent)
+                    .invalidatableContent()   // 押した直後、反映されるまで薄く表示
             }
             .buttonStyle(.plain)
         } else if let from = s.checkInFrom {
@@ -227,7 +250,7 @@ struct WakeWidgetView: View {
         } else if let n = s.next {
             Text("\(WakeLogic.dayLabel(n.first, now: entry.date)) \(JP.time(n.first)) 起床")
         } else {
-            Text("起床の予定なし")
+            Text("起床アラームなし")
         }
     }
 
@@ -269,7 +292,7 @@ struct WakeWidgetView: View {
             } else if !checked && s.phase == .window {
                 Button(intent: WakeCheckInIntent()) {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("\(s.reached)回目まで鳴りました").font(.caption2.weight(.semibold))
+                        Text(windowNote).font(Font.caption2.weight(.semibold))
                         Label("起きた！", systemImage: "sun.max.fill").font(.headline.weight(.heavy))
                         Text(s.nextStage.map { "次は \(JP.time($0.at))" } ?? "最後のアラーム").font(.caption2)
                     }
@@ -283,7 +306,7 @@ struct WakeWidgetView: View {
                 }
             } else {
                 Text("起床").font(.caption2.weight(.semibold))
-                Text("予定なし").font(.headline)
+                Text("アラームなし").font(.headline)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

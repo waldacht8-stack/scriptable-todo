@@ -128,6 +128,12 @@ jobs:
           for tab in 1 2 3 4; do
             shot "shots/tab-$tab.png" -demo -theme focus -tab $tab
           done
+          # 起床の時間帯（起床前・起床中・夜）と、起床の設定・記録
+          shot shots/wake-before.png -demo -theme focus -tab 1 -wakePhase before
+          shot shots/wake-window.png -demo -theme dawn -tab 1 -wakePhase window
+          shot shots/wake-evening.png -demo -theme night -tab 1 -wakePhase evening
+          shot shots/wake-settings.png -demo -theme paper -tab 1 -wakeShot settings
+          shot shots/wake-records.png -demo -theme focus -tab 1 -wakeShot records
           shot shots/settings.png -settings
 
       - name: 実機用にビルド（署名なし）して IPA を作る

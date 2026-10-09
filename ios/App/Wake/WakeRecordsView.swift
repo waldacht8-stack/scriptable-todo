@@ -9,7 +9,7 @@ struct WakeRecordsView: View {
     private struct Bar: Identifiable {
         var id: String { day }
         let day: String
-        let label: String
+        let date: Date
         let score: Int
         let missed: Bool
     }
@@ -21,7 +21,7 @@ struct WakeRecordsView: View {
             guard let d = cal.date(byAdding: .day, value: -i, to: today) else { return nil }
             let k = WakeLogic.key(d)
             guard let s = model.sessions.first(where: { $0.day == k }) else { return nil }
-            return Bar(day: k, label: "\(cal.component(.month, from: d))/\(cal.component(.day, from: d))", score: s.score, missed: s.isMissed)
+            return Bar(day: k, date: d, score: s.score, missed: s.isMissed)
         }
     }
 
@@ -35,11 +35,23 @@ struct WakeRecordsView: View {
                         Text("まだ記録がありません").foregroundStyle(p.sub)
                     } else {
                         Chart(bars) { b in
-                            BarMark(x: .value("日", b.label), y: .value("点", b.score))
+                            BarMark(x: .value("日", b.date, unit: .day), y: .value("点", b.score))
                                 .foregroundStyle(b.missed ? p.overdue : p.accent)
                                 .cornerRadius(4)
                         }
                         .chartYScale(domain: 0...100)
+                        // 日付は1日おきに「9日」のように短く（狭い画面で切れないように）
+                        .chartXAxis {
+                            AxisMarks(values: .stride(by: .day, count: 2)) { value in
+                                AxisGridLine()
+                                AxisValueLabel {
+                                    if let d = value.as(Date.self) {
+                                        let day: Int = Calendar.current.component(.day, from: d)
+                                        Text("\(day)日")
+                                    }
+                                }
+                            }
+                        }
                         .frame(height: 180)
                     }
                 }
