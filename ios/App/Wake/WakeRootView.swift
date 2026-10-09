@@ -5,9 +5,19 @@ struct WakeRootView: View {
     @StateObject private var model = WakeViewModel()
     @Environment(\.palette) private var p
     @Environment(\.scenePhase) private var scene
+    // 起動引数 -wakeShot settings|records で、その画面を開いた状態にする（画面写真用）
+    @State private var path: [WakeRoute] = {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-wakeShot"), i + 1 < args.count else { return [] }
+        switch args[i + 1] {
+        case "settings": return [.settings]
+        case "records": return [.records]
+        default: return []
+        }
+    }()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             TimelineView(.periodic(from: .now, by: 30)) { _ in
                 ScrollView {
                     VStack(spacing: 16) {
@@ -69,19 +79,39 @@ struct WakeHeader: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(JP.date(model.now)).font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
-                Text(title).font(.system(size: 34, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
-                    .lineLimit(1).minimumScaleFactor(0.7)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(JP.date(model.now)).font(Font.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+                    Text(title).font(Font.system(size: 34, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+                Spacer(minLength: 0)
+                SettingsButton()   // アプリ全体の設定（歯車）
             }
-            Spacer(minLength: 0)
-            NavigationLink(value: WakeRoute.records) { WakeRoundIcon(name: "chart.bar.fill") }
-                .accessibilityLabel("記録")
-            NavigationLink(value: WakeRoute.settings) { WakeRoundIcon(name: "gearshape.fill") }
-                .accessibilityLabel("起床の設定")
+            // 起床だけの設定と記録（アプリの設定の歯車と区別するため、文字つきのボタンにする）
+            HStack(spacing: 8) {
+                NavigationLink(value: WakeRoute.settings) { WakePill(text: "アラームの設定", icon: "alarm") }
+                NavigationLink(value: WakeRoute.records) { WakePill(text: "起床の記録", icon: "chart.bar.fill") }
+                Spacer(minLength: 0)
+            }
         }
         .padding(.top, 16)
+    }
+}
+
+/// 見出しの下の小さなボタン
+struct WakePill: View {
+    @Environment(\.palette) private var p
+    let text: String
+    let icon: String
+    var body: some View {
+        Label(text, systemImage: icon)
+            .font(Font.subheadline.weight(.semibold))
+            .lineLimit(1)
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .foregroundStyle(p.text)
+            .background(p.card, in: Capsule())
     }
 }
 
@@ -110,10 +140,13 @@ struct WakeCardTitle: View {
 struct WakeBeforeView: View {
     @ObservedObject var model: WakeViewModel
     var body: some View {
+        // 夜中（就寝の3時間前から最初のアラームまで）は就寝を先頭に
+        if let plan = model.nextPlan, model.now > WakeLogic.bedtime(before: plan, settings: model.settings).addingTimeInterval(-3 * 3600) {
+            WakeBedtimeCard(plan: plan, bed: WakeLogic.bedtime(before: plan, settings: model.settings), now: model.now)
+        }
         WakeNextCard(model: model)
-        WakeLockedCheckIn(model: model)
         if let plan = model.nextPlan { WakeStageTimeline(plan: plan, reached: 0) }
-        WakeSkipCard(model: model)
+        if model.nextPlanAny != nil { WakeSkipCard(model: model) }
         WakeSummaryRow(model: model)
         if !model.message.isEmpty { WakeMessage(text: model.message) }
     }
@@ -140,11 +173,35 @@ struct WakeNextCard: View {
                 Text(detail).font(Font.footnote.weight(.semibold)).foregroundStyle(p.sub)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("予定はありません").font(.title.bold()).foregroundStyle(p.text)
-                Text("設定で起きる曜日と時刻を決めてください").font(.footnote).foregroundStyle(p.sub)
+                let empty: String = model.settings.paused ? "アラームを止めています" : "アラームはありません"
+                let hint: String = model.settings.paused
+                    ? "「アラームの設定」で「すべてのアラームを止める」をオフにすると鳴ります"
+                    : "「アラームの設定」で、起きる曜日と時刻を決めてください"
+                Text(empty).font(Font.title2.weight(.bold)).foregroundStyle(p.text)
+                Text(hint).font(Font.footnote).foregroundStyle(p.sub).fixedSize(horizontal: false, vertical: true)
+                NavigationLink(value: WakeRoute.settings) {
+                    Label("アラームの設定を開く", systemImage: "alarm").font(Font.subheadline.weight(.bold))
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .foregroundStyle(p.onAccent)
+                        .background(p.accent, in: Capsule())
+                }
+                .padding(.top, 4)
             }
+            if let note = todayNote {
+                Label(note, systemImage: "moon.zzz.fill").font(Font.footnote.weight(.semibold)).foregroundStyle(p.sub)
+                    .padding(.top, 2)
+            }
+            WakeLockedCheckIn(model: model)
         }
         .paletteCard(p, padding: 22)
+    }
+
+    /// 今日のアラームがオフのとき、その理由（例：今日は鳴りません（祝日））
+    private var todayNote: String? {
+        guard let t = model.todayPlan, let reason = t.skipReason, model.now < t.last,
+              !model.settings.paused else { return nil }
+        if reason.hasPrefix("祝日") { return "今日は\(reason)のため鳴りません" }
+        return "今日のアラームはオフにしています"
     }
 }
 
@@ -219,7 +276,7 @@ struct WakeSkipCard: View {
                     .frame(width: 48, height: 48)
                     .background(skipped ? p.accent : p.accent.opacity(0.14), in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(skipped ? "明日だけオフにしています" : "明日だけオフ").font(.headline).foregroundStyle(p.text)
+                    Text(skipTitle(skipped)).font(Font.headline).foregroundStyle(p.text)
                     Text(skipText).font(.caption).foregroundStyle(p.sub).lineLimit(2)
                 }
                 Spacer(minLength: 0)
@@ -229,6 +286,14 @@ struct WakeSkipCard: View {
             .paletteCard(p)
         }
         .buttonStyle(.plain)
+    }
+
+    /// 「明日だけオフ」。夜中に今朝の分を止めるときは「今日だけオフ」
+    private func skipTitle(_ skipped: Bool) -> String {
+        let plan: WakePlan? = skipped ? model.nextPlanAny : model.nextPlan
+        let day: String = plan.map { WakeLogic.dayLabel($0.dayStart, now: model.now) } ?? "明日"
+        let d: String = (day == "今日" || day == "明日") ? day : "次の起床日"
+        return skipped ? "\(d)だけオフにしています" : "\(d)だけオフ"
     }
 
     private var skipText: String {
@@ -248,7 +313,7 @@ struct WakeSummaryRow: View {
             HStack(spacing: 10) {
                 tile("7日の平均", WakeLogic.average(model.sessions, days: 7, now: model.now).map { "\($0)" } ?? "―", "点")
                 tile("連続", "\(WakeLogic.streak(model.sessions))", "日")
-                tile("記録", "\(model.sessions.count)", "日")
+                tile("記録した日", "\(model.sessions.count)", "日")
             }
         }
         .buttonStyle(.plain)
@@ -326,13 +391,44 @@ struct WakeMorningView: View {
     @StateObject private var weather = WakeWeatherModel()
 
     var body: some View {
-        WakeResultCard(model: model)
-        if let dep = model.departure, dep > model.now { WakeCountdownCard(model: model, departure: dep) }
-        WakeWeatherCard(weather: weather).onAppear { weather.load(demo: model.demo) }
-        if !model.settings.routine.isEmpty { WakeRoutineCard(model: model) }
-        if !model.settings.belongings.isEmpty { WakeBelongingsCard(model: model) }
+        // 出発前は「出発まで」とルーティンを先頭に。起床の結果は小さく
+        if let dep = model.departure, dep > model.now {
+            WakeResultStrip(model: model)
+            WakeCountdownCard(model: model, departure: dep)
+            if !model.settings.routine.isEmpty { WakeRoutineCard(model: model) }
+            if !model.settings.belongings.isEmpty { WakeBelongingsCard(model: model) }
+            WakeWeatherCard(weather: weather).onAppear { weather.load(demo: model.demo) }
+        } else {
+            WakeResultCard(model: model)
+            WakeWeatherCard(weather: weather).onAppear { weather.load(demo: model.demo) }
+        }
         WakeTodoCard(now: model.now)
         WakeUndoCard(model: model)
+    }
+}
+
+/// 今朝の結果（出発前の小さな表示）
+struct WakeResultStrip: View {
+    @ObservedObject var model: WakeViewModel
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        let s = model.todaySession
+        let time: String = model.checkInAt.map { JP.time($0) } ?? "--:--"
+        let score: String = "\(s?.score ?? 0)点"
+        let streak: Int = WakeLogic.streak(model.sessions)
+        HStack(spacing: 12) {
+            Image(systemName: "sun.max.fill").font(Font.title3).foregroundStyle(p.accent)
+            Text("\(time) に起床").font(Font.headline).foregroundStyle(p.text).monospacedDigit()
+            if streak > 1 {
+                Text("\(streak)日連続").font(Font.footnote.weight(.semibold)).foregroundStyle(p.sub)
+            }
+            Spacer(minLength: 0)
+            Text(score).font(Font.headline.weight(.heavy)).foregroundStyle(p.onAccent)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(p.accent, in: Capsule())
+        }
+        .paletteCard(p, padding: 16)
     }
 }
 
@@ -526,8 +622,7 @@ struct WakeEveningView: View {
             WakeBedtimeCard(plan: plan, bed: WakeLogic.bedtime(before: plan, settings: model.settings), now: model.now)
         }
         WakeNextCard(model: model)
-        WakeLockedCheckIn(model: model)
-        WakeSkipCard(model: model)
+        if model.nextPlanAny != nil { WakeSkipCard(model: model) }
         if model.todaySession != nil { WakeResultCard(model: model) }
         WakeSummaryRow(model: model)
         if model.checkInAt != nil { WakeUndoCard(model: model) }
@@ -542,7 +637,7 @@ struct WakeBedtimeCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            WakeCardTitle(text: "就寝の予定", icon: "bed.double.fill")
+            WakeCardTitle(text: "就寝", icon: "bed.double.fill")
             Text(JP.time(bed)).font(Font.system(size: 64, weight: .heavy, design: p.fontDesign))
                 .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
             let status: String = bed > now ? "あと \(WakeLogic.duration(bed.timeIntervalSince(now)))" : "就寝の時刻を過ぎています"

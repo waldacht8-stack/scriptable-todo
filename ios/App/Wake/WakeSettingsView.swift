@@ -124,7 +124,7 @@ struct WakeSettingsView: View {
             Section {
                 Button("アラームを今すぐ予約し直す") { model.scheduleAll() }
                 if !model.message.isEmpty { Text(model.message).font(.footnote).foregroundStyle(p.sub) }
-                Button("1分後にテストアラーム") {
+                Button("1分後にテストで鳴らす") {
                     Task { testMessage = await AlarmTest.scheduleInOneMinute() }
                 }
                 if !testMessage.isEmpty { Text(testMessage).font(.footnote).foregroundStyle(p.sub) }
