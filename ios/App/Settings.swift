@@ -98,7 +98,7 @@ private struct SettingsContent: View {
 
             TodoSettingsSections()
 
-            InfoSection().id("info")
+            AppInfoSection().id("info")
         }
         .sensoryFeedback(.selection, trigger: store.theme)
         .sensoryFeedback(.selection, trigger: store.layout)
@@ -348,7 +348,7 @@ struct ChipPicker<V: Identifiable & Hashable>: View {
 
 // MARK: - 情報
 
-private struct InfoSection: View {
+private struct AppInfoSection: View {
     @Environment(\.palette) private var p
 
     var body: some View {
