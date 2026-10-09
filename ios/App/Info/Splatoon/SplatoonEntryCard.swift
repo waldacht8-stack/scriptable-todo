@@ -26,7 +26,6 @@ struct SplatoonEntryCard: View {
         ZStack(alignment: .topTrailing) {
             SplatInk.base
             InkSplash(color: SplatInk.purple.opacity(0.7), size: 90).offset(x: 30, y: -30)
-            InkSplash(color: SplatInk.lime.opacity(0.18), size: 70).offset(x: -260, y: 150)
         }
     }
 

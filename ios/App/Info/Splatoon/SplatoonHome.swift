@@ -12,12 +12,12 @@ struct SplatoonHome: View {
             if let s = store.schedule {
                 SplatTimelineSection(schedule: s, slotIndex: $slotIndex)
                 SplatEventSection(schedule: s)
-                SplatSalmonSection(schedule: s)
+                SplatSalmonSection(schedule: s).id("salmon")
                 if let f = s.fest { SplatFestSection(fest: f) }
             } else {
                 SplatScheduleEmpty()
             }
-            SplatRecordsSection()
+            SplatRecordsSection().id("records")
             SplatSettingsSection()
             SplatCredits()
         }
@@ -26,9 +26,12 @@ struct SplatoonHome: View {
         .padding(.bottom, 40)
         .frame(maxWidth: .infinity, alignment: .leading)
 
-        let scroll = ScrollView { content }
-            .scrollDismissesKeyboard(.interactively)
-            .refreshable { await store.refreshAll() }
+        let scroll = ScrollViewReader { proxy in
+            ScrollView { content }
+                .onAppear { Self.scrollForShot(proxy) }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .refreshable { await store.refreshAll() }
         scroll
             .background(InkBlobBackground())
             .environment(\.colorScheme, .dark)
@@ -37,6 +40,14 @@ struct SplatoonHome: View {
             .toolbarBackground(SplatInk.base, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .task { await store.refreshIfNeeded() }
+    }
+
+    /// 画面写真用：起動引数 -splatscroll salmon|records でその欄まで下げておく
+    private static func scrollForShot(_ proxy: ScrollViewProxy) {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-splatscroll"), i + 1 < args.count else { return }
+        let target = args[i + 1]
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo(target, anchor: .top) }
     }
 }
 
