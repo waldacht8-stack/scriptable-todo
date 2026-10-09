@@ -39,7 +39,7 @@ enum SplatAPI {
         let locale = await lData
         let fests = await fData
         return try await Task.detached(priority: .userInitiated) {
-            try parseSchedule(schedules, locale: locale, festivals: fests)
+            try SplatAPI.parseSchedule(schedules, locale: locale, festivals: fests)
         }.value
     }
 
@@ -49,7 +49,7 @@ enum SplatAPI {
         let loc = locale.flatMap { try? dec.decode(SplatLocale.self, from: $0) } ?? SplatLocale()
         var rotations: [SplatRotation] = []
 
-        func stages(_ list: [Lossy<RawStage>]?) -> [SplatStage] {
+        func stages(_ list: [SplatLossy<RawStage>]?) -> [SplatStage] {
             (list ?? []).compactMap(\.value).map { s in
                 SplatStage(name: loc.name("stages", s.id) ?? s.name ?? "？", image: s.image?.url)
             }
@@ -163,13 +163,13 @@ enum SplatAPI {
         let battlesData = try await bData
         let salmonData = await sData
         return try await Task.detached(priority: .userInitiated) {
-            try parseRecords(name: name, battles: battlesData, salmon: salmonData)
+            try SplatAPI.parseRecords(name: name, battles: battlesData, salmon: salmonData)
         }.value
     }
 
     static func parseRecords(name: String, battles: Data, salmon: Data?, now: Date = .now) throws -> SplatRecords {
         let dec = JSONDecoder()
-        guard let raw = try? dec.decode([Lossy<RawBattle>].self, from: battles) else { throw SplatAPIError.badData }
+        guard let raw = try? dec.decode([SplatLossy<RawBattle>].self, from: battles) else { throw SplatAPIError.badData }
         let list: [SplatBattle] = raw.compactMap(\.value).compactMap { b in
             guard let id = b.uuid ?? b.id else { return nil }
             let at = (b.start_at?.time ?? b.end_at?.time).map { Date(timeIntervalSince1970: $0) } ?? now
@@ -181,7 +181,7 @@ enum SplatAPI {
                 inked: b.inked?.int, knockout: b.knockout)
         }
         var shifts: [SplatSalmonRecord] = []
-        if let salmon, let rawS = try? dec.decode([Lossy<RawSalmon>].self, from: salmon) {
+        if let salmon, let rawS = try? dec.decode([SplatLossy<RawSalmon>].self, from: salmon) {
             shifts = rawS.compactMap(\.value).compactMap { s in
                 guard let id = s.uuid ?? s.id else { return nil }
                 let at = (s.start_at?.time ?? s.end_at?.time).map { Date(timeIntervalSince1970: $0) } ?? now
@@ -234,16 +234,16 @@ enum SplatDate {
 }
 
 /// 壊れた要素があっても配列全体を捨てない
-struct Lossy<T: Decodable>: Decodable {
+private struct SplatLossy<T: Decodable>: Decodable {
     let value: T?
     init(from decoder: Decoder) throws { value = try? T(from: decoder) }
 }
 
 /// 配列（または1つだけ・null）を受け付ける
-struct LossyList<T: Decodable>: Decodable {
+private struct SplatLossyList<T: Decodable>: Decodable {
     let items: [T]
     init(from decoder: Decoder) throws {
-        if let arr = try? [Lossy<T>](from: decoder) {
+        if let arr = try? [SplatLossy<T>](from: decoder) {
             items = arr.compactMap(\.value)
         } else if let one = try? T(from: decoder) {
             items = [one]
@@ -254,7 +254,7 @@ struct LossyList<T: Decodable>: Decodable {
 }
 
 /// 数値（文字列で来ることもある）
-struct FlexNum: Decodable {
+private struct SplatFlexNum: Decodable {
     let value: Double?
     var int: Int? { value.map { Int($0.rounded()) } }
     init(from decoder: Decoder) throws {
@@ -317,7 +317,7 @@ struct SplatLocale: Decodable {
 private struct RawSchedRoot: Decodable { let data: RawSchedData? }
 
 private struct RawNodes<T: Decodable>: Decodable {
-    let nodes: LossyList<T>?
+    let nodes: SplatLossyList<T>?
     var items: [T] { nodes?.items ?? [] }
 }
 
@@ -345,7 +345,7 @@ private struct RawRule: Decodable {
 }
 
 private struct RawVsSetting: Decodable {
-    let vsStages: [Lossy<RawStage>]?
+    let vsStages: [SplatLossy<RawStage>]?
     let vsRule: RawRule?
     let bankaraMode: String?
     let festMode: String?
@@ -355,9 +355,9 @@ private struct RawVsNode: Decodable {
     let startTime: String?
     let endTime: String?
     let regularMatchSetting: RawVsSetting?
-    let bankaraMatchSettings: LossyList<RawVsSetting>?
+    let bankaraMatchSettings: SplatLossyList<RawVsSetting>?
     let xMatchSetting: RawVsSetting?
-    let festMatchSettings: LossyList<RawVsSetting>?
+    let festMatchSettings: SplatLossyList<RawVsSetting>?
 
     var start: Date? { SplatDate.parse(startTime) }
     var end: Date? { SplatDate.parse(endTime) }
@@ -371,7 +371,7 @@ private struct RawLeagueEvent: Decodable {
 
 private struct RawLeagueSetting: Decodable {
     let leagueMatchEvent: RawLeagueEvent?
-    let vsStages: [Lossy<RawStage>]?
+    let vsStages: [SplatLossy<RawStage>]?
     let vsRule: RawRule?
 }
 
@@ -382,7 +382,7 @@ private struct RawPeriod: Decodable {
 
 private struct RawEventNode: Decodable {
     let leagueMatchSetting: RawLeagueSetting?
-    let timePeriods: LossyList<RawPeriod>?
+    let timePeriods: SplatLossyList<RawPeriod>?
 }
 
 private struct RawCoop: Decodable {
@@ -415,7 +415,7 @@ private struct RawBoss: Decodable {
 
 private struct RawCoopSetting: Decodable {
     let coopStage: RawCoopStage?
-    let weapons: LossyList<RawCoopWeapon>?
+    let weapons: SplatLossyList<RawCoopWeapon>?
     let boss: RawBoss?
 }
 
@@ -452,7 +452,7 @@ private struct RawFest: Decodable {
     let endTime: String?
     let state: String?
     let image: RawImage?
-    let teams: LossyList<RawFestTeam>?
+    let teams: SplatLossyList<RawFestTeam>?
 }
 
 // MARK: - stat.ink の元の形（自分の記録に要る項目だけ読む。ほかの人の名前などは読まない）
@@ -491,20 +491,20 @@ private struct RawBattle: Decodable {
     let weapon: RawKeyed?
     let result: String?
     let knockout: Bool?
-    let kill: FlexNum?
-    let assist: FlexNum?
-    let death: FlexNum?
-    let special: FlexNum?
-    let inked: FlexNum?
+    let kill: SplatFlexNum?
+    let assist: SplatFlexNum?
+    let death: SplatFlexNum?
+    let special: SplatFlexNum?
+    let inked: SplatFlexNum?
     let start_at: RawTime?
     let end_at: RawTime?
 }
 
 private struct RawSalmonPlayer: Decodable {
     let me: Bool?
-    let rescue: FlexNum?
-    let rescued: FlexNum?
-    let weapons: LossyList<RawKeyed>?
+    let rescue: SplatFlexNum?
+    let rescued: SplatFlexNum?
+    let weapons: SplatLossyList<RawKeyed>?
 }
 
 private struct RawSalmon: Decodable {
@@ -514,11 +514,11 @@ private struct RawSalmon: Decodable {
     let eggstra_work: Bool?
     let stage: RawKeyed?
     let big_stage: RawKeyed?
-    let danger_rate: FlexNum?
-    let clear_waves: FlexNum?
-    let golden_eggs: FlexNum?
-    let power_eggs: FlexNum?
-    let players: LossyList<RawSalmonPlayer>?
+    let danger_rate: SplatFlexNum?
+    let clear_waves: SplatFlexNum?
+    let golden_eggs: SplatFlexNum?
+    let power_eggs: SplatFlexNum?
+    let players: SplatLossyList<RawSalmonPlayer>?
     let start_at: RawTime?
     let end_at: RawTime?
 }

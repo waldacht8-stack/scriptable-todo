@@ -300,17 +300,31 @@ enum SplatDemo {
             let isTurf = lobby.0 == "regular"
             let rule = isTurf ? "ナワバリバトル" : rules[i % 4].0
             let weapon = weapons[[0, 1, 1, 4, 1, 2, 0, 1, 5, 4][i % 10]]
-            battles.append(SplatBattle(
-                id: "demo-\(i)", at: now.addingTimeInterval(-Double(i) * 260 - 600), result: win ? "win" : "lose",
-                lobbyKey: lobby.0, lobby: lobby.1, rule: rule, stage: stages[(i * 3) % stages.count], weapon: weapon,
-                kill: 3 + (i * 7) % 9, assist: (i * 3) % 5, death: 2 + (i * 5) % 7, special: 1 + i % 4,
-                inked: 700 + (i * 137) % 900, knockout: (!isTurf && win && i % 5 == 0) ? true : nil))
+            let at: Date = now.addingTimeInterval(Double(-i * 260 - 600))
+            let ko: Bool? = (!isTurf && win && i % 5 == 0) ? true : nil
+            var b = SplatBattle(id: "demo-\(i)", at: at, result: win ? "win" : "lose", lobbyKey: lobby.0, lobby: lobby.1,
+                                rule: rule, stage: stages[(i * 3) % stages.count], weapon: weapon)
+            b.kill = 3 + (i * 7) % 9
+            b.assist = (i * 3) % 5
+            b.death = 2 + (i * 5) % 7
+            b.special = 1 + i % 4
+            b.inked = 700 + (i * 137) % 900
+            b.knockout = ko
+            battles.append(b)
         }
-        let salmon: [SplatSalmonRecord] = (0..<6).map { i in
-            SplatSalmonRecord(id: "demo-s\(i)", at: now.addingTimeInterval(-Double(i) * 900 - 3600 * 5), stage: "シェケナダム",
-                              cleared: i % 3 != 2, clearWaves: i % 3 != 2 ? 3 : 2, waves: 3, dangerRate: 1.2 + Double(i % 4) * 0.4,
-                              goldenEggs: 38 + (i * 11) % 30, powerEggs: 1400 + (i * 230) % 900, rescue: i % 3, rescued: (i + 1) % 3,
-                              weapons: ["スプラシューター", "バケットスロッシャー", "ノヴァブラスター"])
+        var salmon: [SplatSalmonRecord] = []
+        for i in 0..<6 {
+            let at: Date = now.addingTimeInterval(Double(-i * 900 - 3600 * 5))
+            let ok: Bool = i % 3 != 2
+            var r = SplatSalmonRecord(id: "demo-s\(i)", at: at, stage: "シェケナダム", cleared: ok)
+            r.clearWaves = ok ? 3 : 2
+            r.dangerRate = 1.2 + Double(i % 4) * 0.4
+            r.goldenEggs = 38 + (i * 11) % 30
+            r.powerEggs = 1400 + (i * 230) % 900
+            r.rescue = i % 3
+            r.rescued = (i + 1) % 3
+            r.weapons = ["スプラシューター", "バケットスロッシャー", "ノヴァブラスター"]
+            salmon.append(r)
         }
         return SplatRecords(screenName: "sample", fetchedAt: now, battles: battles, salmon: salmon)
     }

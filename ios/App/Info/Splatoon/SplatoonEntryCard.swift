@@ -15,14 +15,14 @@ struct SplatoonEntryCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(background)
+        .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .environment(\.colorScheme, .dark)
         .task { await store.refreshIfNeeded() }
         .accessibilityElement(children: .contain)
     }
 
-    private var background: some View {
+    private var cardBackground: some View {
         ZStack(alignment: .topTrailing) {
             SplatInk.base
             InkSplash(color: SplatInk.purple.opacity(0.7), size: 90).offset(x: 30, y: -30)
