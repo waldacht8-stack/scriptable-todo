@@ -88,7 +88,7 @@ final class HabitModel: ObservableObject {
 enum HabitReminders {
     static func reschedule(_ habits: [Habit]) {
         let c = UNUserNotificationCenter.current()
-        if habits.contains(where: { $0.remindHour != nil }) {
+        if !LaunchArguments.isScripted, habits.contains(where: { $0.remindHour != nil }) {
             c.requestAuthorization(options: [.alert, .sound]) { _, _ in }
         }
         c.getPendingNotificationRequests { reqs in

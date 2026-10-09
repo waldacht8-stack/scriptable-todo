@@ -208,7 +208,7 @@ final class TodoStore: ObservableObject {
     /// アプリを開いたとき：カレンダーの取り込み・通知の予約し直し・自動バックアップ
     func refreshServices() async {
         let s = SettingsData.load()
-        if s.calendarImport && !CalendarSync.authorized { _ = await CalendarSync.requestAccess() }
+        if s.calendarImport && !CalendarSync.authorized && !LaunchArguments.isScripted { _ = await CalendarSync.requestAccess() }
         var list = TodoData.all()
         CalendarSync.importEvents(into: &list, settings: s)
         items = list

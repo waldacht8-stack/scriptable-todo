@@ -18,6 +18,7 @@ final class TodoNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func requestAuthorization() async {
+        if LaunchArguments.isScripted { return }
         _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
     }
 

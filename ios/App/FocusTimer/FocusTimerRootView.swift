@@ -69,7 +69,9 @@ final class FocusTimerModel: ObservableObject {
     var progress: Double { 1 - remaining / total }
 
     func start(title: String, todoID: String?) {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        if !LaunchArguments.isScripted {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        }
         state = FocusTimerEngine.start(title: title, todoID: todoID)
         live()
     }
