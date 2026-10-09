@@ -52,11 +52,9 @@ final class TodoLogicTests: TokyoTestCase {
     }
 
     func testMonthlyMonthEndDoesNotDrift() {
-        // BUG-1：月末の「毎月」が 2月で28日になると、その後もずっと28日になる
-        knownBug("BUG-1 TodoLogic.swift:27 毎月の月末がずれる（1/31 → 2/28 → 3/28）") {
-            // 1/31 の毎月を 4/15 に完了 → 次は 4/30 のはず
-            XCTAssertEqual(item(T.d(2026, 1, 31, 9), .monthly).nextOccurrence(now: T.d(2026, 4, 15, 10)), T.d(2026, 4, 30, 9))
-        }
+        // BUG-1（直した）：月末の「毎月」を何か月か飛ばして完了しても、元の日付で数える
+        // 1/31 の毎月を 4/15 に完了 → 次は 4/30 のはず
+        XCTAssertEqual(item(T.d(2026, 1, 31, 9), .monthly).nextOccurrence(now: T.d(2026, 4, 15, 10)), T.d(2026, 4, 30, 9))
     }
 
     // MARK: complete

@@ -31,6 +31,14 @@ extension TodoItem {
                 return x
             }
         }
+        // 毎月は元の期限から nか月後で数える（1/31 → 2/28 → 3/31。2月の28日に引きずられない）
+        if rule == .monthly {
+            let today = cal.startOfDay(for: now)
+            var n = 1
+            var next = cal.date(byAdding: .month, value: n, to: due)!
+            while next < today && n < 1000 { n += 1; next = cal.date(byAdding: .month, value: n, to: due)! }
+            return next
+        }
         var next = step(due)
         let today = cal.startOfDay(for: now)
         var guardCount = 0
