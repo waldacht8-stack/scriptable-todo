@@ -79,7 +79,8 @@ enum World: String, CaseIterable, Identifiable {
                            overdue: wx(0xC4122F), onAccent: wx(0x111111),
                            fontDesign: .default, radius: 14, scheme: .light, outline: wx(0x111111), world: .brutal)
         case .aurora:
-            return Palette(background: [wx(0x0D0B1E), wx(0x161034)], card: Color.white.opacity(0.10),
+            // カードの色は不透明にする（重なったカードの文字が透けないように）。すりガラスの見た目は WorldCardSurface で出す
+            return Palette(background: [wx(0x0D0B1E), wx(0x161034)], card: wx(0x231C47),
                            text: wx(0xF4F2FF), sub: wx(0xBDB6E0), accent: wx(0x9EF0E6),
                            overdue: wx(0xFF9D7A), onAccent: wx(0x0D0B1E),
                            fontDesign: .rounded, radius: 24, scheme: .dark, world: .aurora)
@@ -195,9 +196,9 @@ struct WorldCardSurface: View {
                 shape.strokeBorder(Color.black, lineWidth: 3)
             }
         case .aurora:
-            // すりガラス
+            // すりガラス（下の光がうっすら見える程度。文字が読めるよう濃いめに）
             shape.fill(.ultraThinMaterial)
-                .overlay(shape.fill(p.card))
+                .overlay(shape.fill(p.card.opacity(0.78)))
                 .overlay(shape.strokeBorder(Color.white.opacity(0.26), lineWidth: 1))
         case .clay:
             // 粘土：内側の明るい縁と暗い縁、外側のやわらかい影
@@ -213,7 +214,7 @@ struct WorldCardSurface: View {
                 Rectangle().fill(Color.black).frame(height: 2)
             }
         case .hinata:
-            shape.fill(p.card.opacity(0.94))
+            shape.fill(p.card)
                 .shadow(color: wx(0x784614, 0.18), radius: 18, y: 10)
         case .bento:
             shape.fill(p.card)

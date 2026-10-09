@@ -22,7 +22,7 @@ concurrency:
 jobs:
   build:
     runs-on: macos-15-intel
-    timeout-minutes: 45
+    timeout-minutes: 75   # 画面写真が増えたので（45分では IPA を作る前に打ち切られた）
     defaults:
       run:
         working-directory: ios
