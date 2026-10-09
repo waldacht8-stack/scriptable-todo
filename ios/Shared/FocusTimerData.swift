@@ -10,7 +10,7 @@ enum FocusPhase: String, Codable, CaseIterable {
     var name: String {
         switch self {
         case .focus: "集中"
-        case .shortBreak: "小休憩"
+        case .shortBreak: "短い休憩"
         case .longBreak: "長い休憩"
         }
     }
@@ -120,6 +120,19 @@ struct FocusSessionRecord: Codable, Identifiable {
         minutes = (try? c.decodeIfPresent(Double.self, forKey: .minutes)) ?? 0
         completed = (try? c.decodeIfPresent(Bool.self, forKey: .completed)) ?? true
     }
+
+    /// その日に入る集中の分数。日付をまたいだ集中（23:50〜0:15 など）は、それぞれの日に分けて数える
+    func minutes(on day: Date, calendar cal: Calendar = .current) -> Double {
+        let dayStart: Date = cal.startOfDay(for: day)
+        guard let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) else { return 0 }
+        let wall: Double = end.timeIntervalSince(start)
+        guard wall > 0 else { return (end >= dayStart && end < dayEnd) ? minutes : 0 }
+        let lo: Date = max(start, dayStart)
+        let hi: Date = min(end, dayEnd)
+        let overlap: Double = hi.timeIntervalSince(lo)
+        guard overlap > 0 else { return 0 }
+        return minutes * overlap / wall
+    }
 }
 
 enum FocusTimerData {
@@ -158,6 +171,12 @@ enum FocusTimerData {
                 records.append(FocusSessionRecord(title: titles[(i + k) % titles.count], start: start,
                                                   end: start.addingTimeInterval(1500), minutes: 25, completed: true))
             }
+        }
+        // 日付をまたいだ集中（昨日 23:45〜今日 0:10）。昨日に15分、今日に10分として数える
+        let lateStart: Date = today.addingTimeInterval(-15 * 60)
+        let lateEnd: Date = today.addingTimeInterval(10 * 60)
+        if lateEnd <= now {
+            records.append(FocusSessionRecord(title: "資料の読み込み", start: lateStart, end: lateEnd, minutes: 25, completed: true))
         }
         saveSessions(records)
         var s = FocusTimerState()
@@ -297,10 +316,10 @@ enum FocusTimerEngine {
         let content = UNMutableNotificationContent()
         if s.phase == .focus {
             content.title = "集中おつかれさま"
-            content.body = s.title.isEmpty ? "\(Int(s.total / 60))分 集中しました。休憩しましょう。"
-                : "「\(s.title)」に \(Int(s.total / 60))分 集中しました。休憩しましょう。"
+            content.body = s.title.isEmpty ? "\(Int(s.total / 60))分集中しました。休憩しましょう。"
+                : "「\(s.title)」に\(Int(s.total / 60))分集中しました。休憩しましょう。"
         } else {
-            content.title = "休憩おわり"
+            content.title = "休憩が終わりました"
             content.body = "次の集中を始めましょう。"
         }
         content.sound = .default

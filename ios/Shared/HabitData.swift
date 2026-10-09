@@ -276,6 +276,42 @@ enum HabitData {
         }
         return (habits, log)
     }
+
+    /// 画面確認用（起動引数 -habitmany）：20件、とても長い名前も含む
+    static func demoMany(now: Date = .now) -> ([Habit], HabitLog) {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        let created = cal.date(byAdding: .day, value: -60, to: today) ?? today
+        let names: [String] = [
+            "寝る前にスマートフォンを置いて、ゆっくり深呼吸を十回する", "水を飲む", "朝のストレッチ", "読書", "英単語",
+            "散歩", "日記を書く", "早起き", "筋トレ", "瞑想",
+            "部屋の片づけ", "野菜を食べる", "ピアノの練習", "家計簿をつける", "階段を使う",
+            "ビタミンを飲む", "夜ふかししない", "姿勢を正す", "植物に水やり", "週末の作り置き",
+        ]
+        let icons: [String] = ["moon.stars.fill", "drop.fill", "figure.flexibility", "book.fill", "character.book.closed.fill",
+                               "figure.walk", "pencil", "sun.max.fill", "dumbbell.fill", "brain.head.profile"]
+        let colors: [HabitColor] = HabitColor.allCases
+        var habits: [Habit] = []
+        for (i, n) in names.enumerated() {
+            let isCount: Bool = i % 5 == 1
+            let days: [Int] = i == 19 ? [1, 7] : Array(1...7)
+            habits.append(Habit(name: n, icon: icons[i % icons.count], color: colors[i % colors.count],
+                                target: isCount ? 8 : 1, unit: isCount ? "杯" : "", weekdays: days, createdAt: created))
+        }
+        var log: HabitLog = [:]
+        for back in 0...59 {
+            guard let d = cal.date(byAdding: .day, value: -back, to: today) else { continue }
+            for (i, h) in habits.enumerated() where h.isActive(on: d) {
+                let roll: Int = (back * 31 + i * 17) % 10
+                if back == 0 {
+                    set(&log, h, d, i % 3 == 0 ? h.target : (h.isCount ? 3 : 0))
+                } else if roll < 7 {
+                    set(&log, h, d, h.target)
+                }
+            }
+        }
+        return (habits, log)
+    }
 }
 
 // MARK: - 共通の部品（アプリとウィジェット）

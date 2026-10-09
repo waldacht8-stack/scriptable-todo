@@ -86,8 +86,11 @@ final class FocusTimerModel: ObservableObject {
 
     // MARK: 集計
 
+    /// 今日の集中（分）。日付をまたいだ集中は今日の分だけ数える
     var todayMinutes: Int {
-        Int(sessions.filter { Calendar.current.isDateInToday($0.end) }.reduce(0) { $0 + $1.minutes }.rounded())
+        let day: Date = now
+        let total: Double = sessions.reduce(0.0) { $0 + $1.minutes(on: day) }
+        return Int(total.rounded())
     }
 
     var todaySessions: Int { sessions.filter { $0.completed && Calendar.current.isDateInToday($0.end) }.count }
@@ -105,7 +108,7 @@ final class FocusTimerModel: ObservableObject {
         return (0..<7).map { i in
             let back = 6 - i
             let day = cal.date(byAdding: .day, value: -back, to: today) ?? today
-            let m = sessions.filter { cal.isDate($0.end, inSameDayAs: day) }.reduce(0) { $0 + $1.minutes }
+            let m: Double = sessions.reduce(0.0) { $0 + $1.minutes(on: day, calendar: cal) }
             let label = back == 0 ? "今日" : HabitData.weekdaySymbol(cal.component(.weekday, from: day))
             return DayStat(id: i, label: label, minutes: m, isToday: back == 0)
         }
@@ -121,7 +124,7 @@ struct FocusTimerRootView: View {
     @State private var title = ""
     @State private var todoID: String?
     @State private var picking = false
-    @State private var showSettings = false
+    @State private var showSettings = ProcessInfo.processInfo.arguments.contains("-focussettings")
     @State private var actionFeedback = 0
     @State private var viewHeight: CGFloat = 800   // 見えている高さ（小さい画面で操作ボタンまで1画面に収める）
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -184,19 +187,17 @@ struct FocusTimerRootView: View {
     // MARK: 部品
 
     private var header: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(JP.date(.now)).font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
                 Text("集中").font(.system(size: 34, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
             }
-            Spacer()
-            Button { showSettings = true } label: {
-                Image(systemName: "slider.horizontal.3").font(.headline.weight(.bold)).frame(width: 44, height: 44)
-                    .foregroundStyle(p.text).background(p.card, in: Circle())
-            }
-            .accessibilityLabel("時間の設定")
+            Spacer(minLength: 8)
+            HabitCircleButton(icon: "slider.horizontal.3", label: "時間の設定") { showSettings = true }
+            SettingsButton()
         }
         .padding(.top, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var taskCard: some View {
@@ -230,14 +231,9 @@ struct FocusTimerRootView: View {
         return min(320, max(210, room))
     }
 
-    private var phaseColor: Color {
-        model.state.phase.isBreak ? HabitColor.teal.color(p) : p.accent
-    }
-
-    /// phaseColor の上に載せる記号の色
-    private var onPhaseColor: Color {
-        model.state.phase.isBreak ? HabitColor.teal.onColor(p) : p.onAccent
-    }
+    /// 文字盤とボタンの色（色合いの強調色。休憩中も同じ色で、表示の文字とアイコンで区別する）
+    private var phaseColor: Color { p.accent }
+    private var onPhaseColor: Color { p.onAccent }
 
     private var dial: some View {
         let s = model.state
@@ -254,8 +250,8 @@ struct FocusTimerRootView: View {
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 1), value: model.progress)
             VStack(spacing: 8) {
-                Label(s.phase.name + (s.isPaused ? "・一時停止中" : ""), systemImage: s.phase.icon)
-                    .font(.headline).foregroundStyle(phaseColor)
+                Label(s.isPaused ? "一時停止中" : s.phase.name, systemImage: s.isPaused ? "pause.circle.fill" : s.phase.icon)
+                    .font(.headline).foregroundStyle(s.isPaused ? p.sub : phaseColor)
                 Text(FocusTimerFormat.clock(model.remaining))
                     .font(.system(size: clockSize, weight: .heavy, design: p.fontDesign))
                     .monospacedDigit()
@@ -263,7 +259,7 @@ struct FocusTimerRootView: View {
                     .contentTransition(.numericText(countsDown: true))
                     .lineLimit(1).minimumScaleFactor(0.5)
                 if let end = s.endAt, s.isRunning, !s.isPaused {
-                    Text("\(JP.time(end)) に終了").font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+                    Text("\(JP.time(end))に終了").font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
                 } else {
                     Text("\(model.settings.minutes(s.phase))分").font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
                 }
@@ -325,49 +321,74 @@ struct FocusTimerRootView: View {
     }
 
     private var stats: some View {
-        VStack(spacing: 12) {
+        let week: [FocusTimerModel.DayStat] = model.week
+        let weekTotal: Int = Int(week.reduce(0.0) { $0 + $1.minutes }.rounded())
+        return VStack(alignment: .leading, spacing: 12) {
+            HabitSectionTitle(text: "記録")
             HStack(spacing: 12) {
-                tile("今日の集中", "\(model.todayMinutes)", "分")
-                tile("セッション", "\(model.todaySessions)", "回")
+                tile("今日の集中", FocusTimerFormat.durationParts(model.todayMinutes))
+                tile("終えた回数", [("\(model.todaySessions)", "回")])
             }
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
                     Text("この7日間").font(.headline).foregroundStyle(p.text)
-                    Spacer()
-                    Text("合計 \(Int(model.week.reduce(0) { $0 + $1.minutes }.rounded()))分")
+                    Spacer(minLength: 8)
+                    Text("合計 " + FocusTimerFormat.duration(weekTotal))
                         .font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
                 }
-                Chart(model.week) { d in
-                    BarMark(x: .value("日", d.label), y: .value("分", d.minutes))
-                        .foregroundStyle(d.isToday ? p.accent : p.accent.opacity(0.35))
-                        .cornerRadius(6)
-                        .annotation(position: .top) {
-                            if d.minutes > 0 {
-                                Text("\(Int(d.minutes.rounded()))").font(.caption2.weight(.semibold)).foregroundStyle(p.sub)
-                            }
-                        }
+                if weekTotal == 0 {
+                    Text("まだ記録がありません。\n集中を終えると、日ごとの時間がここに出ます。")
+                        .font(.subheadline).foregroundStyle(p.sub)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 120)
+                } else {
+                    weekChart(week)
+                    Text("棒の上の数字は分。日付をまたいだ集中は、それぞれの日に分けて数えます。")
+                        .font(.caption2).foregroundStyle(p.sub)
                 }
-                .chartYAxis(.hidden)
-                .chartXAxis {
-                    AxisMarks { _ in
-                        AxisValueLabel().font(.caption.weight(.semibold)).foregroundStyle(p.sub)
-                    }
-                }
-                .frame(height: 150)
             }
             .paletteCard(p)
         }
-        .padding(.top, 10)
+        .padding(.top, 8)
     }
 
-    private func tile(_ title: String, _ value: String, _ unit: String) -> some View {
+    private func weekChart(_ week: [FocusTimerModel.DayStat]) -> some View {
+        let strong: Color = p.accent
+        let soft: Color = p.accent.opacity(0.35)
+        let label: Color = p.sub
+        return Chart(week) { d in
+            BarMark(x: .value("日", d.label), y: .value("分", d.minutes))
+                .foregroundStyle(d.isToday ? strong : soft)
+                .cornerRadius(6)
+                .annotation(position: .top) {
+                    if d.minutes >= 1 {
+                        Text("\(Int(d.minutes.rounded()))").font(.caption2.weight(.semibold)).foregroundStyle(label)
+                    }
+                }
+        }
+        .chartYAxis(.hidden)
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisValueLabel().font(.caption.weight(.semibold)).foregroundStyle(label)
+            }
+        }
+        .frame(height: 150)
+        .accessibilityLabel("この7日間の集中時間")
+    }
+
+    /// 数字の大きなタイル。parts は（数字, 単位）の並び：「1 時間 40 分」など
+    private func tile(_ title: String, _ parts: [(String, String)]) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption.weight(.semibold)).foregroundStyle(p.sub)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value).font(.system(size: 34, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
-                    .contentTransition(.numericText())
-                Text(unit).font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                ForEach(parts.indices, id: \.self) { i in
+                    Text(parts[i].0).font(.system(size: 34, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
+                        .contentTransition(.numericText())
+                    Text(parts[i].1).font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+                }
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
         }
         .paletteCard(p, padding: 16)
     }
@@ -377,6 +398,21 @@ enum FocusTimerFormat {
     static func clock(_ seconds: Double) -> String {
         let s = max(0, Int(seconds.rounded(.up)))
         return String(format: "%02d:%02d", s / 60, s % 60)
+    }
+
+    /// 「45分」「2時間」「1時間40分」
+    static func duration(_ minutes: Int) -> String {
+        durationParts(minutes).map { $0.0 + $0.1 }.joined()
+    }
+
+    /// 数字と単位に分けた時間（大きな数字の表示用）
+    static func durationParts(_ minutes: Int) -> [(String, String)] {
+        let m: Int = max(0, minutes)
+        if m < 60 { return [("\(m)", "分")] }
+        let h: Int = m / 60
+        let rest: Int = m % 60
+        if rest == 0 { return [("\(h)", "時間")] }
+        return [("\(h)", "時間"), ("\(rest)", "分")]
     }
 }
 
@@ -392,17 +428,20 @@ struct FocusTaskPicker: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("自由に入力") {
+                Section {
                     HStack {
                         TextField("例：資料を読む", text: $text)
+                            .foregroundStyle(p.text)
                             .submitLabel(.done)
                             .onSubmit(useText)
                         Button("決定", action: useText).fontWeight(.bold)
                             .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                     .listRowBackground(p.card)
+                } header: {
+                    Text("自由に入力").foregroundStyle(p.sub)
                 }
-                Section("TODOから選ぶ") {
+                Section {
                     if store.open.isEmpty {
                         Text("未完了のTODOはありません").foregroundStyle(p.sub).listRowBackground(p.card)
                     }
@@ -414,7 +453,7 @@ struct FocusTaskPicker: View {
                         } label: {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.title).font(.body.weight(.semibold)).foregroundStyle(p.text)
+                                    Text(item.title).font(.body.weight(.semibold)).foregroundStyle(p.text).lineLimit(2)
                                     Text(DueText.label(item)).font(.caption).foregroundStyle(item.isOverdue() ? p.overdue : p.sub)
                                 }
                                 Spacer()
@@ -423,14 +462,17 @@ struct FocusTaskPicker: View {
                         }
                         .listRowBackground(p.card)
                     }
+                } header: {
+                    Text("TODOから選ぶ").foregroundStyle(p.sub)
                 }
                 if !title.isEmpty {
                     Section {
-                        Button("選ばずに始める", role: .destructive) {
+                        Button("選択を外す") {
                             title = ""
                             todoID = nil
                             dismiss()
                         }
+                        .foregroundStyle(p.accent)
                         .listRowBackground(p.card)
                     }
                 }
@@ -441,6 +483,7 @@ struct FocusTaskPicker: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() } } }
         }
+        .tint(p.accent)
         .onAppear { if todoID == nil { text = title } }
     }
 
@@ -453,7 +496,7 @@ struct FocusTaskPicker: View {
     }
 }
 
-/// 時間の設定
+/// 時間の設定（色合いに合わせたカードで組む）
 struct FocusSettingsSheet: View {
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
@@ -462,27 +505,38 @@ struct FocusSettingsSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("時間") {
-                    Stepper(value: $settings.focusMinutes, in: 5...90, step: 5) { row("集中", "\(settings.focusMinutes)分") }
-                        .listRowBackground(p.card)
-                    Stepper(value: $settings.shortBreakMinutes, in: 1...30) { row("小休憩", "\(settings.shortBreakMinutes)分") }
-                        .listRowBackground(p.card)
-                    Stepper(value: $settings.longBreakMinutes, in: 5...60, step: 5) { row("長い休憩", "\(settings.longBreakMinutes)分") }
-                        .listRowBackground(p.card)
-                    Stepper(value: $settings.longBreakEvery, in: 2...8) { row("長い休憩の間隔", "集中\(settings.longBreakEvery)回ごと") }
-                        .listRowBackground(p.card)
+            ScrollView {
+                VStack(spacing: 16) {
+                    card("時間") {
+                        stepRow("集中", "\(settings.focusMinutes)分", $settings.focusMinutes, 5...90, 5)
+                        divider
+                        stepRow("短い休憩", "\(settings.shortBreakMinutes)分", $settings.shortBreakMinutes, 1...30, 1)
+                        divider
+                        stepRow("長い休憩", "\(settings.longBreakMinutes)分", $settings.longBreakMinutes, 5...60, 5)
+                    }
+                    card("長い休憩") {
+                        stepRow("長い休憩までの集中", "\(settings.longBreakEvery)回", $settings.longBreakEvery, 2...8, 1)
+                        Text("集中を\(settings.longBreakEvery)回終えるごとに、長い休憩になります。")
+                            .font(.footnote).foregroundStyle(p.sub)
+                    }
+                    card("自動") {
+                        Toggle(isOn: $settings.autoStartBreak) {
+                            Text("集中のあと、休憩を自動で始める").font(.body.weight(.semibold)).foregroundStyle(p.text)
+                        }
+                        .tint(p.accent)
+                    }
+                    Button { settings = FocusTimerSettings() } label: {
+                        Text("初期設定に戻す（集中25分・休憩5分）").font(.subheadline.weight(.semibold)).foregroundStyle(p.accent)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
                 }
-                Section {
-                    Toggle("集中が終わったら休憩を自動で始める", isOn: $settings.autoStartBreak)
-                        .listRowBackground(p.card)
-                }
-                Section {
-                    Button("標準に戻す（25分・5分）") { settings = FocusTimerSettings() }
-                        .listRowBackground(p.card)
-                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 40)
+                .frame(maxWidth: .infinity)
             }
-            .scrollContentBackground(.hidden)
             .paletteBackground(p)
             .navigationTitle("時間の設定")
             .navigationBarTitleDisplayMode(.inline)
@@ -493,13 +547,46 @@ struct FocusSettingsSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
             }
         }
+        .tint(p.accent)
     }
 
-    private func row(_ title: String, _ value: String) -> some View {
-        HStack {
-            Text(title).foregroundStyle(p.text)
-            Spacer()
-            Text(value).font(.body.weight(.bold)).foregroundStyle(p.accent)
+    private var divider: some View {
+        Rectangle().fill(p.sub.opacity(0.15)).frame(height: 1)
+    }
+
+    /// 見出し付きのカード
+    private func card<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.subheadline.weight(.bold)).foregroundStyle(p.sub)
+            content()
+        }
+        .paletteCard(p)
+    }
+
+    /// 名前・値・−＋ボタンの1行
+    private func stepRow(_ title: String, _ value: String, _ binding: Binding<Int>, _ range: ClosedRange<Int>, _ step: Int) -> some View {
+        let v: Int = binding.wrappedValue
+        let canMinus: Bool = v - step >= range.lowerBound
+        let canPlus: Bool = v + step <= range.upperBound
+        return HStack(spacing: 10) {
+            Text(title).font(.body.weight(.semibold)).foregroundStyle(p.text)
+                .lineLimit(2).minimumScaleFactor(0.85)
+            Spacer(minLength: 4)
+            HabitStepButton(icon: "minus", enabled: canMinus) { binding.wrappedValue = max(range.lowerBound, v - step) }
+            Text(value).font(.system(size: 20, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
+                .monospacedDigit()
+                .lineLimit(1)
+                .frame(minWidth: 56)
+            HabitStepButton(icon: "plus", enabled: canPlus) { binding.wrappedValue = min(range.upperBound, v + step) }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title) \(value)")
+        .accessibilityAdjustableAction { dir in
+            switch dir {
+            case .increment: binding.wrappedValue = min(range.upperBound, binding.wrappedValue + step)
+            case .decrement: binding.wrappedValue = max(range.lowerBound, binding.wrappedValue - step)
+            @unknown default: break
+            }
         }
     }
 }
