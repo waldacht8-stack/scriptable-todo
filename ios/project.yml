@@ -47,6 +47,10 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
     dependencies:
       - target: TodoWidget
+    # テスト（ios/Tests）を xcodebuild test -scheme TodoApp で走らせる
+    scheme:
+      testTargets:
+        - TodoAppTests
   TodoWidget:
     type: app-extension
     platform: iOS
@@ -67,4 +71,19 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.todoapp.TodoApp.TodoWidget
+        TARGETED_DEVICE_FAMILY: "1"
+  # 単体テスト（XCTest）。アプリを入れ物にして @testable import TodoApp で Shared の処理を確かめる
+  TodoAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: TodoApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.todoapp.TodoAppTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/TodoApp.app/TodoApp
+        BUNDLE_LOADER: $(TEST_HOST)
         TARGETED_DEVICE_FAMILY: "1"
