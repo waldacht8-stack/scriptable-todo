@@ -134,6 +134,11 @@ struct AppSettings: Codable {
     var lookaheadDays: Int = 45
     var excludeCalendars: [String] = ["日本の祝日", "祝日", "誕生日", "Birthdays", "Japanese Holidays", "Holidays in Japan"]
     var lastBackup: Date? = nil
+    // デザインのカスタマイズ（色合いの上に重ねる。"theme" は色合いのまま。Theme.swift の AccentChoice など）
+    var accentColor: String = "theme"   // 強調色（AccentChoice）
+    var cornerStyle: String = "theme"   // 角の丸み（CornerChoice）
+    var fontStyle: String = "theme"     // 書体（FontChoice）
+    var density: String = "regular"     // 表示の密度（Density）
 
     init() {}
 
@@ -150,6 +155,11 @@ struct AppSettings: Codable {
         lookaheadDays = try c.decodeIfPresent(Int.self, forKey: .lookaheadDays) ?? d.lookaheadDays
         excludeCalendars = try c.decodeIfPresent([String].self, forKey: .excludeCalendars) ?? d.excludeCalendars
         lastBackup = try c.decodeIfPresent(Date.self, forKey: .lastBackup)
+        // デザインのカスタマイズ
+        accentColor = try c.decodeIfPresent(String.self, forKey: .accentColor) ?? d.accentColor
+        cornerStyle = try c.decodeIfPresent(String.self, forKey: .cornerStyle) ?? d.cornerStyle
+        fontStyle = try c.decodeIfPresent(String.self, forKey: .fontStyle) ?? d.fontStyle
+        density = try c.decodeIfPresent(String.self, forKey: .density) ?? d.density
     }
 
     // nil（オフ）を「項目なし」と区別して保存する
@@ -164,10 +174,16 @@ struct AppSettings: Codable {
         try c.encode(lookaheadDays, forKey: .lookaheadDays)
         try c.encode(excludeCalendars, forKey: .excludeCalendars)
         try c.encodeIfPresent(lastBackup, forKey: .lastBackup)
+        // デザインのカスタマイズ
+        try c.encode(accentColor, forKey: .accentColor)
+        try c.encode(cornerStyle, forKey: .cornerStyle)
+        try c.encode(fontStyle, forKey: .fontStyle)
+        try c.encode(density, forKey: .density)
     }
 
     enum CodingKeys: String, CodingKey {
         case theme, layout, remindMinutes, morningHour, eveningHour, calendarImport, lookaheadDays, excludeCalendars, lastBackup
+        case accentColor, cornerStyle, fontStyle, density   // デザインのカスタマイズ
     }
 }
 
