@@ -88,6 +88,7 @@ struct RootView: View {
         .fontDesign(p.fontDesign)
         .tint(p.accent)
         .preferredColorScheme(p.scheme)
+        .splatoonDemoLaunch()
     }
 }
 

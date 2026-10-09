@@ -109,6 +109,8 @@ jobs:
           shot shots/settings.png -settings
           # スプラトゥーン3（見本データ。RootView に .splatoonDemoLaunch() が入ると全画面で開く）
           shot shots/splatoon.png -demo -splatdemo
+          shot shots/splatoon-card.png -demo -splatcard -theme focus
+          shot shots/splatoon-card-night.png -demo -splatcard -theme night
 
       - name: 実機用にビルド（署名なし）して IPA を作る
         run: |
