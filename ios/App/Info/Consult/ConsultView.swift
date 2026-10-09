@@ -408,7 +408,7 @@ struct ConsultView: View {
             ConsultKeySheet(model: model).environment(\.palette, p)
         }
         .sheet(isPresented: $showStats) {
-            MoodStatsView(model: model).environment(\.palette, p).environment(\.motion, motion)
+            MoodStatsView(model: model).environmentObject(store).environment(\.palette, p).environment(\.motion, motion)
         }
         .confirmationDialog("会話を消しますか？", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("会話を消す", role: .destructive) { withAnimation(motion.change) { model.clear() } }
