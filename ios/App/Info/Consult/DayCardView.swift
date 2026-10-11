@@ -661,7 +661,7 @@ struct DayCardReviewSheet: View {
             if let e = model.reviewError {
                 Text(e).font(.footnote.weight(.semibold)).foregroundStyle(p.overdue)
             }
-            HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 8) {
                 Button { Task { await model.runReview(week: w) } } label: {
                     HStack(spacing: 6) {
                         if model.reviewing { ProgressView().tint(p.onAccent) }
@@ -673,6 +673,7 @@ struct DayCardReviewSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(model.reviewing)
+                HStack(spacing: 8) {
                 if model.review != nil {
                     Button {
                         model.keepReview()
@@ -684,6 +685,7 @@ struct DayCardReviewSheet: View {
                 }
                 Button { onTalk() } label: { outlined("相談で話す", symbol: "bubble.left") }
                     .buttonStyle(.plain)
+                }
             }
         }
         .paletteCard(p)
