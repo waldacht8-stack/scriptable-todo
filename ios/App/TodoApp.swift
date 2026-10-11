@@ -79,7 +79,7 @@ struct RootView: View {
                     ConsultRootView().tabItem { Label("相談", systemImage: "bubble.left.and.text.bubble.right") }.tag(3)
                     InfoRootView().tabItem { Label("情報", systemImage: "newspaper") }.tag(4)
                 }
-                .kakeiboOpenURL { tab = 2 }
+                // 家計簿のファイル（CSV・PDF）とウィジェットの hiyori:// は openWidgetLink がまとめて受け取る
                 .onOpenURL { url in openWidgetLink(url) }
                 .onReceive(NotificationCenter.default.publisher(for: .openConsultTab)) { _ in tab = 3 }
                 .onAppear { if ConsultDeepLink.consumePending() { tab = 3 } }

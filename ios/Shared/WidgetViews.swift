@@ -78,6 +78,7 @@ struct TodoWidgetView: View {
             }
         }
         .fontDesign(p.fontDesign)
+        .widgetURL(WidgetLinks.todo)   // 押すと TODO タブを開く
         .worldWidgetAnimation(p, value: changeKey)
     }
 
@@ -415,6 +416,8 @@ struct TodoWidgetView: View {
     @ViewBuilder private var kanban: some View {
         if family == .systemSmall {
             let todays: [TodoItem] = kanbanItems(.today)
+            // 今日の分が少ないときは、明日・あとでの分で下の空きを埋める
+            let rest: [TodoItem] = Array((kanbanItems(.tomorrow) + kanbanItems(.later)).prefix(max(0, 3 - todays.count)))
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("今日").font(.caption.weight(.heavy)).foregroundStyle(p.accent)
@@ -426,11 +429,14 @@ struct TodoWidgetView: View {
                 }
                 if todays.isEmpty {
                     emptyText("今日のTODOはありません")
-                    Spacer(minLength: 0)
                 } else {
                     FitList(items: todays, maxCount: 3, spacing: 4, moreColor: p.sub) { kanbanCard($0) }
-                        .frame(maxHeight: .infinity, alignment: .top)
                 }
+                if !rest.isEmpty {
+                    Text("このあと").font(.system(size: 9, weight: .bold)).foregroundStyle(p.sub)
+                    FitList(items: rest, maxCount: rest.count, spacing: 4, moreColor: p.sub) { kanbanCard($0).opacity(0.75) }
+                }
+                Spacer(minLength: 0)
             }
         } else {
             HStack(alignment: .top, spacing: 6) {

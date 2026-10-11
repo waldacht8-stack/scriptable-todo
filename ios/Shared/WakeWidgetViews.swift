@@ -82,7 +82,10 @@ struct WakeWidgetView: View {
 
     /// 「いま寝ると 7時間30分」
     private func sleepLine(_ n: WakePlan) -> String {
-        "いま寝ると \(WidgetFeedDay.durationText(n.first.timeIntervalSince(entry.date)))"
+        let t = n.first.timeIntervalSince(entry.date)
+        // 休みの日をはさむなど、次の起床まで間が空くときは「いま寝ると」を出さない
+        if t > 16 * 3600 { return "次の起床は \(WakeLogic.dayLabel(n.first, now: entry.date))" }
+        return "いま寝ると \(WidgetFeedDay.durationText(t))"
     }
 
     @ViewBuilder private var nightSmall: some View {
