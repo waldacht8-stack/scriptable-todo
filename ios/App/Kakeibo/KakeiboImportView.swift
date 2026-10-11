@@ -503,6 +503,7 @@ struct KakeiboImportView: View {
                         mapping = ocr.mapping
                         buildDrafts()
                         if !drafts.isEmpty { return }
+                        errorText = nil
                     }
                 }
             }
