@@ -227,7 +227,7 @@ enum CritterArt {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
         let lane: Double = laneY(size)
-        let anglerX: Double = w * 0.2
+        let anglerX: Double = w * 0.34   // 背景のクラゲ（左下）と重ならないように
         let anglerY: Double = lane + 20 + sin(k.t * 0.9) * 2
         let anglerAt = D.pt(anglerX, anglerY)
         switch layer {
