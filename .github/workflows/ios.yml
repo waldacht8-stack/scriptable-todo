@@ -319,6 +319,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # 消して作り直すと、その間リンクが 404 になったり下書きのまま残ったりするので、ファイルの差し替えにする
+          shopt -s nullglob   # 写真を撮らなかったときも IPA だけ置けるように
           if gh release view ios-latest >/dev/null 2>&1; then
             gh release upload ios-latest TodoApp.ipa shots/*.png --clobber
             gh release edit ios-latest --draft=false --prerelease
