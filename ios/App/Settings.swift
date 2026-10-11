@@ -90,7 +90,7 @@ private struct SettingsContent: View {
                 PalettePreview()
                 SubHeading("世界観", note: "背景・カード・数字・動きまで、アプリ全体の雰囲気が変わります。選ぶと色合いより優先されます。").id("world")
                 worldGrid
-                SubHeading("構成（今日の画面）", note: "ボタンの位置と操作のしかたが変わります。")
+                SubHeading("構成（TODO の画面）", note: "ボタンの位置と操作のしかたが変わります。")
                 layoutGrid
                 SubHeading("色合い", note: !World.from(s.world).isOn ? "すべての画面とウィジェットに反映されます。"
                            : "世界観を「なし」にすると使えます。")

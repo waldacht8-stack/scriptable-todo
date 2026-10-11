@@ -71,7 +71,7 @@ struct RootView: View {
                 WidgetPreviewScreen() // ウィジェットの見本（スクリーンショット用）
             } else {
                 TabView(selection: $tab) {
-                    HomeView().tabItem { Label("今日", systemImage: "sun.horizon") }.tag(0)
+                    HomeView().tabItem { Label("TODO", systemImage: "checklist") }.tag(0)
                     WakeRootView().tabItem { Label("起床", systemImage: "alarm") }.tag(1)
                     HabitRootView().tabItem { Label("習慣", systemImage: "leaf") }.tag(2)
                     FocusTimerRootView().tabItem { Label("集中", systemImage: "timer") }.tag(3)
