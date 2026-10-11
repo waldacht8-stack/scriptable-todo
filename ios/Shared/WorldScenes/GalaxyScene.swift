@@ -184,7 +184,7 @@ struct GalaxyCard: View {
         let sheen = LinearGradient(colors: [sceneColor(0x8A6BFF, 0.14), Color.clear],
                                    startPoint: .top, endPoint: .center)
         ZStack {
-            shape.fill(p.card.opacity(light ? 0.78 : 0.88))
+            shape.fill(p.card.opacity(light ? 0.78 : 1))
             shape.fill(sheen)
             shape.strokeBorder(rim, lineWidth: light ? 0.8 : 1)
         }

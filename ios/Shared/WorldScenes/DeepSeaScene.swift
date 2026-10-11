@@ -195,7 +195,7 @@ struct DeepSeaGlass: View {
         let sheen = LinearGradient(colors: [Color.white.opacity(0.12), Color.white.opacity(0.02)], startPoint: .top, endPoint: .bottom)
         let rim = LinearGradient(colors: [sceneColor(0xA0E6FF, 0.5), sceneColor(0x7DF9E6, 0.18)], startPoint: .top, endPoint: .bottom)
         ZStack {
-            shape.fill(p.card.opacity(light ? 0.8 : 0.88))
+            shape.fill(p.card.opacity(light ? 0.8 : 1))
             shape.fill(sheen)
             shape.strokeBorder(rim, lineWidth: light ? 0.8 : 1)
         }

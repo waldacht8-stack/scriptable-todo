@@ -213,10 +213,10 @@ struct SkyBackdrop: View {
             glow(sceneColor(0xFFC27A, 0.85), at: UnitPoint(x: 0.85, y: 1.0), r: w * 1.05)
         case .night:
             ZStack {
-                glow(sceneColor(0xDDE4FF, 0.28), at: UnitPoint(x: 0.82, y: 0.08), r: w * 0.5)
+                glow(sceneColor(0xDDE4FF, 0.28), at: UnitPoint(x: 0.6, y: 0.07), r: w * 0.5)
                 Circle().fill(sceneColor(0xF4F1E4)).frame(width: 26, height: 26)
                     .overlay(Circle().fill(sceneColor(0x121A42)).frame(width: 22, height: 22).offset(x: 7, y: -4))
-                    .position(x: w * 0.82, y: size.height * 0.08)
+                    .position(x: w * 0.6, y: size.height * 0.07)
             }
         }
     }
@@ -243,7 +243,7 @@ struct SkyCloudCard: View {
                 shape.inset(by: -6).fill(halo.opacity(0.4))
                 shape.inset(by: -3).fill(halo)
             }
-            shape.fill(p.card.opacity(night ? 0.9 : 0.93))
+            shape.fill(p.card.opacity(light ? (night ? 0.9 : 0.93) : 1))
             if night {
                 shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
             }
