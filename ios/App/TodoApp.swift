@@ -20,6 +20,7 @@ struct HiyoriApp: App {
                     guard p == .active else { return }
                     store.reload() // ウィジェット・通知で変えた内容を反映
                     if !ProcessInfo.processInfo.arguments.contains("-demo") { Task { await store.refreshServices() } }
+                    if !ProcessInfo.processInfo.arguments.contains("-demo") { DayCardReminder.reschedule() } // 1日1枚の通知を切らさない
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .todoDataChanged)) { _ in store.reload() }
         }
@@ -79,6 +80,8 @@ struct RootView: View {
                     InfoRootView().tabItem { Label("情報", systemImage: "newspaper") }.tag(4)
                 }
                 .kakeiboOpenURL { tab = 2 }
+                .onReceive(NotificationCenter.default.publisher(for: .openConsultTab)) { _ in tab = 3 }
+                .onAppear { if ConsultDeepLink.consumePending() { tab = 3 } }
                 .environment(\.openAppSettings, OpenAppSettingsAction { showSettings = true })
                 .sheet(isPresented: $showSettings) {
                     SettingsView().environmentObject(store).environment(\.palette, p)
