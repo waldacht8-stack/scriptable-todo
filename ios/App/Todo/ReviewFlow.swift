@@ -613,8 +613,8 @@ struct ReviewHost: ViewModifier {
                 Color.clear.fullScreenCover(item: $launch) { l in
                     ReviewFlowView(launch: l)
                         .environmentObject(store)
-                        .environment(.palette, p)
-                        .environment(.motion, motion)
+                        .environment(\.palette, p)
+                        .environment(\.motion, motion)
                         .preferredColorScheme(p.scheme)
                 }
             }

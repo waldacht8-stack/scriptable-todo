@@ -52,8 +52,8 @@ private struct WakeWatchCover: ViewModifier {
             .background {
                 Color.clear.fullScreenCover(isPresented: shown) {
                     WakeWatchStopView()
-                        .environment(.palette, p)
-                        .environment(.motion, motion)
+                        .environment(\.palette, p)
+                        .environment(\.motion, motion)
                         .preferredColorScheme(p.scheme)
                 }
             }
