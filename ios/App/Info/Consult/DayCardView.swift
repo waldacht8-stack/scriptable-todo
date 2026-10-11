@@ -38,8 +38,8 @@ struct ConsultRootView: View {
                 switchTo(.talk)
             })
             .environmentObject(store)
-            .environment(.palette, p)
-            .environment(.motion, motion)
+            .environment(\.palette, p)
+            .environment(\.motion, motion)
         }
         .task { await DayCardReminder.reschedule() }
     }
