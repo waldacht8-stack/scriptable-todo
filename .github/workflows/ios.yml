@@ -187,6 +187,7 @@ jobs:
           shot shots/info-list.png -demo -theme focus -tab 4 -infolist
           shot shots/info-games.png -demo -theme focus -tab 4 -infogames
           shot shots/info-night.png -demo -theme night -tab 4
+          shot shots/info-deck.png -demo -theme focus -tab 4 -infodeck
           # スプラトゥーン3（見本データ。RootView に .splatoonDemoLaunch() が入ると全画面で開く）
           shot shots/splatoon.png -demo -splatdemo
           shot shots/splatoon-records.png -demo -splatdemo -splatscroll records

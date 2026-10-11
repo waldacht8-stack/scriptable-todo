@@ -42,6 +42,7 @@ struct InfoListView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .contentMargins(.top, 4, for: .scrollContent)
+        .contentMargins(.horizontal, 8, for: .scrollContent)   // 一覧の幅を広く
         .animation(reduceMotion ? nil : motion.change, value: items.map(\.id))
         .refreshable { await model.refresh() }
     }

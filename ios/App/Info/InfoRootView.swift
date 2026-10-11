@@ -81,7 +81,7 @@ struct InfoTopicsScreen: View {
     let onOpen: (InfoArticle) -> Void
     let onOpenURL: (URL) -> Void
     @State private var filter: InfoFilter = .all
-    @State private var listMode = ProcessInfo.processInfo.arguments.contains("-infolist")   // スクリーンショット用
+    @State private var listMode = !ProcessInfo.processInfo.arguments.contains("-infodeck")   // 最初は一覧（-infodeck でカード：スクリーンショット用）
     @State private var editing: InfoTopicEdit?
     @Namespace private var chipSpace
 
