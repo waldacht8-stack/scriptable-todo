@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UserNotifications
+import AppIntents
 #if canImport(AlarmKit)
 import AlarmKit
 #endif
