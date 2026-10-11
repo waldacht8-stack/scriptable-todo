@@ -667,6 +667,8 @@ struct SunMoonSky: View {
                 RadialGradient(colors: [Color.white.opacity(0.35), .clear], center: UnitPoint(x: 0.2, y: 0.1), startRadius: 2, endRadius: 140)
             case .bento, .none:
                 EmptyView()
+            default:   // 地層・銀河・空・霧・深海は空の色そのものを見せる
+                EmptyView()
             }
         }
     }
