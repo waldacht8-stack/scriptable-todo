@@ -9,6 +9,11 @@ struct AppWidgets: WidgetBundle {
         TodoWidget()
         WakeWidget()
         WakeLiveActivity()
+        // リリース4：太陽と月の一日・見返し・今日のまとめ・ロック画面（Widget/DayWidgets.swift）
+        SunMoonWidget()
+        ReviewWidget()
+        SummaryWidget()
+        DayLockWidget()
         // 習慣・集中のタブを外したので、そのウィジェットも一覧から外す（リリース4）
     }
 }

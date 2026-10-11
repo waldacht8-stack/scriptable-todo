@@ -193,6 +193,22 @@ jobs:
           done
           shot shots/widgets-other.png -demo -widgetpreview -widgetsize other -theme focus
           shot shots/widgets-lock.png -demo -widgetpreview -widgetsize lock -theme focus
+          # リリース4のウィジェット：太陽と月の一日（3つの時刻）・見返し・今日のまとめ・起床（夜・見張り・スタンバイ）・ロック画面
+          shot shots/widgets-r4.png -demo -widgetpreview -widgetsize r4 -theme focus
+          shot shots/widgets-r4-sunmoon-0730.png -demo -widgetpreview -widgetsize sunmoon -widgettime 07:30 -theme focus
+          shot shots/widgets-r4-sunmoon-1300.png -demo -widgetpreview -widgetsize sunmoon -widgettime 13:00 -theme focus
+          shot shots/widgets-r4-sunmoon-2130.png -demo -widgetpreview -widgetsize sunmoon -widgettime 21:30 -theme focus
+          shot shots/widgets-r4-sunmoon-1700-hinata.png -demo -widgetpreview -widgetsize sunmoon -widgettime 17:00 -world hinata
+          shot shots/widgets-r4-sunmoon-1000-brutal.png -demo -widgetpreview -widgetsize sunmoon -widgettime 10:00 -world brutal
+          shot shots/widgets-r4-review.png -demo -widgetpreview -widgetsize review -theme focus
+          shot shots/widgets-r4-review-swiss.png -demo -widgetpreview -widgetsize review -world swiss
+          shot shots/widgets-r4-summary.png -demo -widgetpreview -widgetsize summary -theme dawn
+          shot shots/widgets-r4-summary-brutal.png -demo -widgetpreview -widgetsize summary -world brutal
+          shot shots/widgets-r4-summary-clay.png -demo -widgetpreview -widgetsize summary -world clay
+          shot shots/widgets-r4-wake.png -demo -widgetpreview -widgetsize wake4 -theme night
+          shot shots/widgets-r4-wake-aurora.png -demo -widgetpreview -widgetsize wake4 -world aurora
+          shot shots/widgets-r4-lock.png -demo -widgetpreview -widgetsize lock4 -theme focus
+          shot shots/widgets-r4-lock-swiss.png -demo -widgetpreview -widgetsize lock4 -world swiss
           # 設定画面を色合いごとに（暗い色合い・下の見出し・カスタマイズも）。カスタマイズは保存されて残るので最後に。
           # どれも -demo を付ける（付けないと起床のアラーム許可の確認が出て、答えるまで以降の写真にも重なり続ける）
           shot shots/settings-night.png -settings -demo -theme night
