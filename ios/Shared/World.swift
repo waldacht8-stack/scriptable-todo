@@ -19,6 +19,11 @@ enum World: String, CaseIterable, Identifiable {
     case bento      // ベント：大小のタイルを組んだ1画面
     case clay       // クレイ：粘土のようにぷっくり
     case swiss      // スイス：巨大な数字と格子
+    case strata     // 地層：用事が積もる。砂の層と堆積した板（WorldScenes/StrataScene.swift）
+    case galaxy     // 銀河：深い宇宙で星の腕が回る（WorldScenes/GalaxyScene.swift）
+    case sky        // 空：いまの時刻と天気の空に雲が流れる（WorldScenes/SkyScene.swift）
+    case mist       // 霧：夜明けの湖と森。霧の層が流れる（WorldScenes/MistScene.swift）
+    case deepsea    // 深海：浅瀬から深みへ。光がゆらぎマリンスノーが降る（WorldScenes/DeepSeaScene.swift）
 
     var id: String { rawValue }
     static func from(_ raw: String) -> World { World(rawValue: raw) ?? World.none }
@@ -35,6 +40,11 @@ enum World: String, CaseIterable, Identifiable {
         case .bento: "ベント"
         case .clay: "クレイ"
         case .swiss: "スイス"
+        case .strata: "地層"
+        case .galaxy: "銀河"
+        case .sky: "空"
+        case .mist: "霧"
+        case .deepsea: "深海"
         }
     }
 
@@ -47,6 +57,11 @@ enum World: String, CaseIterable, Identifiable {
         case .bento: "大小のタイルを組む"
         case .clay: "粘土のようにぷっくり"
         case .swiss: "巨大な数字と細い罫線"
+        case .strata: "用事が砂の層に積もる"
+        case .galaxy: "星の腕がゆっくり回る"
+        case .sky: "いまの時刻の空と雲"
+        case .mist: "夜明けの湖に霧が流れる"
+        case .deepsea: "光がゆらぐ深い海"
         }
     }
 
@@ -60,6 +75,11 @@ enum World: String, CaseIterable, Identifiable {
         case .bento: .snappy
         case .clay: .bouncy
         case .swiss: .crisp
+        case .strata: .gentle      // 静かに沈んで積もる・削れる
+        case .galaxy: .smooth      // 星がなめらかに流れる
+        case .sky: .smooth         // 雲のようにふわりと
+        case .mist: .gentle        // 霧のように控えめに
+        case .deepsea: .smooth     // 水の中のようにゆったり
         }
     }
 
@@ -99,6 +119,31 @@ enum World: String, CaseIterable, Identifiable {
                            text: wx(0x111111), sub: wx(0x555555), accent: wx(0xD71F16),
                            overdue: wx(0xD71F16), onAccent: .white,
                            fontDesign: .default, radius: 3, scheme: .light, world: .swiss)
+        case .strata:
+            // 文字は上〜86% の明るい層に載る（いちばん濃い層 #D9B985 でも本文 8.2・補足 5.4・強調 4.9）
+            return Palette(background: [wx(0xF4EADB), wx(0xD9B985)], card: wx(0xFAF3E7),
+                           text: wx(0x2A1A0C), sub: wx(0x523C2A), accent: wx(0x7A2E0C),
+                           overdue: wx(0x8F1F0B), onAccent: .white,
+                           fontDesign: .default, radius: 16, scheme: .light, world: .strata)
+        case .galaxy:
+            return Palette(background: [wx(0x1B1440), wx(0x03030A)], card: wx(0x161236),
+                           text: wx(0xF5F2FF), sub: wx(0xC9C5EA), accent: wx(0xFFD9A8),
+                           overdue: wx(0xFF9DB8), onAccent: wx(0x1E1638),
+                           fontDesign: .rounded, radius: 22, scheme: .dark, world: .galaxy)
+        case .sky:
+            // 時刻で変わる（明け方・昼・夕方は明るい色合い、夜は暗い色合い）
+            return SkyPhase.current().palette
+        case .mist:
+            return Palette(background: [wx(0xC4CBD0), wx(0xAEB8C0)], card: wx(0xF3F4F3),
+                           text: wx(0x1C2731), sub: wx(0x283846), accent: wx(0x27435A),
+                           overdue: wx(0x7E300C), onAccent: .white,
+                           fontDesign: .default, radius: 20, scheme: .light, world: .mist)
+        case .deepsea:
+            // 上の浅瀬（#0C6A8A）でも本文 5.7・補足 4.8
+            return Palette(background: [wx(0x0C6A8A), wx(0x01060E)], card: wx(0x0A2E48),
+                           text: wx(0xE8F8FF), sub: wx(0xC8EAF5), accent: wx(0x7DF9E6),
+                           overdue: wx(0xFFC2A3), onAccent: wx(0x02213A),
+                           fontDesign: .rounded, radius: 22, scheme: .dark, world: .deepsea)
         }
     }
 
@@ -107,6 +152,7 @@ enum World: String, CaseIterable, Identifiable {
         switch self {
         case .swiss: 76
         case .brutal: 60
+        case .galaxy: 60
         default: 56
         }
     }
@@ -149,6 +195,16 @@ struct WorldBackground: View {
                     }
                 }
             }
+        case .strata:
+            StrataBackdrop(p: p)
+        case .galaxy:
+            GalaxyBackdrop(p: p)
+        case .sky:
+            SkyBackdrop(p: p)
+        case .mist:
+            MistBackdrop(p: p)
+        case .deepsea:
+            DeepSeaBackdrop(p: p)
         default:
             base
         }
@@ -218,10 +274,43 @@ struct WorldCardSurface: View {
                 .shadow(color: wx(0x784614, 0.18), radius: 18, y: 10)
         case .bento:
             shape.fill(p.card)
+        case .strata:
+            StrataSlab(p: p)
+        case .galaxy:
+            GalaxyCard(p: p)
+        case .sky:
+            SkyCloudCard(p: p)
+        case .mist:
+            MistCard(p: p)
+        case .deepsea:
+            DeepSeaGlass(p: p)
         case .none:
             let shadow: Color = .black.opacity(p.scheme == .dark || p.outline != nil ? 0 : 0.06)
             shape.fill(p.card).shadow(color: shadow, radius: 12, y: 4)
                 .overlay(shape.strokeBorder(p.outline ?? .clear, lineWidth: p.outline == nil ? 0 : 1.5))
+        }
+    }
+}
+
+// MARK: - 世界観ごとの大きな数字の光（BigCount が使う）
+
+extension View {
+    /// 大きな数字に世界観の光をのせる。銀河は星のように光り、深海は冷たく光る。地層は刻んだような白い縁
+    @ViewBuilder
+    func worldNumberGlow(_ p: Palette) -> some View {
+        switch p.world {
+        case .galaxy:
+            self.shadow(color: wx(0xFFE4B8, 0.75), radius: 6).shadow(color: wx(0x8A6BFF, 0.65), radius: 18)
+        case .deepsea:
+            self.shadow(color: wx(0x7DF9E6, 0.5), radius: 10)
+        case .strata:
+            self.shadow(color: Color.white.opacity(0.6), radius: 0, x: 0, y: 1)
+        case .sky:
+            self.shadow(color: Color.white.opacity(p.scheme == .dark ? 0.25 : 0.55), radius: 10)
+        case .mist:
+            self.shadow(color: wx(0xFFE2BC, 0.7), radius: 12)
+        default:
+            self
         }
     }
 }

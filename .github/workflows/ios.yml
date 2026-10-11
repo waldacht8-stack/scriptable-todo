@@ -91,7 +91,7 @@ jobs:
           # 起動して撮る。真っ白（小さいファイル）なら、待って撮り直す（遅いシミュレーター対策）
           # 担当の枝では、SHOTS_ON_BRANCH に名前が合う写真だけ撮る（時間短縮）。main ではすべて撮る
           # 各担当は自分の枝でこの値に自分の写真の名前（正規表現）を足す。例："kakeibo|tab-2"
-          SHOTS_ON_BRANCH="tab-|home-focus"
+          SHOTS_ON_BRANCH="world-(strata|galaxy|sky|mist|deepsea)|settings-world-new"
           shot() {
             out=$1; shift
             if [ "$GITHUB_REF_NAME" != "main" ] && ! echo "$out" | grep -qE "$SHOTS_ON_BRANCH"; then
@@ -190,6 +190,18 @@ jobs:
           shot shots/world-clay-checklist.png -demo -layout checklist -world clay -tab 0
           shot shots/world-bento-focus.png -demo -world bento -tab 3
           shot shots/settings-world.png -settings -demo -world hinata -settingsSection world
+          # 新しい世界観（地層・銀河・空・霧・深海）：TODO・起床・ウィジェット
+          for world in strata galaxy sky mist deepsea; do
+            shot "shots/world-$world.png" -demo -world $world
+            shot "shots/world-$world-wake.png" -demo -tab 1 -world $world
+            shot "shots/widgets-world-$world.png" -demo -widgetpreview -world $world
+          done
+          shot shots/world-sky-dawn.png -demo -world sky -skyhour 6
+          shot shots/world-sky-dusk.png -demo -world sky -skyhour 17
+          shot shots/world-sky-night.png -demo -world sky -skyhour 22
+          shot shots/widgets-world-sky-night.png -demo -widgetpreview -world sky -skyhour 22
+          shot shots/widgets-world-deepsea-other.png -demo -widgetpreview -widgetsize other -world deepsea
+          shot shots/settings-world-new.png -settings -demo -world galaxy -settingsSection world
           # ウィジェットの世界観（TODO の小・中・大、起床・習慣・ロック画面）
           for world in hinata brutal aurora bento clay swiss; do
             shot "shots/widgets-world-$world.png" -demo -widgetpreview -world $world

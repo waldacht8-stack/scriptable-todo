@@ -366,6 +366,7 @@ struct BigCount: View {
             Text("\(value)").font(.system(size: p.world.bigNumberSize, weight: .heavy, design: p.fontDesign))
                 .tracking(p.world.bigNumberTracking)
                 .foregroundStyle(p.world.bigNumberAccent ? p.accent : p.text)
+                .worldNumberGlow(p)
                 .contentTransition(.numericText())
             Text(suffix).font(.title3.weight(.semibold)).foregroundStyle(p.sub)
             Spacer()
