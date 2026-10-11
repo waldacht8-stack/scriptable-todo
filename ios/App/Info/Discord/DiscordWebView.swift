@@ -61,6 +61,12 @@ final class DiscordWebController: NSObject, ObservableObject {
         }
     }
 
+    /// DM の一覧（ログイン済みならそのまま開く）
+    func openDMs() {
+        guard !isDemo, let url = URL(string: "https://discord.com/channels/@me") else { return }
+        webView.load(URLRequest(url: url))
+    }
+
     func goBack() { webView.goBack() }
     func goForward() { webView.goForward() }
 

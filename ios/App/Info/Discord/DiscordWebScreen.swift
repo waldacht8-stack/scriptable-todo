@@ -160,6 +160,7 @@ struct DiscordWebScreen: View {
             barButton("chevron.backward", "戻る", enabled: web.canGoBack) { web.goBack() }
             barButton("chevron.forward", "進む", enabled: web.canGoForward) { web.goForward() }
             barButton("arrow.clockwise", "再読み込み", enabled: true) { web.reload() }
+            barButton("bubble.left.and.bubble.right", "DM", enabled: true) { web.openDMs() }
             Spacer(minLength: 2)
             zoomControl
             Spacer(minLength: 2)
