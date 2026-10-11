@@ -480,7 +480,10 @@ struct ReviewStatusLine: View {
     private func cta(_ st: ReviewState) -> some View {
         if let due = st.dueSlot {
             let text: String = "\(due.name)の見返し"
-            Label(text, systemImage: "play.fill")
+            HStack(spacing: 4) {
+                Image(systemName: "play.fill")
+                Text(text)
+            }
                 .font(Font.caption.weight(.heavy)).lineLimit(1).fixedSize()
                 .foregroundStyle(p.onAccent)
                 .padding(.horizontal, 10).frame(height: 28)
@@ -605,12 +608,15 @@ struct ReviewHost: ViewModifier {
         content
             .environment(\.openReview, OpenReviewAction { slot in launch = ReviewLaunch.make(slot) })
             .environment(\.openReviewSettings, OpenReviewSettingsAction { showSettings = true })
-            .fullScreenCover(item: $launch) { l in
-                ReviewFlowView(launch: l)
-                    .environmentObject(store)
-                    .environment(\.palette, p)
-                    .environment(\.motion, motion)
-                    .preferredColorScheme(p.scheme)
+            // 全画面は背景の透明な部品から出す（同じ並びに見張りの全画面もあり、同じ所に2つ付けると片方しか開かない）
+            .background {
+                Color.clear.fullScreenCover(item: $launch) { l in
+                    ReviewFlowView(launch: l)
+                        .environmentObject(store)
+                        .environment(.palette, p)
+                        .environment(.motion, motion)
+                        .preferredColorScheme(p.scheme)
+                }
             }
             .sheet(isPresented: $showSettings) {
                 ReviewSettingsSheet().environment(\.palette, p).preferredColorScheme(p.scheme)

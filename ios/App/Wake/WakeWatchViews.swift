@@ -49,11 +49,13 @@ private struct WakeWatchCover: ViewModifier {
             }
             .onDisappear { if presenter.visible == host { presenter.visible = nil } }
             .onChange(of: scene) { _, s in if s == .active { presenter.check() } }
-            .fullScreenCover(isPresented: shown) {
-                WakeWatchStopView()
-                    .environment(\.palette, p)
-                    .environment(\.motion, motion)
-                    .preferredColorScheme(p.scheme)
+            .background {
+                Color.clear.fullScreenCover(isPresented: shown) {
+                    WakeWatchStopView()
+                        .environment(.palette, p)
+                        .environment(.motion, motion)
+                        .preferredColorScheme(p.scheme)
+                }
             }
     }
 }
