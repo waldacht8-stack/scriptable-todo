@@ -172,16 +172,17 @@ jobs:
           shot shots/kakeibo-applepay-check.png -demo -theme focus -tab 2 -kakeiboapplepay 3
           shot shots/kakeibo-all.png -demo -theme focus -tab 2 -kakeiboall
           shot shots/kakeibo-settings.png -demo -theme focus -tab 2 -kakeibosettings
-          # 習慣・集中：色合い・空・20件と長い名前・記録・編集・時間の設定
-          shot shots/habit-night.png -demo -theme night -tab 2
-          shot shots/habit-records-paper.png -demo -theme paper -tab 2 -habitrecords
-          shot shots/habit-empty-dawn.png -habitempty -theme dawn -tab 2
-          shot shots/habit-many.png -habitmany -theme focus -tab 2
-          shot shots/habit-edit-night.png -demo -theme night -tab 2 -habitedit
-          shot shots/focus-night.png -demo -theme night -tab 3
-          shot shots/focus-settings-dawn.png -demo -theme dawn -tab 3 -focussettings
-          shot shots/focus-celebrate-paper.png -demo -theme paper -tab 3 -focuscelebrate
-          shot shots/focus-celebrate-dawn.png -demo -theme dawn -tab 3 -focuscelebrate
+          # リリース4（TODO・起床）：TODO の見返し（朝・夜と棚卸し・設定・見出しの1行）と、起床の見張り（見張り中・止める画面・夜の確認・二度寝の記録）
+          shot shots/review-morning.png -demo -layout focus -theme focus -tab 0 -reviewdemo morning
+          shot shots/review-night-weekly.png -demo -layout focus -theme night -tab 0 -reviewdemo night -reviewweekly
+          shot shots/review-noon-hinata.png -demo -layout focus -world hinata -tab 0 -reviewdemo noon
+          shot shots/review-settings.png -demo -layout board -theme focus -tab 0 -reviewsettings
+          shot shots/home-review-line.png -demo -layout board -theme dawn -tab 0
+          shot shots/wake-watch.png -demo -theme focus -tab 1 -wakewatchdemo
+          shot shots/wake-watch-stop.png -demo -theme dawn -tab 1 -wakewatchstop
+          shot shots/wake-evening-check.png -demo -theme focus -tab 1 -wakePhase evening
+          shot shots/wake-records-oversleep.png -demo -theme night -tab 1 -wakeShot records
+          shot shots/wake-morning-review.png -demo -theme focus -tab 1 -wakePhase after
           # 情報タブ（一覧・ゲーム・ナイト）
           shot shots/info-list.png -demo -theme focus -tab 4 -infolist
           shot shots/info-games.png -demo -theme focus -tab 4 -infogames

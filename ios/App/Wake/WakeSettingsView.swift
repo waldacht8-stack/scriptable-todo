@@ -124,6 +124,25 @@ struct WakeSettingsView: View {
             .listRowBackground(p.card)
 
             Section {
+                Toggle("二度寝の見張り", isOn: Binding(
+                    get: { model.settings.watch },
+                    set: { v in
+                        model.update { $0.watch = v }
+                        if v { Task { await WakeSteps.requestAccess() } }
+                    }))
+                if model.settings.watch {
+                    Stepper("鳴らし直す上限：\(model.settings.watchRearms)回", value: Binding(
+                        get: { model.settings.watchRearms },
+                        set: { v in model.update { $0.watchRearms = v } }), in: 1...10)
+                }
+            } header: {
+                Text("二度寝の見張り")
+            } footer: {
+                Text("アラームの「止める」で見張りが始まり、10分後と20分後に見張りのアラームを鳴らします（元のアラームの残りは止まります）。約\(WakeWatchLogic.awakeSteps)歩 歩くと見張りは終わります。見張りのアラームは\(WakeWatchLogic.ringSteps)歩 歩くか計算3問で止まり、「止める」だけだと\(WakeWatchLogic.rearmMinutes)分後にまた鳴ります。見張りの準備に失敗したときは、元のアラームがそのまま鳴ります。")
+            }
+            .listRowBackground(p.card)
+
+            Section {
                 Button("アラームを今すぐ予約し直す") { model.scheduleAll() }
                 if !model.message.isEmpty { Text(model.message).font(.footnote).foregroundStyle(p.sub) }
                 Button("1分後にテストで鳴らす") {
@@ -133,7 +152,9 @@ struct WakeSettingsView: View {
             } header: {
                 Text("アラーム")
             } footer: {
-                Text("マナーモード・画面ロック中でも鳴ります。アラーム画面の「止める」は今の音を止めるだけで、次のアラームは鳴ります。「起きた！」を押すと起床を記録し、残りのアラームがすべて止まります。")
+                Text(model.settings.watch
+                     ? "マナーモード・画面ロック中でも鳴ります。アラーム画面の「止める」で二度寝の見張りが始まります。「起きた！」を押すと起床を記録し、残りのアラームがすべて止まります。"
+                     : "マナーモード・画面ロック中でも鳴ります。アラーム画面の「止める」は今の音を止めるだけで、次のアラームは鳴ります。「起きた！」を押すと起床を記録し、残りのアラームがすべて止まります。")
             }
             .listRowBackground(p.card)
         }

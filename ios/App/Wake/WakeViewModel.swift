@@ -10,6 +10,10 @@ final class WakeViewModel: ObservableObject {
     @Published var message = ""
     @Published var feedback = 0
     @Published var undoToast = false
+    /// 二度寝の見張り（Shared/WakeWatch.swift）
+    @Published var watch: WakeWatchState = .idle
+    /// 次の起床日に、AlarmKit に実際に入っているアラームの数（分からなければ nil）
+    @Published var liveAlarmCount: Int? = nil
     private var toastToken = 0
     let demo: Bool
     private var rescheduleTask: Task<Void, Never>?
@@ -20,6 +24,7 @@ final class WakeViewModel: ObservableObject {
         if demo {
             var phase = "after"
             if let i = args.firstIndex(of: "-wakePhase"), i + 1 < args.count { phase = args[i + 1] }
+            if args.contains("-wakewatchdemo") || args.contains("-wakewatchstop") { phase = "watch" }
             WakeDemo.install(phase: phase)
         }
         settings = WakeStore.settings()
@@ -44,8 +49,32 @@ final class WakeViewModel: ObservableObject {
         settings = WakeStore.settings()
         state = WakeStore.state()
         sessions = WakeStore.sessions()
+        watch = WakeWatchState.load(now: now)
         if reschedule && !demo { scheduleAll() }
-        if !demo { Task { await WakeActivityControl.sync() } }
+        if !demo {
+            Task { await WakeActivityControl.sync() }
+            pollWatch()
+            if settings.watch { Task { await WakeSteps.requestAccess() } }   // 歩数の許可（一度だけ確認が出る）
+        }
+    }
+
+    /// 見張り中なら歩数を確かめる（約100歩で見張りが終わり、起床を記録する）
+    func pollWatch() {
+        guard !demo else { return }
+        Task {
+            let w = await WakeWatchActions.poll()
+            watch = w
+            if !w.isWatching {
+                state = WakeStore.state()
+                sessions = WakeStore.sessions()
+            }
+        }
+    }
+
+    /// 夜の確認：次の起床日のアラームが AlarmKit に入っているか
+    func checkAlarms() {
+        guard !demo, let plan = nextPlan else { liveAlarmCount = nil; return }
+        liveAlarmCount = WakeActions.liveAlarmCount(day: plan.day)
     }
 
     func update(_ change: (inout WakeSettings) -> Void) {
@@ -70,6 +99,7 @@ final class WakeViewModel: ObservableObject {
             await WakeActions.scheduleBelongings()
             message = msg
             state = WakeStore.state()
+            checkAlarms()
         }
     }
 
@@ -81,13 +111,15 @@ final class WakeViewModel: ObservableObject {
             state.checkInAt = now
             sessions.removeAll { $0.day == k }
             sessions.insert(WakeSession(day: k, checkInAt: now, stage: stage, score: WakeLogic.score(stage: stage)), at: 0)
+            watch = .idle
             feedback += 1
             showUndoToast()
             return
         }
         guard canCheckIn else { return }
         Task {
-            guard await WakeActions.checkIn(at: .now) != nil else { return }
+            guard await WakeActions.checkIn(at: .now, fromApp: true) != nil else { return }
+            watch = WakeWatchState.load()
             refresh(reschedule: false)
             feedback += 1
             showUndoToast()
@@ -204,6 +236,7 @@ enum WakeDemo {
         case "before": minute = 4 * 60 + 40
         case "window": minute = 7 * 60 + 12
         case "evening": minute = 22 * 60 + 30
+        case "watch": minute = 7 * 60 + 6
         default: minute = 7 * 60 + 31
         }
         let fake = cal.date(byAdding: .minute, value: minute, to: today) ?? .now
@@ -229,6 +262,39 @@ enum WakeDemo {
             guard let d = cal.date(byAdding: .day, value: -(i + 1), to: today) else { continue }
             let at = cal.date(byAdding: .minute, value: 420 + max(0, stage - 1) * 10 + 3, to: d)
             sessions.append(WakeSession(day: WakeLogic.key(d), checkInAt: at, stage: stage, score: WakeLogic.score(stage: stage)))
+        }
+        // 二度寝の記録の見本（5日前は12分の二度寝、2日前は見張りで起床）
+        for i in sessions.indices {
+            if i == 4 { sessions[i].oversleep = 12; sessions[i].score = WakeWatchLogic.score(stage: sessions[i].stage, oversleepMinutes: 12) }
+            if i == 1 { sessions[i].oversleep = 0; sessions[i].watchedBy = "steps" }
+        }
+        if phase == "evening", let tomorrow = cal.date(byAdding: .day, value: 1, to: today) {
+            // 夜の確認の見本：明日の4回が入っている
+            for (n, off) in [0, 10, 20, 30].enumerated() {
+                let at = cal.date(byAdding: .minute, value: 420 + off, to: tomorrow) ?? tomorrow
+                st.alarms.append(WakeScheduledAlarm(id: UUID().uuidString, at: at, day: WakeLogic.key(tomorrow), stage: n + 1))
+            }
+            WakeStore.save(st)
+        }
+        if phase == "watch" {
+            // 見張りの見本：7:01 に1回目を止めて、34歩。次の見張りは 7:11
+            let stop = cal.date(byAdding: .minute, value: 7 * 60 + 1, to: today) ?? fake
+            var r = WakeWatchRecord(day: WakeLogic.key(fake), stopAt: stop, stoppedStage: 1)
+            r.replacedOriginals = true
+            r.steps = 34
+            r.stepsAt = fake
+            for (n, at) in WakeWatchLogic.watchTimes(stopAt: stop).enumerated() {
+                r.alarms.append(WakeScheduledAlarm(id: UUID().uuidString, at: at, day: r.day, stage: n + 1))
+            }
+            if ProcessInfo.processInfo.arguments.contains("-wakewatchstop") {
+                r.rangAt = fake
+                r.stepsAtRing = 22
+            }
+            WakeWatchStore.save(r)
+        } else if let old = WakeWatchStore.record(), old.endedAt == nil {
+            var r = old
+            r.endedAt = fake
+            WakeWatchStore.save(r)   // 前の撮影の見張りを持ち越さない
         }
         if phase == "after" || phase == "evening" {
             sessions.append(WakeSession(day: WakeLogic.key(today), checkInAt: cal.date(byAdding: .minute, value: 428, to: today),

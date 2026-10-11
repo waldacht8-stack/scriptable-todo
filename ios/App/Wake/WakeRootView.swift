@@ -63,6 +63,28 @@ struct WakeRootView: View {
         .sensoryFeedback(.success, trigger: model.feedback)
         .onAppear { model.refresh(reschedule: true) }
         .onChange(of: scene) { _, s in if s == .active { model.refresh(reschedule: true) } }
+        .modifier(WakeWatchHosting(model: model))
+    }
+}
+
+/// 二度寝の見張り（止める画面・歩数の見回り）と、朝の見返しの全画面
+private struct WakeWatchHosting: ViewModifier {
+    @ObservedObject var model: WakeViewModel
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(ReviewHost(handlesRequests: false))
+            .wakeWatchStopCover(.wake)
+            .onReceive(NotificationCenter.default.publisher(for: .wakeWatchChanged)) { _ in model.refresh(reschedule: false) }
+            // 見張り中は20秒ごとに歩数を確かめる（約100歩で見張りが終わる）
+            .task(id: model.watch.isWatching) {
+                guard model.watch.isWatching, !model.demo else { return }
+                while !Task.isCancelled && model.watch.isWatching {
+                    try? await Task.sleep(for: .seconds(20))
+                    if Task.isCancelled { break }
+                    model.pollWatch()
+                }
+            }
     }
 }
 
@@ -302,7 +324,9 @@ struct WakeAlarmHint: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            row(icon: "stop.circle", title: "止める", text: "今の音だけ止まります。次のアラームは鳴ります")
+            row(icon: "stop.circle", title: "止める", text: WakeStore.settings().watch
+                ? "二度寝の見張りが始まります。10分後・20分後に見張りのアラーム。約100歩 歩けば鳴りません"
+                : "今の音だけ止まります。次のアラームは鳴ります")
             row(icon: "sun.max.fill", title: "起きた！", text: "残りのアラームがすべて止まり、起床を記録します")
         }
     }
@@ -408,8 +432,13 @@ struct WakeWindowView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var burst = false
 
-    /// 押したら朝日が広がるように光らせてから、チェックインする
+    /// 押したら朝日が広がるように光らせてから、チェックインする。
+    /// 見張りのアラームが鳴った後は、歩くか計算で止める画面を開く
     private func tapCheckIn() {
+        if model.watch.needsProof && !model.demo {
+            WakeWatchPresenter.shared.showStop = true
+            return
+        }
         guard !burst else { return }
         if reduceMotion {
             model.checkIn()
@@ -419,33 +448,58 @@ struct WakeWindowView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { model.checkIn() }
     }
 
+    /// 見張り中は「起きてるよ」（見張りを止めて起床を記録する）
+    private var bigLabel: String {
+        guard model.watch.isWatching else { return "起きた！" }
+        return model.watch.needsProof ? "歩いて止める" : "起きてるよ"
+    }
+
+    private func scoreLine(reached: Int) -> String {
+        if model.watch.isWatching {
+            let stage: Int = model.watch.stoppedStage ?? reached
+            return "\(stage)回目で止めた・\(WakeLogic.score(stage: stage))点"
+        }
+        return "今なら \(WakeLogic.score(stage: reached))点"
+    }
+
+    private var footLine: String {
+        guard model.watch.isWatching else { return "押すと、残りのアラームがすべて止まります" }
+        return model.watch.needsProof ? "押すと、歩数か計算で止める画面を開きます" : "押すと、見張りが終わり起床を記録します"
+    }
+
     var body: some View {
         let plan = model.todayPlan
         let reached = plan.map { WakeLogic.reached($0, at: model.now) } ?? 0
+        let watching: Bool = model.watch.isWatching
+        if watching { WakeWatchCard(model: model) }
         VStack(spacing: 18) {
-            Text(statusText(plan: plan, reached: reached)).font(.headline).foregroundStyle(p.sub)
-                .multilineTextAlignment(.center)
+            if !watching {
+                Text(statusText(plan: plan, reached: reached)).font(.headline).foregroundStyle(p.sub)
+                    .multilineTextAlignment(.center)
+            }
             Button { tapCheckIn() } label: {
                 VStack(spacing: 6) {
-                    Image(systemName: "sun.max.fill").font(.system(size: 44, weight: .bold))
+                    Image(systemName: watching ? "hand.wave.fill" : "sun.max.fill").font(.system(size: 44, weight: .bold))
                         .symbolEffect(.bounce, value: burst)
-                    Text("起きた！").font(.system(size: 46, weight: .heavy, design: p.fontDesign))
-                    Text("今なら \(WakeLogic.score(stage: reached))点").font(.headline)
+                    Text(bigLabel).font(.system(size: 46, weight: .heavy, design: p.fontDesign))
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    Text(scoreLine(reached: reached)).font(.headline)
                 }
                 .foregroundStyle(p.onAccent)
+                .padding(.horizontal, 16)
                 .frame(width: 240, height: 240)
                 .background(Circle().fill(p.accent).shadow(color: p.accent.opacity(0.4), radius: 20, y: 8))
                 .scaleEffect(burst ? 1.06 : 1)
                 .background { if burst { WakeSunBurst(color: p.accent) } }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("起きた！チェックイン")
-            Text("押すと、残りのアラームがすべて止まります").font(Font.footnote).foregroundStyle(p.sub)
+            .accessibilityLabel(watching ? "\(bigLabel)。見張りを止めて起床を記録" : "起きた！チェックイン")
+            Text(footLine).font(Font.footnote).foregroundStyle(p.sub)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
         .paletteCard(p)
-        if let plan { WakeStageTimeline(plan: plan, reached: reached) }
+        if let plan, !watching { WakeStageTimeline(plan: plan, reached: reached) }
     }
 
     private func statusText(plan: WakePlan?, reached: Int) -> String {
@@ -463,9 +517,11 @@ struct WakeWindowView: View {
 
 struct WakeMorningView: View {
     @ObservedObject var model: WakeViewModel
+    @EnvironmentObject var store: TodoStore
     @StateObject private var weather = WakeWeatherModel()
 
     var body: some View {
+        WakeMorningReviewCard(items: store.items)   // 朝の見返し（まだなら）
         // 出発前は「出発まで」とルーティンを先頭に。起床の結果は小さく
         if let dep = model.departure, dep > model.now {
             WakeResultStrip(model: model)
@@ -730,6 +786,7 @@ struct WakeEveningView: View {
     @Environment(\.palette) private var p
 
     var body: some View {
+        WakeEveningCheck(model: model)   // 明日のアラームが入っているか
         if let plan = model.nextPlan {
             WakeBedtimeCard(plan: plan, bed: WakeLogic.bedtime(before: plan, settings: model.settings), now: model.now)
         }

@@ -14,7 +14,10 @@ final class TodoStore: ObservableObject {
 
     init() {
         let args = ProcessInfo.processInfo.arguments
-        if args.contains("-demo") { TodoData.save(args.contains("-demomany") ? Self.manyDemo() : TodoData.demo()) }
+        if args.contains("-demo") {
+            TodoData.save(args.contains("-demomany") ? Self.manyDemo() : TodoData.demo())
+            ReviewDemo.install()   // 見返しの見本（連続日数・古いTODO）
+        }
         var s = SettingsData.load()
         if let v = Self.arg("-theme", args) { s.theme = v }
         if let v = Self.arg("-layout", args) { s.layout = v }
@@ -54,6 +57,7 @@ final class TodoStore: ObservableObject {
 
     func reload() {
         items = TodoData.all()
+        ReviewStore.noteSeen(items)   // 見返し：TODO を初めて見た日を覚える（「3日以上前から」などに使う）
         let s = SettingsData.load()
         theme = AppTheme.from(s.theme)
         layout = TodayLayout.from(s.layout)
@@ -119,7 +123,7 @@ final class TodoStore: ObservableObject {
     }
 
     /// 期限の移し先（長押しメニュー・かんばん）
-    enum DueMove { case today, tomorrow, nextWeek, noDue }
+    enum DueMove { case today, tomorrow, thisWeek, nextWeek, noDue }
 
     /// 期限を移す。時刻つきなら時刻はそのまま、日だけ変える
     func move(_ item: TodoItem, to target: DueMove) {
@@ -130,6 +134,7 @@ final class TodoStore: ObservableObject {
         switch target {
         case .today: day = today
         case .tomorrow: day = cal.date(byAdding: .day, value: 1, to: today)
+        case .thisWeek: day = ReviewLogic.thisWeekDay(from: .now)
         case .nextWeek: day = DueChoice.nextMonday(from: today)
         case .noDue: day = nil
         }
@@ -152,6 +157,7 @@ final class TodoStore: ObservableObject {
         switch target {
         case .today: name = "今日"
         case .tomorrow: name = "明日"
+        case .thisWeek: name = "今週（週末）"
         case .nextWeek: name = "来週"
         case .noDue: name = "期限なし"
         }
