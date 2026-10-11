@@ -57,9 +57,11 @@ enum WakeActions {
         let settings = WakeStore.settings()
         var state = WakeStore.state()
 
-        // 鳴っている最中のもの以外は、いったんすべて取り消す
+        // 鳴っている最中のものと、二度寝の見張りのアラーム以外は、いったんすべて取り消す
         let existing: [Alarm] = (try? manager.alarms) ?? []
-        for a in existing where a.state != .alerting {
+        let watch: WakeWatchRecord? = WakeWatchStore.active(now: now)
+        let watchIDs: Set<String> = Set((watch?.alarms ?? []).map(\.id))
+        for a in existing where a.state != .alerting && !watchIDs.contains(a.id.uuidString) {
             try? manager.cancel(id: a.id)
         }
         let alerting = Set(existing.filter { $0.state == .alerting }.map { $0.id.uuidString })
@@ -67,16 +69,22 @@ enum WakeActions {
 
         let todayKey = WakeLogic.key(now)
         let checked = WakeLogic.checkedIn(state, now: now) != nil
+        // 見張りがこれから鳴る見張りのアラームを持っているときだけ、今日の元のアラームを入れ直さない。
+        // 見張りのアラームが消えていたら（失敗・上限）、元のアラームの残りを入れ直す（元の動きに戻る）
+        let liveIDs: Set<String> = Set(existing.map { $0.id.uuidString })
+        let watching: Bool = watch.map { w in
+            w.replacedOriginals && w.alarms.contains { $0.at > now && liveIDs.contains($0.id) }
+        } ?? false
         var count = 0
         var firstAt: Date? = nil
         for plan in WakeLogic.plans(from: now, days: horizonDays, settings: settings, state: state) where !plan.isSkipped {
-            if plan.day == todayKey && checked { continue }
+            if plan.day == todayKey && (checked || watching) { continue }
             var any = false
             for stage in plan.stages where stage.at > now {
                 let id = UUID()
                 do {
                     let next: Date? = plan.stages.first(where: { $0.number == stage.number + 1 })?.at
-                    try await scheduleOne(id: id, stage: stage, total: plan.stages.count, next: next)
+                    try await scheduleOne(id: id, stage: stage, total: plan.stages.count, next: next, day: plan.day, watch: settings.watch)
                     state.alarms.append(WakeScheduledAlarm(id: id.uuidString, at: stage.at, day: plan.day, stage: stage.number))
                     count += 1
                     any = true
@@ -93,13 +101,16 @@ enum WakeActions {
     }
 
     @available(iOS 26.0, *)
-    private static func scheduleOne(id: UUID, stage: WakePlan.Stage, total: Int, next: Date?) async throws {
+    private static func scheduleOne(id: UUID, stage: WakePlan.Stage, total: Int, next: Date?,
+                                    day: String, watch: Bool) async throws {
         let stop = AlarmButton(text: "止める", textColor: .white, systemImageName: "stop.circle")
         let up = AlarmButton(text: "起きた！", textColor: .white, systemImageName: "sun.max.fill")
         // 「止める」は今の音を止めるだけで、次のアラームは鳴る。そのことを題名で伝える
         let head: String = stage.name.isEmpty ? "起床アラーム \(stage.number)/\(total)" : "\(stage.name)（\(stage.number)/\(total)）"
         let tail: String
-        if let next {
+        if watch {
+            tail = "止めると二度寝の見張りが始まります"
+        } else if let next {
             tail = "止めても\(JP.time(next))にまた鳴ります"
         } else {
             tail = "最後のアラームです"
@@ -116,11 +127,15 @@ enum WakeActions {
             metadata: WakeAlarmMetadata(stage: stage.number),
             tintColor: Color(red: 0.91, green: 0.38, blue: 0.36)
         )
+        // 「止める」で二度寝の見張りを始める（見張りがオフなら今までどおり、音を止めるだけ）。
+        // 見張りの処理が失敗しても、元のアラームは取り消されずに鳴る
+        let stopIntent: (any LiveActivityIntent)? = watch
+            ? WakeStopIntent(alarmID: id.uuidString, stage: stage.number, day: day) : nil
         let config = AlarmManager.AlarmConfiguration<WakeAlarmMetadata>(
             countdownDuration: nil,
             schedule: .fixed(stage.at),
             attributes: attributes,
-            stopIntent: nil,
+            stopIntent: stopIntent,
             secondaryIntent: WakeCheckInIntent(),
             sound: .default
         )
@@ -150,18 +165,31 @@ enum WakeActions {
     /// 起床チェックイン：今日の残りのアラームを取り消し、記録を保存し、持ち物の通知を予約する。
     /// 受付時間（最初のアラームの2時間前〜その日の受付終わり）の外では何もしない（nil を返す）
     @discardableResult
-    static func checkIn(at now: Date = .now) async -> WakeSession? {
+    static func checkIn(at now: Date = .now, fromApp: Bool = false) async -> WakeSession? {
         let todayKey = WakeLogic.key(now)
         var sessions = WakeStore.sessions()
         var state = WakeStore.state()
         let settings = WakeStore.settings()
         if state.day == todayKey, state.checkInAt != nil, let s = sessions.first(where: { $0.day == todayKey }) {
+            _ = await WakeWatchActions.closeForCheckIn(now: now)   // 見張りが残っていたら止める
             return s
         }
         guard WakeLogic.canCheckIn(now: now, settings: settings, state: state) else { return nil }
         let plan = WakeLogic.plan(for: now, settings: settings, state: state)
-        let stage = plan.map { WakeLogic.reached($0, at: now) } ?? 0
-        let session = WakeSession(day: todayKey, checkInAt: now, stage: stage, score: WakeLogic.score(stage: stage), missed: nil)
+        // 二度寝の見張り中なら、見張りを止めて「何回目で止めたか・二度寝の分」で点数を決める
+        let watch: WakeWatchRecord? = await WakeWatchActions.closeForCheckIn(now: now)
+        var session: WakeSession
+        if let watch {
+            let over: Int = WakeWatchLogic.oversleepMinutes(stopAt: watch.stopAt, stepStart: watch.stepStartAt, awakeAt: now)
+            let score: Int = WakeWatchLogic.score(stage: watch.stoppedStage, oversleepMinutes: over)
+            session = WakeSession(day: todayKey, checkInAt: now, stage: watch.stoppedStage, score: score, missed: nil)
+            session.oversleep = over
+            session.stopAt = watch.stopAt
+            session.watchedBy = watch.endedBy
+        } else {
+            let stage = plan.map { WakeLogic.reached($0, at: now) } ?? 0
+            session = WakeSession(day: todayKey, checkInAt: now, stage: stage, score: WakeLogic.score(stage: stage), missed: nil)
+        }
         sessions.removeAll { $0.day == todayKey }
         sessions.append(session)
         WakeStore.save(sessions)
@@ -182,8 +210,37 @@ enum WakeActions {
         await scheduleBelongings(now: now)
         await WakeActivityControl.sync(now: now)
         await reschedule(now: now)
+        // 朝の見返し（アプリの中で押したときは通知を出さず、画面のカードから始める）
+        await ReviewActions.morningTriggered(now: now, notify: !fromApp)
         return session
     }
+
+    /// 予約されているアラームの数（AlarmKit に実際に入っているもの）。分からなければ nil
+    static func liveAlarmCount(day: String) -> Int? {
+        let state = WakeStore.state()
+        let ids = Set(state.alarms.filter { $0.day == day }.map(\.id))
+        #if canImport(AlarmKit)
+        if #available(iOS 26.0, *) {
+            guard let live = try? AlarmManager.shared.alarms else { return nil }
+            return live.filter { ids.contains($0.id.uuidString) }.count
+        }
+        #endif
+        return nil
+    }
+}
+
+/// アラームの音を止める（AppIntent の最初に呼ぶ。失敗しても気にしない）
+enum WakeAlarmStop {
+    static func stop(_ alarmID: String) {
+        #if canImport(AlarmKit)
+        if #available(iOS 26.0, *), let id = UUID(uuidString: alarmID) {
+            try? AlarmManager.shared.stop(id: id)
+        }
+        #endif
+    }
+}
+
+extension WakeActions {
 
     /// チェックインの取り消し：今日の記録を消して状態を戻し、今日の残りのアラームを予約し直す
     static func undoCheckIn(now: Date = .now) async {

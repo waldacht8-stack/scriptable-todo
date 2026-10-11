@@ -29,6 +29,7 @@ struct WakeRecordsView: View {
         ScrollView {
             VStack(spacing: 16) {
                 WakeSummaryTiles(model: model)
+                WakeOversleepSummary(sessions: model.sessions, now: model.now)
                 VStack(alignment: .leading, spacing: 12) {
                     WakeCardTitle(text: "2週間のスコア", icon: "chart.bar.fill")
                     if bars.isEmpty {
@@ -69,6 +70,13 @@ struct WakeRecordsView: View {
                                     .font(.body.weight(.semibold)).foregroundStyle(p.text)
                                 Text(s.isMissed ? "未チェックイン" : (s.stage == 0 ? "アラームの前に起床" : "\(s.stage)回目で起床"))
                                     .font(.caption).foregroundStyle(s.isMissed ? p.overdue : p.sub)
+                                // 二度寝の見張り：二度寝の分か、「二度寝なし」
+                                if let over = s.oversleep {
+                                    let text: String = over > 0 ? "二度寝 \(over)分" : "二度寝なし"
+                                    let icon: String = over > 0 ? "zzz" : "checkmark.circle.fill"
+                                    Label(text, systemImage: icon).font(Font.caption.weight(.bold))
+                                        .foregroundStyle(over > 0 ? p.overdue : p.accent)
+                                }
                             }
                             Spacer(minLength: 0)
                             Text(s.checkInAt.map { JP.time($0) } ?? "--:--").font(.headline).monospacedDigit().foregroundStyle(p.sub)
@@ -113,5 +121,31 @@ struct WakeSummaryTiles: View {
             }
         }
         .paletteCard(p, padding: 14)
+    }
+}
+
+/// 二度寝の見張りのまとめ（30日）。点数は「止めたのが何回目か」から、二度寝の分だけ引く
+struct WakeOversleepSummary: View {
+    @Environment(\.palette) private var p
+    let sessions: [WakeSession]
+    let now: Date
+
+    var body: some View {
+        let from: String = WakeLogic.key(Calendar.current.date(byAdding: .day, value: -29, to: now) ?? now)
+        let watched: [WakeSession] = sessions.filter { $0.day >= from && $0.oversleep != nil }
+        let late: [Int] = watched.compactMap(\.oversleep).filter { $0 > 0 }
+        VStack(alignment: .leading, spacing: 6) {
+            WakeCardTitle(text: "二度寝の見張り（30日）", icon: "eye.fill")
+            if watched.isEmpty {
+                Text("アラームの「止める」で見張りが始まります").font(Font.subheadline).foregroundStyle(p.sub)
+            } else {
+                let avg: Int = late.isEmpty ? 0 : late.reduce(0, +) / late.count
+                let line: String = late.isEmpty ? "見張った\(watched.count)日とも二度寝なし" : "見張った\(watched.count)日のうち二度寝 \(late.count)回・平均\(avg)分"
+                Text(line).font(Font.headline).foregroundStyle(late.isEmpty ? p.accent : p.text)
+            }
+            Text("点数は、止めたのが何回目のアラームか（1回目=100）から、二度寝した分を引きます（最大50点）")
+                .font(Font.caption).foregroundStyle(p.sub).fixedSize(horizontal: false, vertical: true)
+        }
+        .paletteCard(p, padding: 16)
     }
 }

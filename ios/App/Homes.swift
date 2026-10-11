@@ -11,6 +11,13 @@ struct HomeView: View {
     @State private var listTab: ListTab? = ProcessInfo.processInfo.arguments.contains("-donelist") ? .done : nil
 
     var body: some View {
+        // 見返し（全画面）と、二度寝の見張りの止める画面は、別の部品で重ねる（型の推論を軽くするため）
+        main
+            .modifier(ReviewHost())
+            .wakeWatchStopCover(.todo)
+    }
+
+    private var main: some View {
         Group {
             if ProcessInfo.processInfo.arguments.contains("-todowidgets") {
                 TodoWidgetGallery() // 新しい構成のウィジェットの見本（スクリーンショット用）

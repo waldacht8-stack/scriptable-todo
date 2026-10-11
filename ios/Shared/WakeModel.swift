@@ -86,6 +86,10 @@ struct WakeSettings: Codable, Hashable {
     var skipDay: String?
     /// すべてのアラームを止める
     var paused: Bool
+    /// 二度寝の見張り（アラームの「止める」で始める）
+    var watch: Bool
+    /// 見張りのアラームを「止める」だけで止めたときに鳴らし直す上限
+    var watchRearms: Int
 
     static let stageNames = ["", "", "", ""]   // 名前は任意（空なら「N回目」と表示）
     static let stageOffsets = [0, 10, 20, 30]
@@ -107,6 +111,8 @@ struct WakeSettings: Codable, Hashable {
         skipHolidays = true
         skipDay = nil
         paused = false
+        watch = true
+        watchRearms = WakeWatchLogic.defaultMaxRearms
     }
 
     init(from decoder: Decoder) throws {
@@ -124,6 +130,8 @@ struct WakeSettings: Codable, Hashable {
         skipHolidays = (try? c.decodeIfPresent(Bool.self, forKey: .skipHolidays)) ?? d.skipHolidays
         skipDay = (try? c.decodeIfPresent(String.self, forKey: .skipDay))
         paused = (try? c.decodeIfPresent(Bool.self, forKey: .paused)) ?? false
+        watch = (try? c.decodeIfPresent(Bool.self, forKey: .watch)) ?? d.watch
+        watchRearms = min(10, max(1, (try? c.decodeIfPresent(Int.self, forKey: .watchRearms)) ?? d.watchRearms))
     }
 }
 
@@ -170,6 +178,10 @@ struct WakeSession: Codable, Hashable, Identifiable {
     var stage: Int          // 0 = 最初のアラームより前
     var score: Int
     var missed: Bool?
+    // 二度寝の見張り（Shared/WakeWatch.swift）。見張りが無かった日は nil
+    var oversleep: Int? = nil       // 二度寝の分（0 = 二度寝なし）
+    var stopAt: Date? = nil         // 元のアラームを止めた時刻
+    var watchedBy: String? = nil    // 見張りの終わり方（steps / walk / mission / checkin）
 
     var id: String { day }
     var isMissed: Bool { missed ?? false }

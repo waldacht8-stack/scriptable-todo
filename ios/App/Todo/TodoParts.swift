@@ -30,6 +30,8 @@ struct TodoHeader<Title: View>: View {
                 Spacer(minLength: 8)
                 DoneControls()
             }
+            // 3段目：見返しの連続日数・今週の期限内・次の見返し（押すと見返しを始める）
+            ReviewStatusLine()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

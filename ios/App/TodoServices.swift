@@ -68,7 +68,11 @@ final class TodoNotifier: NSObject, UNUserNotificationCenterDelegate {
             c.userInfo = ["id": t.id]
             requests.append(request("todo-snooze-\(t.id)", c, until))
         }
-        for r in requests.prefix(60) { try? await center.add(r) }
+        // 1つのアプリが待たせられる通知は64件まで。起床・見返しの分を残す
+        for r in requests.prefix(46) { try? await center.add(r) }
+        // 見返しの通知（件数が変わるので一緒に作り直す）。バックグラウンド更新でも呼ばれるので、見張りの歩数もここで確かめる
+        await ReviewActions.reschedule(now: now)
+        await WakeWatchActions.poll(now: now)
     }
 
     /// その時刻の時点で「今日やること」（期限切れ＋その日の期限＋期限なし）
@@ -99,6 +103,11 @@ final class TodoNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     // 通知のボタン（アプリは前に出ない）
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        // 見返しの通知を押した：アプリで見返しを開く
+        if let raw = response.notification.request.content.userInfo["review"] as? String, let slot = ReviewSlot(rawValue: raw) {
+            await MainActor.run { ReviewPresenter.shared.request = slot }
+            return
+        }
         guard let id = response.notification.request.content.userInfo["id"] as? String else { return }
         switch response.actionIdentifier {
         case "done":
