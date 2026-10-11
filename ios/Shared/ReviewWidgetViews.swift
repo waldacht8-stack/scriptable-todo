@@ -126,6 +126,21 @@ struct ReviewWidgetView: View {
 
     private var unreviewed: Int { review.unreviewedCount ?? 0 }
 
+    /// 次の見返しまでの細い棒（6時間前から満ちていく。描き直しを待たずに WidgetKit が進める）
+    @ViewBuilder private var nextBar: some View {
+        if let t = review.next(after: entry.date) {
+            let start: Date = t.addingTimeInterval(-6 * 3600)
+            ProgressView(timerInterval: start...t, countsDown: false) {
+                EmptyView()
+            } currentValueLabel: {
+                EmptyView()
+            }
+            .progressViewStyle(.linear)
+            .tint(p.accent)
+            .padding(.top, 2)
+        }
+    }
+
     // MARK: 中
 
     private var medium: some View {
@@ -151,6 +166,7 @@ struct ReviewWidgetView: View {
                     .contentTransition(.numericText())
                 WidgetCount(p: p, text: untilText, size: 26)
                     .lineLimit(1).minimumScaleFactor(0.6)
+                nextBar
                 Spacer(minLength: 0)
                 unreviewedLine.font(.footnote.weight(.bold))
                 Spacer(minLength: 0)

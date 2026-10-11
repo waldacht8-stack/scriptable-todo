@@ -143,6 +143,8 @@ struct DeepSeaBackdrop: View {
     let p: Palette
     var still: Bool = false
     var compact: Bool = false
+    /// 止まった絵の時刻（ウィジェット用。entry.date から）
+    var stillT: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -160,7 +162,7 @@ struct DeepSeaBackdrop: View {
                     .scenePulse(animated, low: 0.4, high: 1, duration: 8, delay: 2.5)
                 ray(w: w, h: h, x: 0.36, width: 46, length: 0.66, alpha: 0.24)
                     .scenePulse(animated, low: 0.4, high: 1, duration: 8, delay: 5)
-                SceneClock(fps: 15, animated: animated) { t in
+                SceneClock(fps: 15, animated: animated, stillT: stillT) { t in
                     Canvas { ctx, s in
                         DeepSeaScene.drawCaustics(ctx, size: s, t: t, compact: compact)
                         DeepSeaScene.drawLife(ctx, size: s, t: t, compact: compact)

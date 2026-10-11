@@ -173,8 +173,20 @@ enum World: String, CaseIterable, Identifiable {
 struct WorldBackground: View {
     let p: Palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 住人（モグラ・猫など）を描くか（タブの画面だけ。WorldCritters/CritterCore.swift）
+    @Environment(\.worldCritters) private var critters
 
     var body: some View {
+        ZStack {
+            scenery
+            if critters && WorldMotion.hasCritters(p.world) {
+                WorldCritterLayer(p: p)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var scenery: some View {
         let colors: [Color] = p.background.count > 1 ? p.background : [p.background[0], p.background[0]]
         let base = LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
         switch p.world {

@@ -504,6 +504,17 @@ struct InfoWidgetView: View {
                 Spacer(minLength: 0)
                 Text(until).font(.system(size: 10, weight: .bold).monospacedDigit()).foregroundStyle(p.sub)
             }
+            if let end = s.endsAt {
+                // いまのステージ（2時間ごと）の残り。描き直しを待たずに WidgetKit が縮めていく
+                let start: Date = end.addingTimeInterval(-2 * 3600)
+                ProgressView(timerInterval: start...end, countsDown: true) {
+                    EmptyView()
+                } currentValueLabel: {
+                    EmptyView()
+                }
+                .progressViewStyle(.linear)
+                .tint(p.accent)
+            }
             if compact {
                 HStack(alignment: .top, spacing: 6) {
                     ForEach(0..<3, id: \.self) { i in

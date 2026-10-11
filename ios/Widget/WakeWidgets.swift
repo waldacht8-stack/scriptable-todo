@@ -42,13 +42,14 @@ struct WakeProvider: TimelineProvider {
         }
         if let w = watch.nextWatchAt { times.append(w) }
         if let w = watch.lastWatchAt { times.append(w.addingTimeInterval(60)) }
-        let halfHour: TimeInterval = 30 * 60
-        let slot: Double = (now.timeIntervalSinceReferenceDate / halfHour).rounded(.up) * halfHour
+        // 15分ごと（世界観の住人が少しずつ進む。夜の「いま寝ると」はタイマー表示で秒まで進む）
+        let quarter: TimeInterval = 15 * 60
+        let slot: Double = (now.timeIntervalSinceReferenceDate / quarter).rounded(.up) * quarter
         let firstSlot: Date = Date(timeIntervalSinceReferenceDate: slot)
-        for i in 0..<24 { times.append(firstSlot.addingTimeInterval(Double(i) * halfHour)) }
+        for i in 0..<48 { times.append(firstSlot.addingTimeInterval(Double(i) * quarter)) }
         let limit = now.addingTimeInterval(12 * 3600)
         let sorted = Array(Set(times.filter { $0 >= now && $0 <= limit })).sorted()
-        let entries: [WakeEntry] = sorted.prefix(48).map { entry(at: $0, watch: watch, todos: todos) }
+        let entries: [WakeEntry] = sorted.prefix(72).map { entry(at: $0, watch: watch, todos: todos) }
         let refresh: Date = watch.isWatching(now) ? now.addingTimeInterval(5 * 60) : now.addingTimeInterval(60 * 60)
         completion(Timeline(entries: entries, policy: .after(refresh)))
     }
@@ -58,7 +59,7 @@ struct WakeWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "WakeWidget", provider: WakeProvider()) { entry in
             WakeWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date) }
         }
         .configurationDisplayName("起床")
         .description("夜は明日のアラームの確認、見張り中は歩数、朝は「起きた！」と出発までの時間。スタンバイでは枕元の時計に。")

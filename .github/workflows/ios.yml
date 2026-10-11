@@ -91,7 +91,7 @@ jobs:
           # 起動して撮る。真っ白（小さいファイル）なら、待って撮り直す（遅いシミュレーター対策）
           # 担当の枝では、SHOTS_ON_BRANCH に名前が合う写真だけ撮る（時間短縮）。main ではすべて撮る
           # 各担当は自分の枝でこの値に自分の写真の名前（正規表現）を足す。例："kakeibo|tab-2"
-          SHOTS_ON_BRANCH="tab-|home-focus"
+          SHOTS_ON_BRANCH="world-|widgets-world|widgets-r4-review.png|widgets-r4-tabs.png"
           shot() {
             out=$1; shift
             if [ "$GITHUB_REF_NAME" != "main" ] && ! echo "$out" | grep -qE "$SHOTS_ON_BRANCH"; then
@@ -242,6 +242,12 @@ jobs:
             shot "shots/widgets-world-$world-large.png" -demo -widgetpreview -widgetsize large -world $world
             shot "shots/widgets-world-$world-other.png" -demo -widgetpreview -widgetsize other -world $world
             shot "shots/widgets-world-$world-lock.png" -demo -widgetpreview -widgetsize lock -world $world
+          done
+          # 世界観の住人と動き（クレイ以外）：-motionphase で位置を固定し、アプリは -motionreact で完了の反応の途中も描く。
+          # ウィジェットは -widgetsize motion で 15分ごとの絵（3つの位相）を並べる
+          for world in strata galaxy sky mist deepsea hinata brutal aurora bento swiss; do
+            shot "shots/world-$world-motion.png" -demo -layout focus -world $world -tab 0 -motionphase 0.5 -motionreact
+            shot "shots/widgets-world-$world-motion.png" -demo -widgetpreview -widgetsize motion -world $world -motionphase 0.5
           done
           shot shots/widgets-other.png -demo -widgetpreview -widgetsize other -theme focus
           shot shots/widgets-lock.png -demo -widgetpreview -widgetsize lock -theme focus

@@ -123,12 +123,14 @@ struct StrataBackdrop: View {
     let p: Palette
     var still: Bool = false
     var compact: Bool = false
+    /// 止まった絵の時刻（ウィジェット用。entry.date から）
+    var stillT: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geo in
             let animated: Bool = SceneMotion.animated(reduceMotion: reduceMotion, size: geo.size, still: still)
-            SceneClock(fps: 10, animated: animated) { t in
+            SceneClock(fps: 10, animated: animated, stillT: stillT) { t in
                 Canvas { ctx, size in
                     StrataScene.draw(ctx, size: size, t: t, compact: compact)
                 }

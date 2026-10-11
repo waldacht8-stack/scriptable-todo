@@ -33,10 +33,27 @@ struct TodoWidgetData {
     }
 }
 
+extension TodoWidgetData {
+    /// 同じ中身を、別の時刻から見たもの（タイムラインの先の絵。期限切れの数と次の1件だけ数え直す）
+    func at(_ now: Date) -> TodoWidgetData {
+        var d: TodoWidgetData = self
+        d.overdue = items.filter { $0.isOverdue(now) }.count
+        let timed: [TodoItem] = items.filter { !$0.isAllDay && ($0.due ?? .distantPast) > now }
+        d.next = timed.min { ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) }
+        return d
+    }
+}
+
 /// ウィジェットの背景（色合いと世界観に合わせる。飾りは WorldWidget.swift）
 struct WidgetPaletteBackground: View {
     let p: Palette
-    var body: some View { WidgetWorldBackground(p: p) }
+    /// タイムラインの entry.date（世界観の住人の位置が決まる）
+    var date: Date = .now
+    /// 今日完了した数（ネオブルータルのシール）
+    var done: Int? = nil
+    /// 見本の画面用の位相
+    var phase: Double? = nil
+    var body: some View { WidgetWorldBackground(p: p, date: date, done: done, phase: phase) }
 }
 
 struct TodoWidgetView: View {

@@ -80,12 +80,12 @@ struct WakeWidgetView: View {
         "\(WakeLogic.dayLabel(n.first, now: entry.date)) \(JP.time(n.first))・アラーム\(n.stages.count)回 入っています ✓"
     }
 
-    /// 「いま寝ると 7時間30分」
-    private func sleepLine(_ n: WakePlan) -> String {
+    /// 「いま寝ると 7:29:59」（起きる時刻までのタイマー。描き直しを待たずに秒まで進む）
+    private func sleepLine(_ n: WakePlan) -> Text {
         let t = n.first.timeIntervalSince(entry.date)
         // 休みの日をはさむなど、次の起床まで間が空くときは「いま寝ると」を出さない
-        if t > 16 * 3600 { return "次の起床は \(WakeLogic.dayLabel(n.first, now: entry.date))" }
-        return "いま寝ると \(WidgetFeedDay.durationText(t))"
+        if t > 16 * 3600 { return Text("次の起床は \(WakeLogic.dayLabel(n.first, now: entry.date))") }
+        return Text("いま寝ると \(n.first, style: .timer)")
     }
 
     @ViewBuilder private var nightSmall: some View {
@@ -97,7 +97,7 @@ struct WakeWidgetView: View {
                 Text("アラーム\(n.stages.count)回 入っています ✓").font(.caption.weight(.bold)).foregroundStyle(p.accent)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 0)
-                Text(sleepLine(n)).font(.caption2.weight(.semibold)).foregroundStyle(p.sub).lineLimit(1)
+                sleepLine(n).font(.caption2.weight(.semibold)).foregroundStyle(p.sub).lineLimit(1)
                     .contentTransition(.numericText())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -124,7 +124,7 @@ struct WakeWidgetView: View {
                     Text("就寝の目安").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
                     WidgetCount(p: p, text: s.bedtime.map { JP.time($0) } ?? "--:--", size: 20, color: p.text)
                     Spacer(minLength: 0)
-                    Text(sleepLine(n)).font(.caption2.weight(.semibold)).foregroundStyle(p.sub).lineLimit(2)
+                    sleepLine(n).font(.caption2.weight(.semibold)).foregroundStyle(p.sub).lineLimit(2)
                         .contentTransition(.numericText())
                     Text("明日の TODO \(entry.tomorrowTodos)件").font(.caption2.weight(.semibold)).foregroundStyle(p.sub)
                         .lineLimit(1)
@@ -169,7 +169,7 @@ struct WakeWidgetView: View {
                     .lineLimit(1).minimumScaleFactor(0.6)
                     .contentTransition(.numericText())
                 Text("✓ アラーム\(n.stages.count)回").font(.system(size: 13, weight: .bold))
-                Text(sleepLine(n)).font(.system(size: 12, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                sleepLine(n).font(.system(size: 12, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
                     .contentTransition(.numericText())
             } else {
                 Text("明日の起床").font(.system(size: 13, weight: .bold))
@@ -496,7 +496,7 @@ struct WakeWidgetView: View {
                 Text("\(WakeLogic.dayLabel(n.first, now: entry.date))の起床・アラーム\(n.stages.count)回 ✓").font(head).lineLimit(1)
                 Text(JP.time(n.first)).font(big).tracking(w.accessoryTracking)
                     .contentTransition(.numericText())
-                Text(sleepLine(n)).font(small).lineLimit(1)
+                sleepLine(n).font(small).lineLimit(1)
             } else if night {
                 Text("明日の起床").font(head)
                 Text("アラームが入っていません").font(w == .none ? Font.headline : w.accessoryFont(.headline, .heavy))

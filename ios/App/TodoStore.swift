@@ -89,6 +89,7 @@ final class TodoStore: ObservableObject {
         TodoActions.complete(&items, at: i)
         remember("「\(item.title)」を完了しました", before: before)
         saveAndNotify()
+        WorldMotion.postCompleted()   // 世界観の住人が反応する（モグラが顔を出す・風船が上る など）
     }
 
     /// 未完了に戻す。繰り返しで次の回ができていたら、その回は消す（二重にならないように）

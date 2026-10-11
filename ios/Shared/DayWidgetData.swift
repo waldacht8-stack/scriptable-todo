@@ -25,6 +25,12 @@ struct DayWidgetEntry: TimelineEntry {
     }
 
     var day: DayTodos { DayTodos(todos, now: date) }
+
+    /// 同じ中身のまま時刻だけ進めた絵（タイムラインの15分ごとの間の絵。ファイルは読み直さない）
+    func moved(to d: Date) -> DayWidgetEntry {
+        DayWidgetEntry(date: d, todos: todos, palette: palette, review: review, watch: watch, kakeibo: kakeibo,
+                       wake: wake, groupOK: groupOK, consult: consult, info: info)
+    }
 }
 
 /// ある時刻から見た今日の TODO

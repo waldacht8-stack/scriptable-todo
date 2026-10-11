@@ -35,7 +35,7 @@ struct HabitWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "HabitWidget", provider: HabitProvider()) { entry in
             HabitWidgetView(data: entry.data)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.data.palette) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.data.palette, date: entry.date) }
         }
         .configurationDisplayName("習慣")
         .description("今日の習慣の進み具合。ボタンでそのままチェックできます。")
