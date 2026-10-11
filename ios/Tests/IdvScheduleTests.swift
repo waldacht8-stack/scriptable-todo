@@ -110,7 +110,7 @@ final class IdvScheduleTests: TokyoTestCase {
         XCTAssertEqual(c.count, 3)
         XCTAssertEqual(c[0].tag, "コラボ")
         XCTAssertEqual(c[0].start, T.d(2026, 10, 15))
-        XCTAssertEqual(c[0].label, "開始まであと6日")
+        XCTAssertEqual(IdvCollab.label(start: c[0].start, end: c[0].end, now: T.now), "開始まであと6日")
         XCTAssertEqual(c[1].tag, "ガチャ")
         XCTAssertEqual(c[1].start, T.d(2026, 10, 10), "説明文の「期間」より後ろから探す（発表日は使わない）")
         XCTAssertEqual(c[1].end, T.d(2026, 10, 24))
