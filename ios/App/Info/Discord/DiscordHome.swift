@@ -326,7 +326,7 @@ struct DiscordHome: View {
                 Text("ボットを追加して、読むチャンネルのIDを入れると、最新のメッセージがここに出ます（下の設定）。")
                     .font(.footnote).foregroundStyle(DiscordInk.sub)
             } else if store.contentMissingHint {
-                Text("メッセージの本文が読めませんでした。開発者ポータルの Bot で「MESSAGE CONTENT INTENT」をオンにしてください。")
+                Text("メッセージがありません。投稿があるのに出ないときは、開発者ポータルの Bot で「MESSAGE CONTENT INTENT」をオンにしてください。")
                     .font(.footnote).foregroundStyle(DiscordInk.warn)
             }
             if let e = store.botError { Text(e).font(.footnote).foregroundStyle(DiscordInk.warn) }
