@@ -204,3 +204,31 @@ final class DayCardTests: TokyoTestCase {
         XCTAssertFalse(s.contains("x.jpg"))
     }
 }
+
+final class ConsultWidgetFeedTests: TokyoTestCase {
+    func testStreakCountsFromTodayOrYesterday() {
+        let days: Set<String> = ["2026-10-09", "2026-10-08", "2026-10-07", "2026-10-05"]
+        XCTAssertEqual(ConsultWidgetSync.streak(days: days, now: T.now), 3)
+        XCTAssertEqual(ConsultWidgetSync.streak(days: ["2026-10-08", "2026-10-07"], now: T.now), 2, "今日まだなら昨日から")
+        XCTAssertEqual(ConsultWidgetSync.streak(days: ["2026-10-06"], now: T.now), 0)
+    }
+
+    func testMoodLevelMapping() {
+        XCTAssertEqual(ConsultMood.from(score: 5), .great)
+        XCTAssertEqual(ConsultMood.from(score: 1), .bad)
+        XCTAssertEqual(ConsultMood.from(score: 9), .great, "範囲外は丸める")
+    }
+
+    func testFeedFieldNames() throws {
+        let data = try JSONEncoder().encode(ConsultWidgetFeed(todayMood: 4, dayCardWritten: true, streakDays: 2))
+        let s = String(decoding: data, as: UTF8.self)
+        for k in ["todayMood", "dayCardWritten", "streakDays"] { XCTAssertTrue(s.contains("\"\(k)\""), k) }
+        let info = InfoWidgetFeed(headlines: [.init(title: "a", source: "b", topic: "c", colorIndex: 1)],
+                                  splat: .init(endsAt: "2026-10-09T11:00:00Z", regular: "r", bankara: "b", x: "x"),
+                                  steamSale: .init(title: "t", discount: 50))
+        let t = String(decoding: try JSONEncoder().encode(info), as: UTF8.self)
+        for k in ["headlines", "title", "source", "topic", "colorIndex", "splat", "endsAt", "regular", "bankara", "\"x\"", "steamSale", "discount"] {
+            XCTAssertTrue(t.contains(k.hasPrefix("\"") ? k : "\"\(k)\""), k)
+        }
+    }
+}

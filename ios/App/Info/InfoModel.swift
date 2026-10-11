@@ -229,6 +229,7 @@ final class InfoModel: ObservableObject {
         pruneRead()
         persistCache()
         requestTranslation()
+        InfoWidgetSync.update(headlines: InfoWidgetSync.headlines(self))   // 情報のウィジェットの元データ
     }
 
     // MARK: 翻訳（端末の翻訳機能。iOS 18 以降）

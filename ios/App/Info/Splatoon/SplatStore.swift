@@ -58,6 +58,7 @@ final class SplatStore: ObservableObject {
             schedule = s
             scheduleError = nil
             SplatFiles.save(s, SplatFiles.schedule)
+            InfoWidgetSync.update()   // 情報のウィジェット（スプラのステージ）
         } catch {
             scheduleError = "ステージ情報を読み込めませんでした。通信を確認してください。"
         }

@@ -138,7 +138,7 @@ jobs:
           shot shots/todo-widgets.png -demo -theme focus -tab 0 -todowidgets
           shot shots/todo-widgets-night.png -demo -theme night -tab 0 -todowidgets
           # 起床・習慣・集中・情報のタブ（見本データ）
-          for tab in 1 2 4; do
+          for tab in 1 2 3 4; do
             shot "shots/tab-$tab.png" -demo -theme focus -tab $tab
           done
           # 起床の時間帯（起床前・起床中・夜）と、起床の設定・記録
@@ -169,16 +169,17 @@ jobs:
           shot shots/info-games-steam.png -demo -theme night -tab 4 -infogames
           # Web版 Discord（試作）。-demo では通信せず見本のページを出す
           shot shots/discord-web.png -demo -tab 4 -infogames -discordweb
-          shot shots/consult.png -demo -theme focus -tab 4 -consult
-          shot shots/consult-dawn.png -demo -theme dawn -tab 4 -consult
-          shot shots/consult-stats.png -demo -theme focus -tab 4 -consult -moodstats
-          shot shots/consult-stats-night.png -demo -theme night -tab 4 -consult -moodstats -moodscroll weekday
-          shot shots/consult-stats-ai.png -demo -theme dawn -tab 4 -consult -moodstats -moodscroll ai
+          shot shots/consult.png -demo -theme focus -tab 3
+          shot shots/consult-dawn.png -demo -theme dawn -tab 3
+          shot shots/consult-evening.png -demo -theme night -tab 3 -consultevening
+          shot shots/consult-stats.png -demo -theme focus -tab 3 -moodstats
+          shot shots/consult-stats-night.png -demo -theme night -tab 3 -moodstats -moodscroll weekday
+          shot shots/consult-stats-ai.png -demo -theme dawn -tab 3 -moodstats -moodscroll ai
           # リリース4：相談の1日1枚・Discord・第五人格
-          shot shots/daycard.png -demo -theme focus -tab 4 -daycard
-          shot shots/daycard-night.png -demo -theme night -tab 4 -daycard
-          shot shots/daycard-viewer.png -demo -theme focus -tab 4 -daycardviewer
-          shot shots/daycard-review.png -demo -theme dawn -tab 4 -daycardviewer -daycardreview
+          shot shots/daycard.png -demo -theme focus -tab 3 -daycard
+          shot shots/daycard-night.png -demo -theme night -tab 3 -daycard
+          shot shots/daycard-viewer.png -demo -theme focus -tab 3 -daycardviewer
+          shot shots/daycard-review.png -demo -theme dawn -tab 3 -daycardviewer -daycardreview
           shot shots/discord.png -demo -theme focus -tab 4 -infogames -discorddemo
           shot shots/discord-setup.png -demo -theme focus -tab 4 -infogames -discorddemo -discordsetup
           shot shots/idv.png -demo -theme focus -tab 4 -infogames -idvdemo

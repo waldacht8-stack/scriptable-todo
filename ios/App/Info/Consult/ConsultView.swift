@@ -12,30 +12,7 @@ struct ConsultMessage: Codable, Identifiable, Equatable {
     var date = Date()
 }
 
-enum ConsultMood: Int, CaseIterable, Identifiable, Codable {
-    case great, good, okay, low, bad
-    var id: Int { rawValue }
-
-    var title: String {
-        switch self {
-        case .great: "最高"
-        case .good: "いい"
-        case .okay: "ふつう"
-        case .low: "いまいち"
-        case .bad: "つらい"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .great: "sun.max.fill"
-        case .good: "cloud.sun.fill"
-        case .okay: "cloud.fill"
-        case .low: "cloud.drizzle.fill"
-        case .bad: "cloud.heavyrain.fill"
-        }
-    }
-}
+// ConsultMood（今日の気分）は Shared/MoodData.swift（ウィジェットの LogMoodIntent と共有）
 
 /// 相談の目的。目的ごとに AI の答え方を変える
 enum ConsultPurpose: String, CaseIterable, Identifiable, Codable {

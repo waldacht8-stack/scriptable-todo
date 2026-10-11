@@ -82,12 +82,14 @@ enum DayCardData {
     static func save(_ card: DayCard) {
         guard !InfoLaunch.isDemo else { return }
         SplatFiles.save(card, fileName(card.day))
+        ConsultWidgetSync.write()
     }
 
     static func remove(day: String) {
         guard !InfoLaunch.isDemo else { return }
         if let c = load(day: day), let p = c.photo { removePhoto(p) }
         SplatFiles.remove(fileName(day))
+        ConsultWidgetSync.write()
     }
 
     static func hasCard(on date: Date) -> Bool { load(day: WakeLogic.key(date)) != nil }
@@ -389,5 +391,34 @@ final class DayCardModel: ObservableObject {
     func keepReview() {
         guard let r = review else { return }
         DayCardData.saveReview(r)
+    }
+}
+
+// MARK: - 通知から相談タブ（tag 3）を開く
+// 夜の通知（daycard-）をタップしたら、RootView のタブを 3 にする。つなぐ2行（統合のとき）：
+// - TodoNotifier.userNotificationCenter(_:didReceive:) の先頭：
+//   if ConsultDeepLink.opensConsult(response.notification.request.identifier) { await MainActor.run { ConsultDeepLink.request() }; return }
+// - RootView の TabView：.onReceive(NotificationCenter.default.publisher(for: .openConsultTab)) { _ in tab = 3 }
+//   （起動直後に通知より先に開いたときのため .onAppear { if ConsultDeepLink.consumePending() { tab = 3 } } も）
+
+extension Notification.Name {
+    static let openConsultTab = Notification.Name("openConsultTab")
+}
+
+@MainActor
+enum ConsultDeepLink {
+    private static var pending = false
+
+    nonisolated static func opensConsult(_ identifier: String) -> Bool { identifier.hasPrefix("daycard-") }
+
+    static func request() {
+        pending = true
+        NotificationCenter.default.post(name: .openConsultTab, object: nil)
+    }
+
+    /// まだ開いていない要求があれば true（一度だけ）
+    static func consumePending() -> Bool {
+        defer { pending = false }
+        return pending
     }
 }

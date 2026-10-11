@@ -1,7 +1,7 @@
 import SwiftUI
 import PhotosUI
 
-// MARK: - 相談の入口：「話す」と「1日1枚」の切り替え
+// MARK: - 相談タブ（tag 3）：見出し・夜の誘い・「話す」と「1日1枚」の切り替え
 // 起動引数：-daycard で「1日1枚」、-daycardviewer で過去の1枚をめくる画面、-daycardreview で AI のふり返り（画面写真用）
 
 enum ConsultMode: String {
@@ -19,18 +19,29 @@ struct ConsultRootView: View {
         return (a.contains("-daycard") || a.contains("-daycardviewer") || a.contains("-daycardreview")) ? .daycard : .talk
     }()
     @State private var showViewer = ProcessInfo.processInfo.arguments.contains("-daycardviewer")
+    /// 夜の誘いのカード（18時以降で、今日の1枚がまだのとき。×で今日は隠す）
+    @State private var hidePromptDay = ""
+    /// 画面写真用：-consultevening で夕方として扱う
+    private let forceEvening = ProcessInfo.processInfo.arguments.contains("-consultevening")
 
     var body: some View {
-        VStack(spacing: 10) {
-            modeBar
-            switch mode {
-            case .talk:
-                ConsultView()
-                    .transition(motion.appear)
-            case .daycard:
-                DayCardWriteView(model: dayModel, onTalk: { switchTo(.talk) })
-                    .transition(motion.appear)
+        NavigationStack {
+            VStack(spacing: 10) {
+                header
+                if showPrompt { eveningPrompt.transition(motion.appear) }
+                modeBar
+                switch mode {
+                case .talk:
+                    ConsultView()
+                        .transition(motion.appear)
+                case .daycard:
+                    DayCardWriteView(model: dayModel, onTalk: { switchTo(.talk) })
+                        .transition(motion.appear)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .paletteBackground(p)
+            .toolbar(.hidden, for: .navigationBar)
         }
         .fullScreenCover(isPresented: $showViewer) {
             DayCardViewer(model: dayModel, onTalk: {
@@ -41,11 +52,72 @@ struct ConsultRootView: View {
             .environment(\.palette, p)
             .environment(\.motion, motion)
         }
-        .task { await DayCardReminder.reschedule() }
+        .task {
+            await DayCardReminder.reschedule()
+            ConsultWidgetSync.write()
+        }
+    }
+
+    private var isEvening: Bool { forceEvening || Calendar.current.component(.hour, from: .now) >= 18 }
+
+    private var showPrompt: Bool {
+        mode == .talk && isEvening && !dayModel.savedToday && hidePromptDay != dayModel.todayKey
     }
 
     private func switchTo(_ m: ConsultMode) {
         withAnimation(reduceMotion ? nil : motion.tap) { mode = m }
+    }
+
+    // 見出し：「相談」・日付・1日1枚・歯車
+    private var header: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(JP.date(.now)).font(.footnote.weight(.semibold)).foregroundStyle(p.sub)
+                Text("相談").font(.largeTitle.weight(.heavy)).foregroundStyle(p.text)
+            }
+            Spacer()
+            Button { switchTo(.daycard) } label: {
+                Label("1日1枚", systemImage: dayModel.savedToday ? "checkmark.seal.fill" : "square.and.pencil")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(mode == .daycard ? p.onAccent : p.accent)
+                    .padding(.horizontal, 12).frame(height: 36)
+                    .background(mode == .daycard ? p.accent : p.accent.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("今日の1枚を書く画面を開きます")
+            SettingsButton()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+    }
+
+    // 夜の誘い（書く画面へ）
+    private var eveningPrompt: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "moon.stars.fill").font(.title2).foregroundStyle(p.accent)
+                .frame(width: 44, height: 44)
+                .background(p.accent.opacity(0.14), in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text("今日の1枚を書きましょう").font(.subheadline.weight(.heavy)).foregroundStyle(p.text)
+                Text("TODO や気分はもう入っています。ひとことだけどうぞ").font(.caption).foregroundStyle(p.sub).lineLimit(2)
+            }
+            Spacer(minLength: 4)
+            Button { switchTo(.daycard) } label: {
+                Text("書く").font(.subheadline.weight(.bold)).foregroundStyle(p.onAccent)
+                    .padding(.horizontal, 14).frame(height: 34)
+                    .background(p.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            Button {
+                withAnimation(reduceMotion ? nil : motion.change) { hidePromptDay = dayModel.todayKey }
+            } label: {
+                Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(p.sub).frame(width: 28, height: 34)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("今日は隠す")
+        }
+        .paletteCard(p, padding: 12)
+        .padding(.horizontal, 16)
     }
 
     private var modeBar: some View {

@@ -8,11 +8,6 @@ import Charts
 // - 起動引数 -moodstats で分析の画面を開く（スクリーンショット用。-demo では見本の記録）
 
 extension ConsultMood {
-    /// 点数（最高 5 〜 つらい 1）
-    var score: Int { 5 - rawValue }
-
-    static func from(score: Int) -> ConsultMood { ConsultMood(rawValue: 5 - min(max(score, 1), 5)) ?? .okay }
-
     func color(_ p: Palette) -> Color {
         switch self {
         case .great: Color(red: 0.95, green: 0.62, blue: 0.10)
@@ -24,48 +19,7 @@ extension ConsultMood {
     }
 }
 
-struct MoodEntry: Codable, Identifiable, Equatable {
-    var day: String          // yyyy-MM-dd（WakeLogic.key と同じ形）
-    var mood: ConsultMood
-    var at: Date
-    var id: String { day }
-}
-
-struct MoodAnalysis: Codable, Equatable {
-    var text: String
-    var at: Date
-}
-
-enum MoodData {
-    static let file = "consult-moods.json"
-    static let analysisFile = "consult-analysis.json"
-
-    static func entries() -> [MoodEntry] { SplatFiles.load([MoodEntry].self, file) ?? [] }
-
-    /// その日の気分を記録する（同じ日は上書き）
-    static func record(_ mood: ConsultMood, now: Date = .now) {
-        var list = entries()
-        let day = WakeLogic.key(now)
-        list.removeAll { $0.day == day }
-        list.append(MoodEntry(day: day, mood: mood, at: now))
-        list.sort { $0.day < $1.day }
-        SplatFiles.save(Array(list.suffix(800)), file)
-    }
-
-    static func today(now: Date = .now) -> ConsultMood? {
-        let day = WakeLogic.key(now)
-        return entries().first { $0.day == day }?.mood
-    }
-
-    static func remove(day: String) {
-        var list = entries()
-        list.removeAll { $0.day == day }
-        SplatFiles.save(list, file)
-    }
-
-    static func analysis() -> MoodAnalysis? { SplatFiles.load(MoodAnalysis.self, analysisFile) }
-    static func save(_ a: MoodAnalysis) { SplatFiles.save(a, analysisFile) }
-}
+// MoodEntry・MoodAnalysis・MoodData（記録の読み書き）は Shared/MoodData.swift
 
 // MARK: - 1日分（気分と、その日のほかの記録）
 
