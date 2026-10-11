@@ -201,6 +201,9 @@ final class DayCardTests: TokyoTestCase {
         XCTAssertTrue(s.contains("TODO完了 3件"))
         XCTAssertTrue(s.contains("起床 7:08・1回目"))
         XCTAssertFalse(s.contains("点"), "起床の点数は送らない")
+        XCTAssertTrue(s.contains("よく眠れた"))
+        XCTAssertFalse(s.contains("ひみつの用事"))
+        XCTAssertFalse(s.contains("x.jpg"))
     }
 
     func testOldDayCardWithScoreDecodes() throws {
@@ -208,9 +211,6 @@ final class DayCardTests: TokyoTestCase {
         let c = try JSONDecoder.iso.decode(DayCard.self, from: Data(json.utf8))
         XCTAssertNil(c.wakeStage)
         XCTAssertNil(c.wakeText, "時刻のない昔の記録は起床を出さない")
-        XCTAssertTrue(s.contains("よく眠れた"))
-        XCTAssertFalse(s.contains("ひみつの用事"))
-        XCTAssertFalse(s.contains("x.jpg"))
     }
 }
 
