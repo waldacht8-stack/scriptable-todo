@@ -51,6 +51,7 @@ final class SteamStore: ObservableObject {
             snapshot = s
             error = nil
             SplatFiles.save(s, Self.snapshotFile)
+            InfoWidgetSync.update()   // 情報のウィジェット（セール）
         } catch SteamAPIError.badKey {
             error = "Web API キーが使えませんでした。キーを確かめてください。"
         } catch SteamAPIError.notFound {

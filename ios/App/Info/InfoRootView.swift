@@ -1,13 +1,12 @@
 import SwiftUI
 
-/// 「情報」タブ：好きな話題の記事・投稿をカードの山で読む。ゲーム（スプラトゥーン3・Steam）への入口。相談（AI）
+/// 「情報」タブ：好きな話題の記事・投稿をカードの山で読む。ゲーム（スプラトゥーン3・Steam・Discord・第五人格）への入口。相談は独立したタブ
 struct InfoRootView: View {
     @StateObject private var model = InfoModel()
     @Environment(\.palette) private var p
     @Environment(\.motion) private var motion
     @State private var section: InfoSection = {
         let args = ProcessInfo.processInfo.arguments
-        if args.contains("-consult") { return .consult }
         return args.contains("-infogames") ? .games : .topics
     }()
     @State private var opening: InfoOpenTarget?
@@ -30,9 +29,6 @@ struct InfoRootView: View {
                         .transition(motion.appear)
                 case .games:
                     InfoGameSection()
-                        .transition(motion.appear)
-                case .consult:
-                    ConsultView()
                         .transition(motion.appear)
                 }
             }
@@ -291,15 +287,28 @@ struct InfoEmptyTopics: View {
     }
 }
 
-// MARK: - ゲーム：スプラトゥーン3・Steam への入口
+// MARK: - ゲーム：スプラトゥーン3・Steam・Discord・第五人格への入口
+
+/// ゲームのくわしく画面（Discord・第五人格はカードの中にボタンがあるので、NavigationLink ではなく行き先で開く）
+enum InfoGameRoute: Hashable {
+    case discord, identityV
+}
 
 struct InfoGameSection: View {
     @Environment(\.palette) private var p
     @Environment(\.motion) private var motion
     /// Web版 Discord（試作）。起動引数 -discordweb で最初から開く（画面写真用。-demo なら通信しない）
     @State private var showDiscord = ProcessInfo.processInfo.arguments.contains("-discordweb")
+    /// 起動引数 -discorddemo で Discord、-idvdemo で第五人格のくわしく画面を開く（画面写真用）
+    @State private var route: InfoGameRoute? = {
+        let a = ProcessInfo.processInfo.arguments
+        if a.contains("-discorddemo") { return .discord }
+        if a.contains("-idvdemo") { return .identityV }
+        return nil
+    }()
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text("ゲーム").font(.largeTitle.weight(.heavy)).foregroundStyle(p.text)
@@ -309,12 +318,28 @@ struct InfoGameSection: View {
                     .buttonStyle(.plain)
                 NavigationLink { SteamHome() } label: { SteamEntryCard() }
                     .buttonStyle(.plain)
+                DiscordServerCard { route = .discord }
+                    .id("discord")
+                Button { route = .identityV } label: { IdvEntryCard() }
+                    .buttonStyle(.plain)
                 Button { showDiscord = true } label: { DiscordEntryCard() }
                     .buttonStyle(.plain)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
+        }
+        .onAppear {
+            // 画面写真用：-gamesscroll で Discord・第五人格のカードまで下げる
+            guard ProcessInfo.processInfo.arguments.contains("-gamesscroll") else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { proxy.scrollTo("discord", anchor: .top) }
+        }
+        }
+        .navigationDestination(item: $route) { r in
+            switch r {
+            case .discord: DiscordHome()
+            case .identityV: IdvHome()
+            }
         }
         .fullScreenCover(isPresented: $showDiscord) {
             DiscordWebScreen { showDiscord = false }
