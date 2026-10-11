@@ -174,6 +174,15 @@ jobs:
           shot shots/consult-stats.png -demo -theme focus -tab 4 -consult -moodstats
           shot shots/consult-stats-night.png -demo -theme night -tab 4 -consult -moodstats -moodscroll weekday
           shot shots/consult-stats-ai.png -demo -theme dawn -tab 4 -consult -moodstats -moodscroll ai
+          # リリース4：相談の1日1枚・Discord・第五人格
+          shot shots/daycard.png -demo -theme focus -tab 4 -daycard
+          shot shots/daycard-night.png -demo -theme night -tab 4 -daycard
+          shot shots/daycard-viewer.png -demo -theme focus -tab 4 -daycardviewer
+          shot shots/daycard-review.png -demo -theme dawn -tab 4 -daycardviewer -daycardreview
+          shot shots/discord.png -demo -theme focus -tab 4 -infogames -discorddemo
+          shot shots/discord-setup.png -demo -theme focus -tab 4 -infogames -discorddemo -discordsetup
+          shot shots/idv.png -demo -theme focus -tab 4 -infogames -idvdemo
+          shot shots/info-games-r4.png -demo -theme night -tab 4 -infogames -gamesscroll
           # 世界観（-world。-demo のたびに「なし」へ戻る）
           for world in hinata brutal aurora bento clay swiss; do
             shot "shots/world-$world.png" -demo -layout focus -world $world -tab 0
