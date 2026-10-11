@@ -126,7 +126,7 @@ struct TodoSettingsSections: View {
                     SettingsRow(title: "今すぐバックアップ", icon: "arrow.clockwise.icloud.fill") {
                         HStack(spacing: 6) {
                             if let last = s.lastBackup {
-                                Text("前回 \(JP.shortDate(last)) \(JP.time(last))")
+                                Text("前回 \(Self.monthDay(last)) \(JP.time(last))")
                                     .font(.caption)
                                     .foregroundStyle(p.sub)
                                     .lineLimit(1)
@@ -141,6 +141,11 @@ struct TodoSettingsSections: View {
                 ActionRow(title: "バックアップから戻す", icon: "clock.arrow.circlepath") { importing = true }
             }
         }
+    }
+
+    private static func monthDay(_ d: Date) -> String {
+        let c = Calendar.current.dateComponents([.month, .day], from: d)
+        return "\(c.month ?? 0)/\(c.day ?? 0)"
     }
 
     private func backupNow() {

@@ -161,6 +161,9 @@ struct TuneSections: View {
         s.accentColor != "theme" || s.cornerStyle != "theme" || s.fontStyle != "theme" || s.density != Density.regular.rawValue
     }
 
+    /// 「色合い」を選んでいるときは「色合いのまま」と出す
+    static func valueName(_ name: String, isTheme: Bool) -> String { isTheme ? "色合いのまま" : name }
+
     /// 調整を重ねる前の色の組（「色合いのまま」の見本に使う）
     private var base: Palette { World.from(s.world).palette ?? store.theme.palette }
 
@@ -168,13 +171,13 @@ struct TuneSections: View {
         let base = self.base
         VStack(alignment: .leading, spacing: 14 * p.density.scale) {
             TuneGroup(title: "強調色", value: AccentChoice.from(s.accentColor).name) { swatches(base) }
-            TuneGroup(title: "角の丸み", value: CornerChoice.from(s.cornerStyle).name) {
+            TuneGroup(title: "角の丸み", value: Self.valueName(CornerChoice.from(s.cornerStyle).name, isTheme: CornerChoice.from(s.cornerStyle) == .theme)) {
                 OptionTiles(options: CornerChoice.allCases, selection: binding(\.cornerStyle, CornerChoice.from),
                             label: { $0.name }) { c in
                     CornerSample(radius: c.radius ?? base.radius)
                 }
             }
-            TuneGroup(title: "書体", value: FontChoice.from(s.fontStyle).name) {
+            TuneGroup(title: "書体", value: Self.valueName(FontChoice.from(s.fontStyle).name, isTheme: FontChoice.from(s.fontStyle) == .theme)) {
                 OptionTiles(options: FontChoice.allCases, selection: binding(\.fontStyle, FontChoice.from),
                             label: { $0.name }) { f in
                     FontSample(design: f.design ?? base.fontDesign)

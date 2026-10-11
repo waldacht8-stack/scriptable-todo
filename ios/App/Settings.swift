@@ -139,7 +139,7 @@ private struct AppInfoSection: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { showDiagnosis.toggle() }
                 } label: {
-                    SettingsRow(title: "ウィジェットとの共有", icon: ok ? "checkmark.seal.fill" : "exclamationmark.triangle.fill",
+                    SettingsRow(title: "ウィジェット連携", icon: ok ? "checkmark.seal.fill" : "exclamationmark.triangle.fill",
                                 iconColor: ok ? p.accent : p.overdue) {
                         HStack(spacing: 6) {
                             Text(ok ? "使える" : "使えない").font(.subheadline.weight(.semibold)).foregroundStyle(ok ? p.sub : p.overdue)

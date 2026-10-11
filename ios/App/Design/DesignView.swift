@@ -91,7 +91,7 @@ struct DesignView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22 * p.density.scale) {
-                DesignHero(height: 260)
+                DesignHero(height: 236)
 
                 VStack(spacing: 12 * p.density.scale) {
                     ForEach(DesignPage.allCases) { page in
@@ -126,7 +126,7 @@ private struct DesignEntryRow: View {
         let thumbShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         HStack(spacing: 14) {
             thumb
-                .frame(width: 78, height: 62)
+                .miniThumb(width: 78, height: 62, scale: 0.55)
                 .clipShape(thumbShape)
                 .overlay(thumbShape.strokeBorder(p.sub.opacity(0.15), lineWidth: 1))
             VStack(alignment: .leading, spacing: 3) {
@@ -418,7 +418,7 @@ struct DesignHero: View {
         let outer = RoundedRectangle(cornerRadius: 26, style: .continuous)
         let border: Color = p.outline ?? p.sub.opacity(0.18)
         let gap: CGFloat = 8 * p.density.scale
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
             WorldBackground(p: p)
             VStack(alignment: .leading, spacing: gap) {
                 header
@@ -427,12 +427,6 @@ struct DesignHero: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            Image(systemName: "plus")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(p.onAccent)
-                .frame(width: 42, height: 42)
-                .background(p.accent, in: Circle())
-                .padding(14)
         }
         .frame(height: height)
         .frame(maxWidth: .infinity)
@@ -445,18 +439,26 @@ struct DesignHero: View {
     private var header: some View {
         let numberSize: CGFloat = min(p.world.bigNumberSize * 0.62, 46)
         let numberColor: Color = p.world.bigNumberAccent ? p.accent : p.text
-        return VStack(alignment: .leading, spacing: 0) {
-            Text(JP.date(.now))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(p.sub)
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text("あと").font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
-                Text("3")
-                    .font(.system(size: numberSize, weight: .heavy, design: p.fontDesign))
-                    .tracking(p.world.bigNumberTracking * 0.6)
-                    .foregroundStyle(numberColor)
-                Text("件").font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+        return HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(JP.date(.now))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(p.sub)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("あと").font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+                    Text("3")
+                        .font(.system(size: numberSize, weight: .heavy, design: p.fontDesign))
+                        .tracking(p.world.bigNumberTracking * 0.6)
+                        .foregroundStyle(numberColor)
+                    Text("件").font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+                }
             }
+            Spacer(minLength: 8)
+            Image(systemName: "plus")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(p.onAccent)
+                .frame(width: 38, height: 38)
+                .background(p.accent, in: Circle())
         }
     }
 
@@ -465,6 +467,9 @@ struct DesignHero: View {
         switch layout {
         case .focus:
             HeroFocusCard()
+            HeroRows(count: 1, start: 1)
+                .opacity(0.55)
+                .padding(.horizontal, 14)
         case .thumb:
             HeroWeekStrip()
             HeroRows(count: 2)
@@ -489,6 +494,7 @@ private enum HeroSample {
 private struct HeroRows: View {
     @Environment(\.palette) private var p
     let count: Int
+    var start: Int = 0
 
     var body: some View {
         var small = p
@@ -496,7 +502,7 @@ private struct HeroRows: View {
         let gap: CGFloat = 7 * p.density.scale
         return VStack(spacing: gap) {
             ForEach(0..<count, id: \.self) { i in
-                let row = HeroSample.rows[i % HeroSample.rows.count]
+                let row = HeroSample.rows[(start + i) % HeroSample.rows.count]
                 let mark: Color = row.overdue ? p.overdue : p.accent
                 HStack(spacing: 10) {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -547,7 +553,6 @@ private struct HeroFocusCard: View {
             }
         }
         .padding(14)
-        .padding(.trailing, 50) // 右下の＋と重ならないように
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(WorldCardSurface(p: small))
         .padding(.trailing, p.world == .brutal ? 5 : 0)
@@ -605,7 +610,7 @@ struct DesignEntryCard: View {
         let current: String = world.isOn ? "\(world.name)・\(store.layout.name)" : "\(store.theme.name)・\(store.layout.name)"
         HStack(spacing: 14) {
             WorldThumb(palette: p)
-                .frame(width: 96, height: 76)
+                .miniThumb(width: 96, height: 76, scale: 0.62)
                 .clipShape(thumbShape)
                 .overlay(thumbShape.strokeBorder(p.sub.opacity(0.15), lineWidth: 1))
             VStack(alignment: .leading, spacing: 4) {
@@ -634,5 +639,14 @@ struct DesignEntryCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("デザインを変える。いまは\(current)")
         .accessibilityAddTraits(.isButton)
+    }
+}
+
+extension View {
+    /// 大きめに描いた見本を縮めて小さな枠に入れる（文字が詰まって切れないように）
+    func miniThumb(width: CGFloat, height: CGFloat, scale: CGFloat) -> some View {
+        self.frame(width: width / scale, height: height / scale)
+            .scaleEffect(scale)
+            .frame(width: width, height: height)
     }
 }
