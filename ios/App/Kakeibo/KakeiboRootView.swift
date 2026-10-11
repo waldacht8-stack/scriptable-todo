@@ -11,6 +11,7 @@ struct KakeiboRootView: View {
     @State private var monthOffset = 0
     @State private var sheet: KakeiboSheet?
     @State private var path: [KakeiboRoute] = []
+    @State private var showAddChoices = false
 
     private var month: Date { KakeiboMonth.start(.now, offset: monthOffset) }
 
@@ -135,7 +136,7 @@ struct KakeiboRootView: View {
     }
 
     private var addButton: some View {
-        Button { sheet = .entry(nil) } label: {
+        Button { showAddChoices = true } label: {
             Image(systemName: "plus").font(.title2.weight(.heavy)).foregroundStyle(p.onAccent)
                 .frame(width: 60, height: 60)
                 .background(p.accent, in: Circle())
@@ -144,7 +145,13 @@ struct KakeiboRootView: View {
         .buttonStyle(.plain)
         .padding(.trailing, 20)
         .padding(.bottom, 20)
-        .accessibilityLabel("手入力で記録する")
+        .accessibilityLabel("記録する・明細を取り込む")
+        .confirmationDialog("記録のしかた", isPresented: $showAddChoices, titleVisibility: .visible) {
+            Button("手入力で記録") { sheet = .entry(nil) }
+            Button("明細を取り込む") { sheet = .importer(.fresh) }
+            Button("Apple Pay の自動記録") { sheet = .applePay }
+            Button("やめる", role: .cancel) {}
+        }
     }
 
     // MARK: シート
@@ -177,6 +184,7 @@ struct KakeiboRootView: View {
         try? await Task.sleep(nanoseconds: 700_000_000)
         switch target {
         case .entry: sheet = .entry(nil)
+        case .addMenu: showAddChoices = true
         case .importer(let step): sheet = .importer(.demo(step))
         case .applePay: sheet = .applePay
         case .all: path = [.all]
@@ -205,7 +213,7 @@ enum KakeiboSheet: Identifiable {
 
 /// 起動引数（画面写真用）
 enum KakeiboLaunch {
-    enum Target { case entry, importer(String), applePay, all, settings }
+    enum Target { case entry, addMenu, importer(String), applePay, all, settings }
 
     private static var args: [String] { ProcessInfo.processInfo.arguments }
 
@@ -216,6 +224,7 @@ enum KakeiboLaunch {
 
     static var target: Target? {
         if args.contains("-kakeiboentry") { return .entry }
+        if args.contains("-kakeiboadd") { return .addMenu }
         if args.contains("-kakeiboimport") { return .importer(value(after: "-kakeiboimport") ?? "source") }
         if args.contains("-kakeiboapplepay") { return .applePay }
         if args.contains("-kakeiboall") { return .all }
