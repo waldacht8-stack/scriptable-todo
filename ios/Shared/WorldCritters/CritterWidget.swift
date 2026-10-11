@@ -28,25 +28,25 @@ enum CritterWidgetArt {
             let y: CGFloat = h * CGFloat(0.86 - 0.05 * sin(k.progress * 2 * Double.pi))
             let angle: Double = (k.progress - 0.5) * 1.4
             return AnyView(sprite(28, 34, x: x, y: y, angle: angle) { c, s in
-                C.astronaut(D.local(c, at: D.pt(s.width / 2, s.height / 2 + 2), scale: 0.78), t: 0)
+                C.astronaut(D.local(c, at: CritterDraw.cpt(s.width / 2, s.height / 2 + 2), scale: 0.78), t: 0)
             })
         case .sky: return AnyView(WidgetSky(size: size, k: k))
         case .mist:
             let x: CGFloat = w * CGFloat(0.9 - 0.8 * k.progress)
             return AnyView(ZStack {
                 sprite(30, 30, x: w * 0.07, y: h * 0.86, angle: 0) { c, s in
-                    D.glow(c, s.width / 2, s.height / 2, 14, sceneColor(0xFFC77A), 0.5)
-                    D.circle(c, s.width / 2, s.height / 2, 2, sceneColor(0xFFD9A0))
+                    D.glow(c, Double(s.width) / 2, Double(s.height) / 2, 14, sceneColor(0xFFC77A), 0.5)
+                    D.circle(c, Double(s.width) / 2, Double(s.height) / 2, 2, sceneColor(0xFFD9A0))
                 }
                 sprite(30, 32, x: x, y: h * 0.95 - 16, angle: 0) { c, s in
-                    C.deer(D.local(c, at: D.pt(s.width / 2 + 2, s.height - 1), scale: 0.68),
+                    C.deer(D.local(c, at: CritterDraw.cpt(s.width / 2 + 2, s.height - 1), scale: 0.68),
                            walk: k.progress * 40, color: sceneColor(0x3E4A55, 0.5))
                 }
             })
         case .deepsea:
             let x: CGFloat = w * CGFloat(0.92 - 0.84 * k.progress)
             return AnyView(sprite(64, 24, x: x, y: h * 0.88, angle: 0) { c, s in
-                C.whale(D.local(c, at: D.pt(s.width / 2, s.height / 2), scale: 0.6), t: k.progress * 30)
+                C.whale(D.local(c, at: CritterDraw.cpt(s.width / 2, s.height / 2), scale: 0.6), t: k.progress * 30)
             })
         case .hinata: return AnyView(WidgetCat(size: size, k: k))
         case .brutal:
@@ -117,7 +117,7 @@ private struct WidgetMole: View {
                 .trim(from: 0, to: reach)
                 .stroke(sceneColor(0x5E4129, 0.42), style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
             CritterWidgetArt.sprite(28, 18, x: mx, y: WidgetTunnel.wave(Double(mx), w: Double(w), y: Double(y)), angle: 0) { c, s in
-                Critters.mole(CritterDraw.local(c, at: CritterDraw.pt(s.width / 2 - 2, s.height / 2), scale: 0.72), t: 0, digging: false)
+                Critters.mole(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2 - 2, s.height / 2), scale: 0.72), t: 0, digging: false)
             }
         }
     }
@@ -162,12 +162,12 @@ private struct WidgetSky: View {
         ZStack {
             if showSun {
                 CritterWidgetArt.sprite(34, 34, x: sx, y: sy, angle: 0) { c, s in
-                    CritterDraw.glow(c, s.width / 2, s.height / 2, 17, sceneColor(0xFFF1B8), 0.75)
-                    CritterDraw.circle(c, s.width / 2, s.height / 2, 5.5, sceneColor(0xFFE9A0))
+                    CritterDraw.glow(c, Double(s.width) / 2, Double(s.height) / 2, 17, sceneColor(0xFFF1B8), 0.75)
+                    CritterDraw.circle(c, Double(s.width) / 2, Double(s.height) / 2, 5.5, sceneColor(0xFFE9A0))
                 }
             }
             CritterWidgetArt.sprite(22, 14, x: px, y: py, angle: tilt) { c, s in
-                Critters.paperPlane(CritterDraw.local(c, at: CritterDraw.pt(s.width / 2, s.height / 2), scale: 0.8), dark: k.dark)
+                Critters.paperPlane(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2, s.height / 2), scale: 0.8), dark: k.dark)
             }
         }
     }
@@ -189,7 +189,7 @@ private struct WidgetCat: View {
         ZStack {
             Ellipse().fill(pool).frame(width: 60, height: 14).position(x: x, y: ground - 2)
             CritterWidgetArt.sprite(20, 24, x: x, y: ground - 12, angle: 0) { c, s in
-                Critters.catSitting(CritterDraw.local(c, at: CritterDraw.pt(s.width / 2, s.height), scale: 0.85))
+                Critters.catSitting(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2, s.height), scale: 0.85))
             }
         }
     }

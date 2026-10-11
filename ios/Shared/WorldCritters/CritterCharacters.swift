@@ -61,7 +61,9 @@ enum Critters {
     /// 流れ星（head が先頭。dir の向きに進む）
     @_optimize(none)
     static func shootingStar(_ c: GraphicsContext, head: CGPoint, dirX: Double, dirY: Double, length: Double, alpha: Double) {
-        let tail = CGPoint(x: head.x - dirX * length, y: head.y - dirY * length)
+        let hx: Double = Double(head.x)
+        let hy: Double = Double(head.y)
+        let tail = CGPoint(x: hx - dirX * length, y: hy - dirY * length)
         var path = Path()
         path.move(to: tail)
         path.addLine(to: head)
@@ -381,7 +383,9 @@ enum Critters {
     /// 1枚のタイル（中心 c、大きさ size、ぽこっと膨らむ pop）
     static func bentoTile(_ ctx: GraphicsContext, center: CGPoint, size: Double, color: Color, pop: Double) {
         let s: Double = size * (1 + pop)
-        let rect = CGRect(x: center.x - s / 2, y: center.y - s / 2, width: s, height: s)
+        let cx: Double = Double(center.x)
+        let cy: Double = Double(center.y)
+        let rect = CGRect(x: cx - s / 2, y: cy - s / 2, width: s, height: s)
         let path = Path(roundedRect: rect, cornerRadius: s * 0.24)
         ctx.fill(path, with: .color(color))
         ctx.stroke(path, with: .color(sceneColor(0x1E1B16, 0.14)), lineWidth: 0.8)

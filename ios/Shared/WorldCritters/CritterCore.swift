@@ -263,6 +263,9 @@ enum CritterDraw {
 
     static func pt(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: x, y: y) }
 
+    /// CGFloat のまま点を作る（ウィジェットの小さな絵の中心など）
+    static func cpt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x, y: y) }
+
     /// 0〜1 の中で、a〜b の区間の進み（外は 0 か 1）
     static func span(_ r: Double, _ a: Double, _ b: Double) -> Double { max(0, min(1, (r - a) / (b - a))) }
 

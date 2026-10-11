@@ -323,12 +323,14 @@ enum CritterArt {
             let spot = stickerSpot(newest, w: w, lane: lane)
             let pa: Double = D.span(r, 0.05, 0.15) * (1 - D.span(r, 0.55, 0.75))
             let peta = Text("ペタッ").font(.system(size: 12, weight: .black)).foregroundColor(Color.black.opacity(pa))
-            ctx.draw(peta, at: D.pt(spot.0.x + 6, spot.0.y - 22))
+            let sx: Double = Double(spot.0.x)
+            let sy: Double = Double(spot.0.y)
+            ctx.draw(peta, at: D.pt(sx + 6, sy - 22))
             let press: Double = D.span(r, 0.35, 0.5)
             guard press > 0 else { return }
             let stampScale: Double = 1.45 - 0.45 * D.bounce(press)
             let stampAlpha: Double = min(1, press * 3) * (1 - D.span(r, 0.85, 1))
-            C.stamp(D.local(ctx, at: D.pt(spot.0.x + 26, spot.0.y + 2), scale: stampScale, angle: -0.22), alpha: stampAlpha)
+            C.stamp(D.local(ctx, at: D.pt(sx + 26, sy + 2), scale: stampScale, angle: -0.22), alpha: stampAlpha)
         }
     }
 
