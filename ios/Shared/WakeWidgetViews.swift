@@ -484,7 +484,7 @@ struct WakeWidgetView: View {
                 let wf: WakeWatchFeed = entry.watch
                 Text("見張り中・あと\(wf.stepsLeft)歩で解除").font(head).lineLimit(1)
                 HStack(spacing: 6) {
-                    Text("\(wf.stepCount) / \(wf.stepGoal)歩").font(big).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                    Text("\(wf.stepCount)/\(wf.stepGoal)歩").font(big).monospacedDigit().lineLimit(1).fixedSize()
                         .contentTransition(.numericText(value: Double(wf.stepCount)))
                     LockBar(fraction: wf.fraction).frame(height: 5)
                 }

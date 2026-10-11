@@ -381,7 +381,7 @@ struct SunMoonWidgetView: View {
             let text: String = d.done ? "\(d.time) \(large ? title + " " : "")済" : "\(d.time) \(title)"
             let width: CGFloat = Self.estimateWidth(text, fontSize: fontSize)
             let pt: CGPoint = geo.point(d.fraction)
-            let trailing: Bool = pt.x > size.width * 0.66
+            let trailing: Bool = pt.x > size.width * 0.8
             let gap: CGFloat = dotRadius + 4
             let left: CGFloat = trailing ? pt.x - gap - width : pt.x + gap
             let top: CGFloat = pt.y - fontSize - 4

@@ -20,14 +20,18 @@ struct WidgetPreviewScreen: View {
         case "r4": kind = "リリース4"
         case "review": kind = "見返し"
         case "summary": kind = "今日のまとめ"
+        case "summary2": kind = "今日のまとめ・見張り中"
         case "wake4": kind = "起床・夜と見張り"
         case "lock4": kind = "ロック画面・時間帯"
         case "tabs": kind = "家計簿・相談・情報"
-        case "tabslock": kind = "家計簿・相談・情報（大・ロック画面）"
+        case "tabslock": kind = "情報（大）・ロック画面"
         case "sunmoon": kind = "太陽と月・\(JP.time(Self.previewNow))"
         default: kind = "小・中"
         }
         let world: String = p.world.isOn ? "・\(p.world.name)" : ""
+        // リリース4のページは短く（375pt 幅で1行に収める）
+        let legacy: Set<String> = ["", "large", "other", "lock"]
+        if !legacy.contains(size) { return "見本：\(kind)\(world)" }
         return "ウィジェットの見本（\(kind)）\(world)"
     }
 
@@ -42,6 +46,7 @@ struct WidgetPreviewScreen: View {
                 case "r4": r4Page
                 case "review": reviewPage
                 case "summary": summaryPage
+                case "summary2": summary2Page
                 case "wake4": wake4Page
                 case "lock4": lock4Page
                 case "sunmoon": sunMoonPage
@@ -359,24 +364,24 @@ extension WidgetPreviewScreen {
 
     // MARK: ページ
 
+    // 画面写真のシミュレーターは 375×667pt なので、どのページもスクロールせずに入る大きさにする
+
     /// タブごと（家計簿・相談・情報）の小・中。相談は 20:00（「今日の1枚 まだ」が出る時刻）
     var tabsPage: some View {
         let e: DayWidgetEntry = dayEntry(at: Self.today(20, 0))
-        return VStack(alignment: .leading, spacing: 6) {
-            caption("家計簿")
+        return VStack(alignment: .leading, spacing: 5) {
+            caption("家計簿・相談・情報（小）")
             HStack(alignment: .top, spacing: 6) {
-                frame(KakeiboWidgetView(entry: e, familyOverride: .systemSmall), Self.small, scale: 0.55)
-                frame(KakeiboWidgetView(entry: e, familyOverride: .systemMedium), Self.medium, scale: 0.55)
+                frame(KakeiboWidgetView(entry: e, familyOverride: .systemSmall), Self.small, scale: 0.6)
+                frame(ConsultWidgetView(entry: e, familyOverride: .systemSmall), Self.small, scale: 0.6)
+                frame(InfoWidgetView(entry: e, familyOverride: .systemSmall), Self.small, scale: 0.6)
             }
-            frame(KakeiboWidgetView(entry: e, familyOverride: .systemMedium), Self.medium, scale: 0.9)
-            caption("相談（20:00）")
-            HStack(alignment: .top, spacing: 6) {
-                frame(ConsultWidgetView(entry: e, familyOverride: .systemSmall), Self.small, scale: 0.55)
-                frame(InfoWidgetView(entry: e, familyOverride: .systemSmall), Self.small, scale: 0.55)
-            }
-            frame(ConsultWidgetView(entry: e, familyOverride: .systemMedium), Self.medium, scale: 0.9)
-            caption("情報（小は上の右）")
-            frame(InfoWidgetView(entry: e, familyOverride: .systemMedium), Self.medium, scale: 0.9)
+            caption("家計簿（中）")
+            frame(KakeiboWidgetView(entry: e, familyOverride: .systemMedium), Self.medium, scale: 0.75)
+            caption("相談（中・20:00）")
+            frame(ConsultWidgetView(entry: e, familyOverride: .systemMedium), Self.medium, scale: 0.75)
+            caption("情報（中）")
+            frame(InfoWidgetView(entry: e, familyOverride: .systemMedium), Self.medium, scale: 0.75)
         }
     }
 
@@ -387,11 +392,12 @@ extension WidgetPreviewScreen {
         let circle = CGSize(width: 64, height: 64)
         let rect = CGSize(width: 160, height: 66)
         let panel: Color = Color(uiColor: .secondarySystemBackground)
-        return VStack(alignment: .leading, spacing: 6) {
+        let inlineFont: Font = Font.footnote.weight(.semibold)
+        return VStack(alignment: .leading, spacing: 5) {
             caption("情報（大）")
-            frame(InfoWidgetView(entry: e, familyOverride: .systemLarge), Self.large, scale: 0.8)
+            frame(InfoWidgetView(entry: e, familyOverride: .systemLarge), Self.large, scale: 0.55)
             caption("ロック画面：家計簿・相談・情報")
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 10) {
                     accessory(KakeiboWidgetView(entry: e, familyOverride: .accessoryRectangular), rect, round: false)
                     accessory(KakeiboWidgetView(entry: e, familyOverride: .accessoryCircular), circle, round: true)
@@ -402,9 +408,9 @@ extension WidgetPreviewScreen {
                     accessory(InfoWidgetView(entry: e, familyOverride: .accessoryCircular), circle, round: true)
                 }
                 accessory(InfoWidgetView(entry: e, familyOverride: .accessoryRectangular), rect, round: false)
-                KakeiboWidgetView(entry: e, familyOverride: .accessoryInline).font(.subheadline.weight(.semibold)).lineLimit(1)
-                ConsultWidgetView(entry: e, familyOverride: .accessoryInline).font(.subheadline.weight(.semibold)).lineLimit(1)
-                InfoWidgetView(entry: e, familyOverride: .accessoryInline).font(.subheadline.weight(.semibold)).lineLimit(1)
+                KakeiboWidgetView(entry: e, familyOverride: .accessoryInline).font(inlineFont).lineLimit(1)
+                ConsultWidgetView(entry: e, familyOverride: .accessoryInline).font(inlineFont).lineLimit(1)
+                InfoWidgetView(entry: e, familyOverride: .accessoryInline).font(inlineFont).lineLimit(1)
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -422,10 +428,11 @@ extension WidgetPreviewScreen {
         let medium = SunMoonWidgetView(entry: e, familyOverride: .systemMedium).background(sky)
         let large = SunMoonWidgetView(entry: e, familyOverride: .systemLarge).background(sky)
         return VStack(alignment: .leading, spacing: 6) {
-            caption("小・中・大")
-            frame(small, Self.small, scale: 0.9, padded: false)
-            frame(medium, Self.medium, scale: 0.9, padded: false)
-            frame(large, Self.large, scale: 0.9, padded: false)
+            frame(medium, Self.medium, scale: 0.85, padded: false)
+            HStack(alignment: .top, spacing: 8) {
+                frame(small, Self.small, scale: 0.55, padded: false)
+                frame(large, Self.large, scale: 0.68, padded: false)
+            }
         }
     }
 
@@ -434,15 +441,16 @@ extension WidgetPreviewScreen {
         let evening: DayWidgetEntry = dayEntry(at: Self.today(19, 0))
         let night: WakeEntry = wakeEntry(at: Self.today(22, 40), snap: Self.wakeNight(alarm: true))
         let watch: WakeEntry = wakeEntry(at: Self.today(7, 12), snap: Self.wakeMorning(), watch: Self.watchSample())
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 5) {
             caption("見返し（中）19:00")
-            frame(ReviewWidgetView(entry: evening, familyOverride: .systemMedium), Self.medium, scale: 0.9)
-            caption("今日のまとめ（大）19:00")
-            frame(SummaryWidgetView(entry: evening), Self.large, scale: 0.9)
-            caption("起床：夜 22:40 ／ 見張り中 7:12")
-            HStack(spacing: 8) {
-                frame(WakeWidgetView(entry: night, familyOverride: .systemSmall, standbyOverride: false), Self.small, scale: 0.9)
-                frame(WakeWidgetView(entry: watch, familyOverride: .systemSmall), Self.small, scale: 0.9)
+            frame(ReviewWidgetView(entry: evening, familyOverride: .systemMedium), Self.medium, scale: 0.75)
+            caption("今日のまとめ（大）19:00 ／ 起床：夜 22:40・見張り中 7:12")
+            HStack(alignment: .top, spacing: 8) {
+                frame(SummaryWidgetView(entry: evening), Self.large, scale: 0.62)
+                VStack(spacing: 8) {
+                    frame(WakeWidgetView(entry: night, familyOverride: .systemSmall, standbyOverride: false), Self.small, scale: 0.62)
+                    frame(WakeWidgetView(entry: watch, familyOverride: .systemSmall), Self.small, scale: 0.62)
+                }
             }
         }
     }
@@ -451,25 +459,34 @@ extension WidgetPreviewScreen {
     var reviewPage: some View {
         let evening: DayWidgetEntry = dayEntry(at: Self.today(19, 0))
         let morning: DayWidgetEntry = dayEntry(at: Self.today(9, 30))
-        return VStack(alignment: .leading, spacing: 6) {
-            caption("中・19:00（朝と昼は済み）")
-            frame(ReviewWidgetView(entry: evening, familyOverride: .systemMedium), Self.medium, scale: 0.92)
-            caption("中・9:30（次は昼）")
-            frame(ReviewWidgetView(entry: morning, familyOverride: .systemMedium), Self.medium, scale: 0.92)
+        return VStack(alignment: .leading, spacing: 5) {
+            caption("中・19:00（朝と昼は済み） ／ 9:30（次は昼）")
+            frame(ReviewWidgetView(entry: evening, familyOverride: .systemMedium), Self.medium, scale: 0.75)
+            frame(ReviewWidgetView(entry: morning, familyOverride: .systemMedium), Self.medium, scale: 0.75)
             caption("大・19:00")
-            frame(ReviewWidgetView(entry: evening, familyOverride: .systemLarge), Self.large, scale: 0.92)
+            frame(ReviewWidgetView(entry: evening, familyOverride: .systemLarge), Self.large, scale: 0.75)
         }
     }
 
-    /// 今日のまとめ（大）：夜のアラーム確認と、見張り中
+    /// 今日のまとめ（大）：19:00 の夜のアラーム確認
     var summaryPage: some View {
         let evening: DayWidgetEntry = dayEntry(at: Self.today(19, 0))
-        let watching: DayWidgetEntry = dayEntry(at: Self.today(7, 12), watch: Self.watchSample(), wake: Self.wakeMorning())
         return VStack(alignment: .leading, spacing: 6) {
             caption("19:00・明日のアラームあり")
-            frame(SummaryWidgetView(entry: evening), Self.large, scale: 1.0)
-            caption("7:12・見張り中")
-            frame(SummaryWidgetView(entry: watching), Self.large, scale: 0.9)
+            frame(SummaryWidgetView(entry: evening), Self.large, scale: 0.95)
+        }
+    }
+
+    /// 今日のまとめ（見張り中）と、起床ウィジェットのロック画面
+    var summary2Page: some View {
+        let watching: DayWidgetEntry = dayEntry(at: Self.today(7, 12), watch: Self.watchSample(), wake: Self.wakeMorning())
+        let wakeWatch: WakeEntry = wakeEntry(at: Self.today(7, 12), snap: Self.wakeMorning(), watch: Self.watchSample())
+        let wakeNight: WakeEntry = wakeEntry(at: Self.today(22, 40), snap: Self.wakeNight(alarm: true))
+        return VStack(alignment: .leading, spacing: 6) {
+            caption("今日のまとめ・7:12 見張り中")
+            frame(SummaryWidgetView(entry: watching), Self.large, scale: 0.8)
+            caption("起床ウィジェットのロック画面（見張り中・夜）")
+            lockWakeRow(wakeWatch, wakeNight)
         }
     }
 
@@ -484,21 +501,22 @@ extension WidgetPreviewScreen {
             .padding(16)
             .frame(width: Self.small.width, height: Self.small.height)
             .background(Color.black, in: black)
-        return VStack(alignment: .leading, spacing: 6) {
-            caption("夜 22:40：アラームあり ／ なし")
-            HStack(spacing: 8) {
-                frame(WakeWidgetView(entry: set, familyOverride: .systemSmall, standbyOverride: false), Self.small, scale: 0.9)
-                frame(WakeWidgetView(entry: none, familyOverride: .systemSmall, standbyOverride: false), Self.small, scale: 0.9)
-            }
-            frame(WakeWidgetView(entry: set, familyOverride: .systemMedium), Self.medium, scale: 0.9)
-            caption("見張り中 7:12 ／ スタンバイ（夜）")
-            HStack(spacing: 8) {
-                frame(WakeWidgetView(entry: watch, familyOverride: .systemSmall), Self.small, scale: 0.9)
+        return VStack(alignment: .leading, spacing: 5) {
+            caption("夜 22:40：アラームあり ／ なし ／ スタンバイ")
+            HStack(spacing: 6) {
+                frame(WakeWidgetView(entry: set, familyOverride: .systemSmall, standbyOverride: false), Self.small, scale: 0.64)
+                frame(WakeWidgetView(entry: none, familyOverride: .systemSmall, standbyOverride: false), Self.small, scale: 0.64)
                 standby
-                    .scaleEffect(0.9)
-                    .frame(width: Self.small.width * 0.9, height: Self.small.height * 0.9)
+                    .scaleEffect(0.64)
+                    .frame(width: Self.small.width * 0.64, height: Self.small.height * 0.64)
             }
-            frame(WakeWidgetView(entry: watch, familyOverride: .systemMedium), Self.medium, scale: 0.9)
+            frame(WakeWidgetView(entry: set, familyOverride: .systemMedium), Self.medium, scale: 0.75)
+            caption("見張り中 7:12")
+            HStack(spacing: 6) {
+                frame(WakeWidgetView(entry: watch, familyOverride: .systemSmall), Self.small, scale: 0.75)
+                Spacer(minLength: 0)
+            }
+            frame(WakeWidgetView(entry: watch, familyOverride: .systemMedium), Self.medium, scale: 0.75)
         }
     }
 
@@ -508,16 +526,12 @@ extension WidgetPreviewScreen {
         let watching: DayWidgetEntry = dayEntry(at: Self.today(7, 12), watch: Self.watchSample(), wake: Self.wakeMorning())
         let night: DayWidgetEntry = dayEntry(at: Self.today(22, 40))
         let noAlarm: DayWidgetEntry = dayEntry(at: Self.today(22, 40), wake: Self.wakeNight(alarm: false))
-        let wakeWatch: WakeEntry = wakeEntry(at: Self.today(7, 12), snap: Self.wakeMorning(), watch: Self.watchSample())
-        let wakeNight: WakeEntry = wakeEntry(at: Self.today(22, 40), snap: Self.wakeNight(alarm: true))
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 6) {
             caption("いまの日和：時間帯で中身が変わる")
             lockRow("ふだん 12:30", day)
             lockRow("見張り中 7:12", watching)
             lockRow("夜 22:40", night)
             lockRow("夜・アラームなし", noAlarm)
-            caption("起床ウィジェット（見張り中・夜）")
-            lockWakeRow(wakeWatch, wakeNight)
         }
     }
 
@@ -526,7 +540,7 @@ extension WidgetPreviewScreen {
         let circle = CGSize(width: 64, height: 64)
         let rect = CGSize(width: 160, height: 66)
         let panel: Color = Color(uiColor: .secondarySystemBackground)
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.caption2.weight(.bold)).foregroundStyle(.secondary)
             HStack(spacing: 10) {
                 accessory(DayLockView(entry: e, familyOverride: .accessoryRectangular), rect, round: false)
@@ -535,7 +549,7 @@ extension WidgetPreviewScreen {
             DayLockView(entry: e, familyOverride: .accessoryInline)
                 .font(.subheadline.weight(.semibold)).lineLimit(1)
         }
-        .padding(10)
+        .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .foregroundStyle(.primary)
         .background(panel, in: shape)

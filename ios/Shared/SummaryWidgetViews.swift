@@ -14,10 +14,11 @@ struct SummaryWidgetView: View {
         self.entry = entry
     }
 
-    /// 上位3件（今日の分がなければ、期限の近い順）
+    /// 上位3件（今日の分が先。3件に満たなければ、ほかの期限の近いものを足す）
     private var top: [TodoItem] {
-        let list: [TodoItem] = day.today.isEmpty ? day.open : day.today
-        return Array(list.prefix(3))
+        let todayIDs: Set<String> = Set(day.today.map(\.id))
+        let rest: [TodoItem] = day.open.filter { !todayIDs.contains($0.id) }
+        return Array((day.today + rest).prefix(3))
     }
 
     var body: some View {

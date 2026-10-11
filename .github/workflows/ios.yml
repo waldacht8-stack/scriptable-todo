@@ -205,6 +205,7 @@ jobs:
           shot shots/widgets-r4-summary.png -demo -widgetpreview -widgetsize summary -theme dawn
           shot shots/widgets-r4-summary-brutal.png -demo -widgetpreview -widgetsize summary -world brutal
           shot shots/widgets-r4-summary-clay.png -demo -widgetpreview -widgetsize summary -world clay
+          shot shots/widgets-r4-summary-watch.png -demo -widgetpreview -widgetsize summary2 -theme focus
           shot shots/widgets-r4-wake.png -demo -widgetpreview -widgetsize wake4 -theme night
           shot shots/widgets-r4-wake-aurora.png -demo -widgetpreview -widgetsize wake4 -world aurora
           shot shots/widgets-r4-lock.png -demo -widgetpreview -widgetsize lock4 -theme focus
