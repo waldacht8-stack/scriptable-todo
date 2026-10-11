@@ -295,6 +295,9 @@ struct InfoEmptyTopics: View {
 
 struct InfoGameSection: View {
     @Environment(\.palette) private var p
+    @Environment(\.motion) private var motion
+    /// Web版 Discord（試作）。起動引数 -discordweb で最初から開く（画面写真用。-demo なら通信しない）
+    @State private var showDiscord = ProcessInfo.processInfo.arguments.contains("-discordweb")
 
     var body: some View {
         ScrollView {
@@ -306,10 +309,17 @@ struct InfoGameSection: View {
                     .buttonStyle(.plain)
                 NavigationLink { SteamHome() } label: { SteamEntryCard() }
                     .buttonStyle(.plain)
+                Button { showDiscord = true } label: { DiscordEntryCard() }
+                    .buttonStyle(.plain)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
+        }
+        .fullScreenCover(isPresented: $showDiscord) {
+            DiscordWebScreen { showDiscord = false }
+                .environment(\.palette, p)
+                .environment(\.motion, motion)
         }
     }
 }
