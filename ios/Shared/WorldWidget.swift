@@ -25,6 +25,8 @@ struct WidgetWorldBackground: View {
         switch p.world {
         case .none:
             base
+        case .strata, .galaxy, .sky, .mist, .deepsea:
+            WidgetSceneBackground(p: p)
         case .hinata:
             ZStack {
                 base
@@ -128,6 +130,8 @@ struct WidgetCardSurface: View {
         switch p.world {
         case .none, .bento:
             shape.fill(p.card)
+        case .strata, .galaxy, .sky, .mist, .deepsea:
+            WidgetSceneCard(p: p, radius: r)
         case .brutal:
             ZStack {
                 shape.fill(Color.black).offset(x: 2.5, y: 2.5)
@@ -190,6 +194,8 @@ struct WidgetButtonSurface: View {
                 .shadow(color: wwx(0x784614, 0.25), radius: 5, y: 3)
         case .none, .bento, .swiss:
             shape.fill(p.accent)
+        case .strata, .galaxy, .sky, .mist, .deepsea:
+            WidgetSceneButton(p: p, radius: r)
         }
     }
 }
@@ -339,6 +345,8 @@ extension World {
                                             removal: AnyTransition.move(edge: .leading))
         case .bento:
             return AnyTransition.scale(scale: 0.88).combined(with: .opacity)
+        case .strata, .galaxy, .sky, .mist, .deepsea:
+            return sceneRowTransition()
         }
     }
 
@@ -417,6 +425,8 @@ extension World {
         case .none: nil
         case .hinata, .clay, .aurora: .rounded
         case .brutal, .swiss, .bento: .default
+        case .galaxy, .sky, .deepsea: .rounded
+        case .strata, .mist: .default
         }
     }
 
