@@ -77,6 +77,7 @@ struct RootView: View {
                     KakeiboRootView().tabItem { Label("家計簿", systemImage: "yensign.circle") }.tag(2)
                     InfoRootView().tabItem { Label("情報", systemImage: "newspaper") }.tag(4)
                 }
+                .kakeiboOpenURL { tab = 2 }
                 .environment(\.openAppSettings, OpenAppSettingsAction { showSettings = true })
                 .sheet(isPresented: $showSettings) {
                     SettingsView().environmentObject(store).environment(\.palette, p)
