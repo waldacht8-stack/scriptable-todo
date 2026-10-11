@@ -20,7 +20,7 @@ struct HiyoriApp: App {
                     guard p == .active else { return }
                     store.reload() // ウィジェット・通知で変えた内容を反映
                     if !ProcessInfo.processInfo.arguments.contains("-demo") { Task { await store.refreshServices() } }
-                    if !ProcessInfo.processInfo.arguments.contains("-demo") { DayCardReminder.reschedule() } // 1日1枚の通知を切らさない
+                    if !ProcessInfo.processInfo.arguments.contains("-demo") { Task { await DayCardReminder.reschedule() } } // 1日1枚の通知を切らさない
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .todoDataChanged)) { _ in store.reload() }
         }
