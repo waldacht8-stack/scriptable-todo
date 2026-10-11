@@ -329,7 +329,7 @@ struct KakeiboImportView: View {
                 .onChange(of: excludeTransfers) { _, v in applyTransferToggle(v) }
             }
             if usedOCR {
-                Label("文字が読めない PDF だったので、画像から文字を読み取りました。まちがいが出やすいので、よく見てください", systemImage: "text.viewfinder")
+                Label("文字として読めない PDF（Safari で印刷した明細など）だったので、画像から文字を読み取りました。まちがいが出やすいので、よく見てください", systemImage: "text.viewfinder")
                     .font(.footnote).foregroundStyle(p.overdue).fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -486,9 +486,26 @@ struct KakeiboImportView: View {
         defer { loading = false }
         if isPDF {
             var text = KakeiboPDF.text(from: data)
+            // Safari で印刷した PDF などは、取り出した文字が化けている。そのときも画像から読む
+            if let t = text, KakeiboPDF.isGarbled(t) { text = nil }
             if text == nil {
-                text = await KakeiboPDF.recognize(data)
-                usedOCR = text != nil
+                let pages = await KakeiboPDF.recognizeBoxes(data)
+                let ocrText = KakeiboOCRTable.text(pages: pages)
+                if !ocrText.isEmpty {
+                    text = ocrText
+                    usedOCR = true
+                }
+                if detect, !ocrText.isEmpty, let i = KakeiboDetect.institution(ocrText) { institution = i }
+                // 見出しの位置で列に分ける（ウェブの明細を印刷したもの）
+                if let ocr = KakeiboOCRTable.build(pages: pages) {
+                    table = ocr.table
+                    if ocr.table.headerFound && ocr.mapping.isUsable {
+                        mapping = ocr.mapping
+                        buildDrafts()
+                        if !drafts.isEmpty { return }
+                        errorText = nil
+                    }
+                }
             }
             guard let text else {
                 errorText = "文字が読めない PDF です。明細の画面から PDF を出し直すか、CSV を選んでください"
@@ -499,6 +516,14 @@ struct KakeiboImportView: View {
             hasBalance = parsed.hasBalance
             var rows = parsed.rows
             if usedOCR { for i in rows.indices { rows[i].suspect = true } }
+            if rows.isEmpty, let t = table {
+                // 画像から読んだ表：列の対応を選んでもらう
+                mapping = t.headerFound ? mapping : KakeiboColumnMapping()
+                needsMapping = true
+                errorText = nil
+                return
+            }
+            table = nil
             if rows.isEmpty { errorText = "日付と金額の行が見つかりませんでした。CSV があれば CSV を選んでください" }
             drafts = store.prepare(rows, institution: institution, isCard: institution.isCard, excludeTransfers: excludeTransfers)
         } else {
@@ -527,8 +552,12 @@ struct KakeiboImportView: View {
 
     private func buildDrafts() {
         guard let table else { return }
-        let rows = KakeiboCSV.drafts(table, mapping: mapping, isCard: csvIsCard)
+        var rows = KakeiboCSV.drafts(table, mapping: mapping, isCard: csvIsCard)
         hasBalance = mapping.balance != nil
+        if usedOCR {
+            // 画像から読んだ行：残高の検算が合わなかった行（残高が読めない行も）はよく見てもらう
+            for i in rows.indices where !hasBalance || rows[i].balance == nil { rows[i].suspect = true }
+        }
         drafts = store.prepare(rows, institution: institution, isCard: csvIsCard, excludeTransfers: excludeTransfers)
         errorText = rows.isEmpty ? "日付と金額の行が見つかりませんでした。列の対応を選び直してください" : nil
     }

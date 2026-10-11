@@ -91,7 +91,7 @@ jobs:
           # 起動して撮る。真っ白（小さいファイル）なら、待って撮り直す（遅いシミュレーター対策）
           # 担当の枝では、SHOTS_ON_BRANCH に名前が合う写真だけ撮る（時間短縮）。main ではすべて撮る
           # 各担当は自分の枝でこの値に自分の写真の名前（正規表現）を足す。例："kakeibo|tab-2"
-          SHOTS_ON_BRANCH="tab-|home-focus"
+          SHOTS_ON_BRANCH="kakeibo"
           shot() {
             out=$1; shift
             if [ "$GITHUB_REF_NAME" != "main" ] && ! echo "$out" | grep -qE "$SHOTS_ON_BRANCH"; then
@@ -157,6 +157,7 @@ jobs:
           shot shots/kakeibo.png -demo -theme focus -tab 2
           shot shots/kakeibo-night.png -demo -theme night -tab 2
           shot shots/kakeibo-world-hinata.png -demo -world hinata -tab 2
+          shot shots/kakeibo-add-menu.png -demo -theme focus -tab 2 -kakeiboadd
           shot shots/kakeibo-import.png -demo -theme focus -tab 2 -kakeiboimport source
           shot shots/kakeibo-import-jcb.png -demo -theme focus -tab 2 -kakeiboimport jcb
           shot shots/kakeibo-import-mufg.png -demo -theme focus -tab 2 -kakeiboimport mufg

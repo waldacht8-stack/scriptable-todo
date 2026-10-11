@@ -313,10 +313,39 @@ enum KakeiboPDF {
         return s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : s
     }
 
-    /// 画像だけの PDF：ページを描いて文字認識（Vision）。行ごとにまとめて返す
-    static func recognize(_ data: Data) async -> String? {
-        guard let doc = PDFDocument(data: data) else { return nil }
-        var lines: [String] = []
+    /// 文字が化けていないか。Safari で印刷した PDF は、日本語の字形に文字の対応（ToUnicode）が無く、
+    /// 取り出すと「೥ ݄೔ ԁ」のようなよその文字になる（数字まで化ける）。そのときは文字認識で読む
+    static func isGarbled(_ text: String) -> Bool {
+        var total = 0, japanese = 0, foreign = 0, nonASCII = 0
+        var hasKey = false
+        for u in text.unicodeScalars {
+            if u.properties.isWhitespace { continue }
+            total += 1
+            let v = u.value
+            if v < 0x80 { continue }
+            nonASCII += 1
+            if "年月日円".unicodeScalars.contains(u) { hasKey = true }
+            let kana: Bool = (0x3040...0x30FF).contains(v) || (0x31F0...0x31FF).contains(v)
+            let kanji: Bool = (0x4E00...0x9FFF).contains(v) || (0x3400...0x4DBF).contains(v) || (0xF900...0xFAFF).contains(v)
+            if kana || kanji { japanese += 1; continue }
+            let ok: Bool = (0x00A0...0x00FF).contains(v) || (0x2000...0x2BFF).contains(v)
+                || (0x3000...0x303F).contains(v) || (0xFF00...0xFFEF).contains(v)
+            if !ok { foreign += 1 }
+        }
+        guard total > 0 else { return false }
+        // よその文字が多い
+        if foreign >= 3 && Double(foreign) / Double(total) > 0.1 { return true }
+        // ASCII 以外の文字がそれなりにあるのに、日本語（年・月・日・円）がほとんど無い
+        if nonASCII >= 10 && !hasKey && japanese * 5 < nonASCII { return true }
+        // 漢字に化けることもある：日本語の明細なら「年・月・日・円」のどれかは必ずある
+        if nonASCII >= 30 && !hasKey { return true }
+        return false
+    }
+
+    /// 文字が無い・化けた PDF：ページを2倍で描いて文字認識（Vision）。ページごとの認識結果を返す
+    static func recognizeBoxes(_ data: Data) async -> [[KakeiboOCRBox]] {
+        guard let doc = PDFDocument(data: data) else { return [] }
+        var pages: [[KakeiboOCRBox]] = []
         for i in 0..<min(doc.pageCount, 20) {
             guard let page = doc.page(at: i) else { continue }
             let box = page.bounds(for: .mediaBox)
@@ -324,47 +353,25 @@ enum KakeiboPDF {
             let size = CGSize(width: box.width * scale, height: box.height * scale)
             let image = page.thumbnail(of: size, for: .mediaBox)
             guard let cg = image.cgImage else { continue }
-            lines += await recognizeLines(cg)
+            pages.append(await recognizeBoxes(cg))
         }
-        let s = lines.joined(separator: "\n")
-        return s.isEmpty ? nil : s
+        return pages
     }
 
-    private static func recognizeLines(_ image: CGImage) async -> [String] {
+    private static func recognizeBoxes(_ image: CGImage) async -> [KakeiboOCRBox] {
         let req = VNRecognizeTextRequest()
-        req.recognitionLanguages = ["ja-JP", "en-US"]
+        req.recognitionLanguages = ["ja-JP"]
         req.recognitionLevel = .accurate
-        req.usesLanguageCorrection = false
+        req.usesLanguageCorrection = true
         let handler = VNImageRequestHandler(cgImage: image)
         do { try handler.perform([req]) } catch { return [] }
         let obs: [VNRecognizedTextObservation] = req.results ?? []
-        // 同じ高さの文字を1行にまとめる（上から順、左から順）
-        var items: [OCRItem] = []
+        var out: [KakeiboOCRBox] = []
         for o in obs {
             guard let s = o.topCandidates(1).first?.string else { continue }
-            items.append(OCRItem(y: o.boundingBox.midY, x: o.boundingBox.minX, h: o.boundingBox.height, s: s))
+            out.append(KakeiboOCRBox(text: s, rect: o.boundingBox))
         }
-        items.sort { $0.y > $1.y }
-        var rows: [[OCRItem]] = []
-        var lastY: CGFloat = -1
-        var lastH: CGFloat = 0
-        for it in items {
-            if lastY >= 0 && abs(lastY - it.y) < max(it.h, lastH) * 0.6 && !rows.isEmpty {
-                rows[rows.count - 1].append(it)
-            } else {
-                rows.append([it])
-                lastY = it.y
-                lastH = it.h
-            }
-        }
-        return rows.map { row in row.sorted { $0.x < $1.x }.map(\.s).joined(separator: " ") }
-    }
-
-    private struct OCRItem {
-        var y: CGFloat
-        var x: CGFloat
-        var h: CGFloat
-        var s: String
+        return out
     }
 
     private static let dateHead = #"^\s*((令和|平成|R|H)\s*\d{1,2}[./\-年]\d{1,2}[./\-月]\d{1,2}日?|\d{4}[./\-年]\s*\d{1,2}[./\-月]\s*\d{1,2}日?|\d{2}[./\-]\d{1,2}[./\-]\d{1,2}|\d{1,2}[/月]\d{1,2}日?)(?=\s|$)"#
