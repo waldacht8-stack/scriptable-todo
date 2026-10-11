@@ -195,10 +195,19 @@ final class DayCardTests: TokyoTestCase {
     }
 
     func testPromptHasNoTodoTitles() {
-        let c = DayCard(day: "2026-10-09", note: "よく眠れた", doneCount: 3, doneTitles: ["ひみつの用事"], wakeScore: 80,
-                        wakeTime: nil, mood: .good, photo: "x.jpg", savedAt: T.now)
+        let c = DayCard(day: "2026-10-09", note: "よく眠れた", doneCount: 3, doneTitles: ["ひみつの用事"], wakeStage: 1,
+                        wakeTime: T.d(2026, 10, 9, 7, 8), mood: .good, photo: "x.jpg", savedAt: T.now)
         let s = DayCardData.promptLines([c])
         XCTAssertTrue(s.contains("TODO完了 3件"))
+        XCTAssertTrue(s.contains("起床 7:08・1回目"))
+        XCTAssertFalse(s.contains("点"), "起床の点数は送らない")
+    }
+
+    func testOldDayCardWithScoreDecodes() throws {
+        let json = #"{"day":"2026-10-08","note":"","doneCount":1,"doneTitles":[],"wakeScore":85,"savedAt":"2026-10-08T12:00:00Z"}"#
+        let c = try JSONDecoder.iso.decode(DayCard.self, from: Data(json.utf8))
+        XCTAssertNil(c.wakeStage)
+        XCTAssertNil(c.wakeText, "時刻のない昔の記録は起床を出さない")
         XCTAssertTrue(s.contains("よく眠れた"))
         XCTAssertFalse(s.contains("ひみつの用事"))
         XCTAssertFalse(s.contains("x.jpg"))

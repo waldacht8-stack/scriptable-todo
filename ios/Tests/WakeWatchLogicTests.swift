@@ -64,7 +64,7 @@ final class WakeWatchLogicTests: TokyoTestCase {
         XCTAssertFalse(WakeWatchLogic.isActive(nil, now: T.now))
     }
 
-    // MARK: 二度寝と点数
+    // MARK: 二度寝
 
     func testStepStart() {
         let b: [(start: Date, steps: Int)] = [(T.d(2026, 10, 9, 7, 1), 0), (T.d(2026, 10, 9, 7, 3), 4),
@@ -82,12 +82,13 @@ final class WakeWatchLogicTests: TokyoTestCase {
         XCTAssertEqual(WakeWatchLogic.oversleepMinutes(stopAt: stop, stepStart: T.d(2026, 10, 9, 7, 40), awakeAt: T.d(2026, 10, 9, 7, 3)), 0)
     }
 
-    func testScore() {
-        XCTAssertEqual(WakeWatchLogic.score(stage: 1, oversleepMinutes: 0), 100)
-        XCTAssertEqual(WakeWatchLogic.score(stage: 2, oversleepMinutes: 0), 85)
-        XCTAssertEqual(WakeWatchLogic.score(stage: 1, oversleepMinutes: 12), 78)
-        XCTAssertEqual(WakeWatchLogic.score(stage: 1, oversleepMinutes: 90), 50, "引くのは最大50点")
-        XCTAssertEqual(WakeWatchLogic.score(stage: 4, oversleepMinutes: 30), 0)
+    func testResultText() {
+        var s = WakeSession(day: "2026-10-09", checkInAt: T.d(2026, 10, 9, 7, 8), stage: 1)
+        s.oversleep = 0
+        XCTAssertEqual(WakeLogic.resultText(s), "1回目で起床・二度寝なし")
+        s.stage = 2
+        s.oversleep = 12
+        XCTAssertEqual(WakeLogic.resultText(s), "2回目で起床・二度寝 12分")
     }
 
     // MARK: 計算のミッション
@@ -137,6 +138,10 @@ final class WakeWatchLogicTests: TokyoTestCase {
         let old = #"[{"day":"2026-10-08","stage":1,"score":100}]"#
         let sessions = try JSONDecoder.iso.decode([WakeSession].self, from: Data(old.utf8))
         XCTAssertNil(sessions.first?.oversleep)
+        XCTAssertEqual(sessions.first?.stage, 1, "点数つきの古い記録も読める")
+        XCTAssertEqual(sessions.first.map { WakeLogic.stageText($0) }, "1回目で起床")
+        let fresh = try JSONDecoder.iso.decode([WakeSession].self, from: Data(#"[{"day":"2026-10-09","stage":2}]"#.utf8))
+        XCTAssertNil(fresh.first?.score, "新しい記録には点数がない")
         let r = try JSONDecoder.iso.decode(WakeWatchRecord.self, from: Data(#"{"day":"2026-10-09","stopAt":"2026-10-08T22:01:00Z"}"#.utf8))
         XCTAssertEqual(r.stoppedStage, 1)
         XCTAssertTrue(r.alarms.isEmpty)

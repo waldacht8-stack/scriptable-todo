@@ -1,7 +1,7 @@
 import SwiftUI
 
 // MARK: - 相談（AI に悩みを話す。Gemini API の無料枠を使う）
-// - 送るのは、書いた文・選んだ気分・記録の要約（件数・平均点・連続日数）だけ。TODO の題名や予定の中身は送らない
+// - 送るのは、書いた文・選んだ気分・記録の要約（件数・平均の起床時刻・連続日数）だけ。TODO の題名や予定の中身は送らない
 // - API キーは Keychain にだけ保存（InfoSecrets）。会話は端末のファイル（consult-history.json）に最新40件まで
 // - 起動引数 -demo では通信せず、見本の会話を出す。-consult で情報タブの「相談」を開く
 
@@ -99,7 +99,8 @@ struct ConsultContext: Equatable {
     var openCount = 0
     var overdueCount = 0
     var doneToday = 0
-    var wakeAverage: Int?
+    var wakeAverage: Int?          // 直近7日の平均の起床時刻（0時からの分）
+    var wakeOversleepDays = 0      // 直近7日で二度寝した日の数
     var wakeStreak = 0
     var habitCount = 0
     var habitDoneToday = 0
@@ -112,7 +113,8 @@ struct ConsultContext: Equatable {
         c.overdueCount = store.overdue.count
         c.doneToday = store.doneToday.count
         let sessions = WakeStore.sessions()
-        c.wakeAverage = WakeLogic.average(sessions, days: 7, now: now)
+        c.wakeAverage = WakeLogic.averageWakeMinutes(sessions, days: 7, now: now)
+        c.wakeOversleepDays = WakeLogic.oversleepDays(sessions, days: 7, now: now)
         c.wakeStreak = WakeLogic.streak(sessions)
         let habits = HabitData.habits()
         let log = HabitData.log()
@@ -124,7 +126,7 @@ struct ConsultContext: Equatable {
 
     var chips: [String] {
         var out: [String] = []
-        if let a = wakeAverage { out.append("起床 7日の平均 \(a)点") }
+        if let a = wakeAverage { out.append("起床 7日の平均 \(WakeLogic.clock(a))") }
         out.append(overdueCount > 0 ? "TODO \(openCount)件・期限切れ \(overdueCount)" : "TODO \(openCount)件")
         if habitCount > 0 { out.append("習慣 今日 \(habitDoneToday)/\(habitCount)") }
         return out
@@ -134,7 +136,10 @@ struct ConsultContext: Equatable {
     var summary: String {
         var lines: [String] = []
         lines.append("未完了のTODO: \(openCount)件（うち期限切れ \(overdueCount)件）、今日完了: \(doneToday)件")
-        if let a = wakeAverage { lines.append("起床スコアの直近7日平均: \(a)点（100点満点）、連続 \(wakeStreak)日") }
+        if let a = wakeAverage {
+            let over: String = wakeOversleepDays > 0 ? "二度寝した日 \(wakeOversleepDays)日" : "二度寝した日なし"
+            lines.append("起床: 直近7日の平均の起床時刻 \(WakeLogic.clock(a))、\(over)、連続 \(wakeStreak)日")
+        }
         if habitCount > 0 { lines.append("習慣: \(habitCount)個中 今日 \(habitDoneToday)個できた、最長の連続 \(habitBestStreak)日") }
         return lines.joined(separator: "\n")
     }
@@ -489,7 +494,7 @@ struct ConsultView: View {
     private var emptyHint: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("話を聞くよ").font(.title3.weight(.heavy)).foregroundStyle(p.text)
-            Text("いまの目的は「\(model.purpose.title)」。\(model.purpose.summary)。記録の数字（件数や平均点）だけを参考にして返事をします。")
+            Text("いまの目的は「\(model.purpose.title)」。\(model.purpose.summary)。記録の数字（件数や起床の時刻）だけを参考にして返事をします。")
                 .font(.subheadline).foregroundStyle(p.sub)
         }
         .padding(.vertical, 8)

@@ -26,7 +26,7 @@ extension ConsultMood {
 struct MoodDay: Identifiable, Equatable {
     var date: Date
     var mood: ConsultMood
-    var wake: Int?              // 起床スコア（記録がない日は nil）
+    var wake: Int?              // 何回目のアラームで起きたか（0 = アラームの前。記録がない日は nil）
     var habitRate: Double?      // 習慣の達成率 0〜1（習慣がなければ nil）
     var doneCount: Int          // 完了した TODO の数
     var focusMinutes: Double    // 集中した分
@@ -38,7 +38,7 @@ struct MoodDay: Identifiable, Equatable {
 
 /// 「〜の日は気分が高い/低い」の比較
 struct MoodFactor: Identifiable, Equatable {
-    var title: String           // 例：起床スコアが80点以上の日
+    var title: String           // 例：起床が1回目までの日
     var diff: Double            // その日の平均 − それ以外の日の平均
     var withCount: Int
     var withoutCount: Int
@@ -103,7 +103,7 @@ struct MoodStats: Equatable {
             return MoodFactor(title: title, diff: a - b, withCount: yes.count, withoutCount: no.count)
         }
         let list: [MoodFactor?] = [
-            compare("起床スコアが80点以上の日") { d in d.wake.map { s in s >= 80 } },
+            compare("起床が1回目までの日") { d in d.wake.map { s in s <= 1 } },
             compare("習慣を半分以上できた日") { d in d.habitRate.map { r in r >= 0.5 } },
             compare("TODO を3件以上終えた日") { d in d.doneCount >= 3 },
             compare("30分以上集中した日") { d in d.focusMinutes >= 30 },
@@ -171,7 +171,7 @@ enum MoodCollector {
         guard !entries.isEmpty else { return [] }
         let cal = Calendar.current
         var wake: [String: Int] = [:]
-        for s in WakeStore.sessions() where !s.isMissed { wake[s.day] = s.score }
+        for s in WakeStore.sessions() where !s.isMissed { wake[s.day] = s.stage }
         let habits = HabitData.habits()
         let log = HabitData.log()
         var done: [String: Int] = [:]
@@ -200,10 +200,10 @@ enum MoodDemo {
             guard let date = cal.date(byAdding: .day, value: -i, to: today) else { continue }
             if i % 9 == 5 { continue }   // 記録しなかった日
             let w = cal.component(.weekday, from: date)
-            let wake = 60 + (i * 37 % 41)
+            let wake: Int = [1, 2, 1, 3, 1, 0, 2, 4][i * 5 % 8]   // 何回目で起きたか
             let habit = Double((i * 13) % 10) / 10
             var s = 3
-            if wake >= 80 { s += 1 }
+            if wake <= 1 { s += 1 }
             if habit >= 0.6 { s += 1 }
             if w == 2 { s -= 1 }          // 月曜は低め
             if w == 7 || w == 1 { s += 0 }

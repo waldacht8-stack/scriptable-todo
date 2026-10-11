@@ -243,13 +243,13 @@ struct WidgetPreviewScreen: View {
         let tomorrow: Date = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: .now)) ?? .now
         func at(_ h: Int, _ m: Int) -> Date { cal.date(bySettingHour: h, minute: m, second: 0, of: tomorrow) ?? tomorrow }
         let stages: [WakePlan.Stage] = [
-            WakePlan.Stage(number: 1, name: "1回目", at: at(6, 30), score: 100),
-            WakePlan.Stage(number: 2, name: "2回目", at: at(6, 40), score: 80),
-            WakePlan.Stage(number: 3, name: "3回目", at: at(6, 50), score: 60),
+            WakePlan.Stage(number: 1, name: "1回目", at: at(6, 30)),
+            WakePlan.Stage(number: 2, name: "2回目", at: at(6, 40)),
+            WakePlan.Stage(number: 3, name: "3回目", at: at(6, 50)),
         ]
         let plan = WakePlan(day: "preview", dayStart: tomorrow, stages: stages, departure: at(8, 0), skipReason: nil)
         return WakeSnapshot(phase: .before, next: plan, today: nil, reached: 0, nextStage: nil,
-                            checkInAt: nil, score: nil, departure: nil, nextStep: nil, stepsLeft: 0,
+                            checkInAt: nil, session: nil, departure: nil, nextStep: nil, stepsLeft: 0,
                             bedtime: nil, canCheckIn: false, checkInFrom: at(4, 30))
     }
 
@@ -258,7 +258,8 @@ struct WidgetPreviewScreen: View {
         let now = Date.now
         let step = WakeRoutineItem(name: "朝ごはんを食べる", minutes: 15)
         return WakeSnapshot(phase: .morning, next: nil, today: nil, reached: 3, nextStage: nil,
-                            checkInAt: now.addingTimeInterval(-20 * 60), score: 90,
+                            checkInAt: now.addingTimeInterval(-20 * 60),
+                            session: WakeSession(day: "preview", checkInAt: now.addingTimeInterval(-20 * 60), stage: 1, oversleep: 0),
                             departure: now.addingTimeInterval(45 * 60), nextStep: step, stepsLeft: 2,
                             bedtime: nil, canCheckIn: false, checkInFrom: nil)
     }
@@ -328,12 +329,12 @@ extension WidgetPreviewScreen {
         let tomorrow: Date = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: .now)) ?? .now
         func at(_ h: Int, _ m: Int) -> Date { cal.date(bySettingHour: h, minute: m, second: 0, of: tomorrow) ?? tomorrow }
         let stages: [WakePlan.Stage] = (0..<4).map { i in
-            WakePlan.Stage(number: i + 1, name: "\(i + 1)回目", at: at(7, i * 5), score: 100 - i * 15)
+            WakePlan.Stage(number: i + 1, name: "\(i + 1)回目", at: at(7, i * 5))
         }
         let plan = WakePlan(day: "preview", dayStart: tomorrow, stages: stages, departure: at(8, 10), skipReason: nil)
         let from: Date? = alarm ? at(5, 0) : nil
         return WakeSnapshot(phase: .evening, next: alarm ? plan : nil, today: nil, reached: 0, nextStage: nil,
-                            checkInAt: nil, score: nil, departure: nil, nextStep: nil, stepsLeft: 0,
+                            checkInAt: nil, session: nil, departure: nil, nextStep: nil, stepsLeft: 0,
                             bedtime: today(23, 30), canCheckIn: false, checkInFrom: from)
     }
 
@@ -346,7 +347,7 @@ extension WidgetPreviewScreen {
     /// 起床の見本（見張り中の朝）
     static func wakeMorning() -> WakeSnapshot {
         WakeSnapshot(phase: .window, next: nil, today: nil, reached: 4, nextStage: nil,
-                     checkInAt: nil, score: nil, departure: nil, nextStep: nil, stepsLeft: 0,
+                     checkInAt: nil, session: nil, departure: nil, nextStep: nil, stepsLeft: 0,
                      bedtime: nil, canCheckIn: true, checkInFrom: nil)
     }
 

@@ -110,7 +110,7 @@ final class WakeViewModel: ObservableObject {
             state.day = k
             state.checkInAt = now
             sessions.removeAll { $0.day == k }
-            sessions.insert(WakeSession(day: k, checkInAt: now, stage: stage, score: WakeLogic.score(stage: stage)), at: 0)
+            sessions.insert(WakeSession(day: k, checkInAt: now, stage: stage), at: 0)
             watch = .idle
             feedback += 1
             showUndoToast()
@@ -261,11 +261,11 @@ enum WakeDemo {
         for (i, stage) in stages.enumerated() {
             guard let d = cal.date(byAdding: .day, value: -(i + 1), to: today) else { continue }
             let at = cal.date(byAdding: .minute, value: 420 + max(0, stage - 1) * 10 + 3, to: d)
-            sessions.append(WakeSession(day: WakeLogic.key(d), checkInAt: at, stage: stage, score: WakeLogic.score(stage: stage)))
+            sessions.append(WakeSession(day: WakeLogic.key(d), checkInAt: at, stage: stage))
         }
         // 二度寝の記録の見本（5日前は12分の二度寝、2日前は見張りで起床）
         for i in sessions.indices {
-            if i == 4 { sessions[i].oversleep = 12; sessions[i].score = WakeWatchLogic.score(stage: sessions[i].stage, oversleepMinutes: 12) }
+            if i == 4 { sessions[i].oversleep = 12 }
             if i == 1 { sessions[i].oversleep = 0; sessions[i].watchedBy = "steps" }
         }
         if phase == "evening", let tomorrow = cal.date(byAdding: .day, value: 1, to: today) {
@@ -298,7 +298,7 @@ enum WakeDemo {
         }
         if phase == "after" || phase == "evening" {
             sessions.append(WakeSession(day: WakeLogic.key(today), checkInAt: cal.date(byAdding: .minute, value: 428, to: today),
-                                        stage: 1, score: 100))
+                                        stage: 1, oversleep: 0, watchedBy: "steps"))
             if phase == "evening" {
                 st.day = WakeLogic.key(today)
                 st.checkInAt = cal.date(byAdding: .minute, value: 428, to: today)

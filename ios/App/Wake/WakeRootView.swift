@@ -279,7 +279,9 @@ struct WakeStageTimeline: View {
                     .frame(width: 36, height: 36)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(st.name.isEmpty ? "\(st.number)回目" : st.name).font(.body.weight(.semibold)).foregroundStyle(p.text).lineLimit(1)
-                        Text("\(st.score)点").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
+                        if !st.name.isEmpty {
+                            Text("\(st.number)回目").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
+                        }
                     }
                     Spacer(minLength: 0)
                     Text(JP.time(st.at)).font(.system(size: 26, weight: .bold, design: p.fontDesign))
@@ -393,7 +395,7 @@ struct WakeSummaryRow: View {
     var body: some View {
         NavigationLink(value: WakeRoute.records) {
             HStack(spacing: 10) {
-                tile("7日の平均", WakeLogic.average(model.sessions, days: 7, now: model.now).map { "\($0)" } ?? "―", "点")
+                tile("7日の平均起床", WakeLogic.averageWakeMinutes(model.sessions, days: 7, now: model.now).map { WakeLogic.clock($0) } ?? "―", "")
                 tile("連続", "\(WakeLogic.streak(model.sessions))", "日")
                 tile("記録した日", "\(model.sessions.count)", "日")
             }
@@ -454,12 +456,12 @@ struct WakeWindowView: View {
         return model.watch.needsProof ? "歩いて止める" : "起きてるよ"
     }
 
-    private func scoreLine(reached: Int) -> String {
+    private func stageLine(reached: Int) -> String {
         if model.watch.isWatching {
             let stage: Int = model.watch.stoppedStage ?? reached
-            return "\(stage)回目で止めた・\(WakeLogic.score(stage: stage))点"
+            return "\(stage)回目で止めた"
         }
-        return "今なら \(WakeLogic.score(stage: reached))点"
+        return "今なら" + WakeLogic.stageText(stage: reached)
     }
 
     private var footLine: String {
@@ -483,7 +485,7 @@ struct WakeWindowView: View {
                         .symbolEffect(.bounce, value: burst)
                     Text(bigLabel).font(.system(size: 46, weight: .heavy, design: p.fontDesign))
                         .lineLimit(1).minimumScaleFactor(0.6)
-                    Text(scoreLine(reached: reached)).font(.headline)
+                    Text(stageLine(reached: reached)).font(.headline)
                 }
                 .foregroundStyle(p.onAccent)
                 .padding(.horizontal, 16)
@@ -554,12 +556,12 @@ struct WakeResultStrip: View {
                 Text("\(streak)日連続").font(Font.footnote.weight(.semibold)).foregroundStyle(p.sub)
             }
             Spacer(minLength: 0)
-            HStack(spacing: 1) {
-                WakeCountUp(value: s?.score ?? 0, font: Font.headline.weight(.heavy), color: p.onAccent)
-                Text("点").font(Font.caption.weight(.bold)).foregroundStyle(p.onAccent)
+            if let s {
+                let badge: String = s.stage <= 0 ? "アラーム前" : "\(s.stage)回目"
+                Text(badge).font(Font.subheadline.weight(.heavy)).foregroundStyle(p.onAccent).lineLimit(1)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(p.accent, in: Capsule())
             }
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(p.accent, in: Capsule())
         }
         .paletteCard(p, padding: 16)
     }
@@ -594,7 +596,7 @@ struct WakeCountUp: View {
     }
 }
 
-/// 今朝の結果（スコア）
+/// 今朝の結果（何回目で起きたか・二度寝・連続）
 struct WakeResultCard: View {
     @ObservedObject var model: WakeViewModel
     @Environment(\.palette) private var p
@@ -607,22 +609,36 @@ struct WakeResultCard: View {
                 Text(model.checkInAt.map { JP.time($0) } ?? "--:--")
                     .font(.system(size: 44, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text).monospacedDigit()
                 Text(stageText(s)).font(.footnote.weight(.semibold)).foregroundStyle(p.sub)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
-            VStack(spacing: 0) {
-                WakeCountUp(value: s?.score ?? 0, font: Font.system(size: 40, weight: .heavy, design: p.fontDesign), color: p.onAccent)
-                Text("点").font(.caption.weight(.bold)).foregroundStyle(p.onAccent)
-            }
-            .frame(width: 96, height: 96)
-            .background(Circle().fill(p.accent))
+            stageBadge(s)
+                .frame(width: 96, height: 96)
+                .background(Circle().fill(p.accent))
         }
         .paletteCard(p, padding: 22)
     }
 
+    /// 丸の中：「1 回目」か、アラームの前なら朝日と「前に」
+    @ViewBuilder
+    private func stageBadge(_ s: WakeSession?) -> some View {
+        let stage: Int = s?.stage ?? 0
+        VStack(spacing: 0) {
+            if stage <= 0 {
+                Image(systemName: "sunrise.fill").font(.system(size: 34, weight: .bold)).foregroundStyle(p.onAccent)
+                Text("アラーム前").font(.caption.weight(.bold)).foregroundStyle(p.onAccent)
+            } else {
+                Text("\(stage)").font(.system(size: 44, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.onAccent)
+                Text("回目").font(.caption.weight(.bold)).foregroundStyle(p.onAccent)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     private func stageText(_ s: WakeSession?) -> String {
         guard let s else { return "" }
-        let streak = WakeLogic.streak(model.sessions)
-        let st = s.stage == 0 ? "アラームの前に起床" : "\(s.stage)回目で起床"
+        let streak: Int = WakeLogic.streak(model.sessions)
+        let st: String = WakeLogic.resultText(s)
         return streak > 1 ? "\(st)・\(streak)日連続" : st
     }
 }

@@ -46,7 +46,7 @@ struct WakeSettingsView: View {
             } header: {
                 Text("アラーム")
             } footer: {
-                Text("起床時刻からのずれ（分）。チェックインするまで、次のアラームが順に鳴ります。点数：1回目=100、2回目=85、3回目=70、4回目=40")
+                Text("起床時刻からのずれ（分）。チェックインするまで、次のアラームが順に鳴ります")
             }
             .listRowBackground(p.card)
 

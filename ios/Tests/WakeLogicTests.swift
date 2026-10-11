@@ -22,7 +22,6 @@ final class WakeLogicTests: TokyoTestCase {
         XCTAssertEqual(p.dayStart, T.d(2026, 10, 9))
         XCTAssertEqual(p.stages.map(\.at), [T.d(2026, 10, 9, 7), T.d(2026, 10, 9, 7, 10), T.d(2026, 10, 9, 7, 20), T.d(2026, 10, 9, 7, 30)])
         XCTAssertEqual(p.stages.map(\.number), [1, 2, 3, 4])
-        XCTAssertEqual(p.stages.map(\.score), [100, 85, 70, 40])
         XCTAssertEqual(p.departure, T.d(2026, 10, 9, 7, 45))
         XCTAssertEqual(p.first, T.d(2026, 10, 9, 7))
         XCTAssertEqual(p.last, T.d(2026, 10, 9, 7, 30))
@@ -129,12 +128,22 @@ final class WakeLogicTests: TokyoTestCase {
         XCTAssertEqual(WakeLogic.nextCheckInStart(now: T.d(2026, 10, 9, 8), settings: s, state: st), T.d(2026, 10, 12, 5))
     }
 
-    // MARK: 段階・点数・連続
+    // MARK: 段階・連続（点数は出さない）
 
-    func testScoreTable() {
-        XCTAssertEqual((0...4).map { WakeLogic.score(stage: $0) }, [100, 100, 85, 70, 40])
-        XCTAssertEqual(WakeLogic.score(stage: 9), 40)
-        XCTAssertEqual(WakeLogic.score(stage: -1), 100)
+    func testStageAndOversleepText() {
+        XCTAssertEqual(WakeLogic.stageText(stage: 0), "アラームの前に起床")
+        XCTAssertEqual(WakeLogic.stageText(stage: 1), "1回目で起床")
+        XCTAssertEqual(WakeLogic.stageText(stage: 3), "3回目で起床")
+        var s = WakeSession(day: "2026-10-09", checkInAt: T.d(2026, 10, 9, 7, 8), stage: 1)
+        XCTAssertEqual(WakeLogic.resultText(s), "1回目で起床", "見張りが無かった日は二度寝を書かない")
+        s.oversleep = 0
+        XCTAssertEqual(WakeLogic.resultText(s), "1回目で起床・二度寝なし")
+        s.oversleep = 15
+        XCTAssertEqual(WakeLogic.oversleepText(s), "二度寝 15分")
+        XCTAssertEqual(WakeLogic.wakeMinutes(s), 7 * 60 + 8)
+        s.missed = true
+        XCTAssertEqual(WakeLogic.stageText(s), "未チェックイン")
+        XCTAssertNil(WakeLogic.wakeMinutes(s))
     }
 
     func testReached() throws {
@@ -145,24 +154,37 @@ final class WakeLogicTests: TokyoTestCase {
         XCTAssertEqual(WakeLogic.reached(p, at: T.d(2026, 10, 9, 9)), 4)
     }
 
-    private func session(_ day: String, _ score: Int, missed: Bool? = nil) -> WakeSession {
-        WakeSession(day: day, checkInAt: nil, stage: 1, score: score, missed: missed)
+    /// day の hour:minute にチェックインした記録（hour が nil なら時刻なし）
+    private func session(_ day: String, stage: Int = 1, hour: Int? = 7, minute: Int = 0, oversleep: Int? = nil,
+                         missed: Bool? = nil) -> WakeSession {
+        var checkIn: Date? = nil
+        if let hour, let d = WakeLogic.date(fromKey: day) {
+            checkIn = Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: d)
+        }
+        var s = WakeSession(day: day, checkInAt: checkIn, stage: stage, missed: missed)
+        s.oversleep = oversleep
+        return s
     }
 
     func testStreak() {
-        let xs = [session("2026-10-06", 40), session("2026-10-09", 100), session("2026-10-07", 70),
-                  session("2026-10-08", 85), session("2026-10-05", 100)]
-        XCTAssertEqual(WakeLogic.streak(xs), 3, "新しい順に 70 点以上が続いた数（順不同の入力でも）")
+        let xs = [session("2026-10-06", stage: 4), session("2026-10-09", stage: 1), session("2026-10-07", stage: 3),
+                  session("2026-10-08", stage: 2), session("2026-10-05", stage: 1)]
+        XCTAssertEqual(WakeLogic.streak(xs), 3, "新しい順に、3回目までに起きた日が続いた数（順不同の入力でも）")
         XCTAssertEqual(WakeLogic.streak([]), 0)
-        XCTAssertEqual(WakeLogic.streak([session("2026-10-09", 100, missed: true), session("2026-10-08", 100)]), 0)
-        XCTAssertEqual(WakeLogic.streak([session("2026-10-09", 69)]), 0)
+        XCTAssertEqual(WakeLogic.streak([session("2026-10-09", missed: true), session("2026-10-08")]), 0)
+        XCTAssertEqual(WakeLogic.streak([session("2026-10-09", stage: 0), session("2026-10-08", oversleep: 0)]), 2,
+                       "アラームの前に起きた日・二度寝なしの日は続く")
+        XCTAssertEqual(WakeLogic.streak([session("2026-10-09", oversleep: 12), session("2026-10-08")]), 0, "二度寝した日で途切れる")
     }
 
-    func testAverage() {
-        let xs = [session("2026-10-09", 100), session("2026-10-08", 70), session("2026-10-01", 0)]
-        XCTAssertEqual(WakeLogic.average(xs, days: 7, now: T.now), 85)
-        XCTAssertEqual(WakeLogic.average(xs, days: 30, now: T.now), 56)
-        XCTAssertNil(WakeLogic.average([], days: 7, now: T.now))
+    func testAverageWakeTimeAndOversleepDays() {
+        let xs = [session("2026-10-09", hour: 7), session("2026-10-08", hour: 7, minute: 20, oversleep: 15),
+                  session("2026-10-07", hour: nil, missed: true), session("2026-10-01", hour: 8, minute: 30, oversleep: 30)]
+        XCTAssertEqual(WakeLogic.averageWakeMinutes(xs, days: 7, now: T.now), 7 * 60 + 10, "未チェックインの日は数えない")
+        XCTAssertEqual(WakeLogic.averageWakeMinutes(xs, days: 30, now: T.now), 7 * 60 + 36)
+        XCTAssertNil(WakeLogic.averageWakeMinutes([], days: 7, now: T.now))
+        XCTAssertEqual(WakeLogic.oversleepDays(xs, days: 7, now: T.now), 1)
+        XCTAssertEqual(WakeLogic.oversleepDays(xs, days: 30, now: T.now), 2)
     }
 
     // MARK: 画面の状態

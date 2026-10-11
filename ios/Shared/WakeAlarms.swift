@@ -177,19 +177,18 @@ enum WakeActions {
         }
         guard WakeLogic.canCheckIn(now: now, settings: settings, state: state) else { return nil }
         let plan = WakeLogic.plan(for: now, settings: settings, state: state)
-        // 二度寝の見張り中なら、見張りを止めて「何回目で止めたか・二度寝の分」で点数を決める
+        // 二度寝の見張り中なら、見張りを止めて「何回目で止めたか・二度寝の分」を記録する
         let watch: WakeWatchRecord? = await WakeWatchActions.closeForCheckIn(now: now)
         var session: WakeSession
         if let watch {
             let over: Int = WakeWatchLogic.oversleepMinutes(stopAt: watch.stopAt, stepStart: watch.stepStartAt, awakeAt: now)
-            let score: Int = WakeWatchLogic.score(stage: watch.stoppedStage, oversleepMinutes: over)
-            session = WakeSession(day: todayKey, checkInAt: now, stage: watch.stoppedStage, score: score, missed: nil)
+            session = WakeSession(day: todayKey, checkInAt: now, stage: watch.stoppedStage)
             session.oversleep = over
             session.stopAt = watch.stopAt
             session.watchedBy = watch.endedBy
         } else {
             let stage = plan.map { WakeLogic.reached($0, at: now) } ?? 0
-            session = WakeSession(day: todayKey, checkInAt: now, stage: stage, score: WakeLogic.score(stage: stage), missed: nil)
+            session = WakeSession(day: todayKey, checkInAt: now, stage: stage)
         }
         sessions.removeAll { $0.day == todayKey }
         sessions.append(session)

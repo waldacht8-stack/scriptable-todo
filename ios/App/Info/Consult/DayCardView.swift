@@ -195,8 +195,8 @@ struct DayCardWriteView: View {
 
     private func refreshAuto() {
         if model.isDemo {
-            auto = DayCardAuto(doneCount: 5, doneTitles: ["企画書の下書き", "洗濯", "ジムに行く"], wakeScore: 82,
-                               wakeTime: Calendar.current.date(bySettingHour: 6, minute: 30, second: 0, of: .now), mood: .good)
+            auto = DayCardAuto(doneCount: 5, doneTitles: ["企画書の下書き", "洗濯", "ジムに行く"], wakeStage: 1,
+                               wakeTime: Calendar.current.date(bySettingHour: 7, minute: 8, second: 0, of: .now), mood: .good)
         } else {
             auto = DayCardAuto.make(store: store)
         }
@@ -262,8 +262,8 @@ struct DayCardWriteView: View {
             }
             DayCardAutoRow(label: "TODO", value: "\(auto.doneCount)件 完了",
                            detail: auto.doneTitles.isEmpty ? "今日はまだ完了なし" : auto.doneTitles.joined(separator: "・"))
-            DayCardAutoRow(label: "起床", value: auto.wakeScore.map { "\($0)点" } ?? "記録なし",
-                           detail: auto.wakeTime.map { "\(JP.time($0)) に起きた" } ?? "")
+            DayCardAutoRow(label: "起床", value: DayCard.wakeValue(time: auto.wakeTime, stage: auto.wakeStage) ?? "記録なし",
+                           detail: auto.wakeStage.map { WakeLogic.stageText(stage: $0) } ?? "")
             DayCardAutoRow(label: "気分", value: auto.mood?.title ?? "まだ選んでいません",
                            detail: auto.mood == nil ? "「話す」の今日の気分から" : "相談の「今日の気分」から",
                            symbol: auto.mood?.symbol, tint: auto.mood?.color(p))
@@ -551,7 +551,7 @@ private struct DayCardFace: View {
     private var chips: some View {
         HStack(spacing: 6) {
             DayChip(text: "TODO \(card.doneCount)件")
-            if let w = card.wakeScore { DayChip(text: "起床 \(w)点") }
+            if let w = card.wakeText { DayChip(text: w) }
             if let m = card.mood { DayChip(text: m.title, symbol: m.symbol) }
         }
     }
@@ -639,11 +639,14 @@ struct DayCardReviewSheet: View {
 
     private func stats(_ w: [DayCard]) -> some View {
         let done: Int = w.map(\.doneCount).reduce(0, +)
-        let wakes: [Int] = w.compactMap(\.wakeScore)
-        let avg: String = wakes.isEmpty ? "—" : String(wakes.reduce(0, +) / wakes.count)
+        let cal = Calendar.current
+        let wakes: [Int] = w.compactMap(\.wakeTime).map { (d: Date) -> Int in
+            cal.component(.hour, from: d) * 60 + cal.component(.minute, from: d)
+        }
+        let avg: String = wakes.isEmpty ? "—" : WakeLogic.clock(wakes.reduce(0, +) / wakes.count)
         return HStack(spacing: 8) {
             DayStat(label: "TODO 完了", value: String(done), unit: "件")
-            DayStat(label: "起床の平均", value: avg, unit: wakes.isEmpty ? "" : "点")
+            DayStat(label: "起床の平均", value: avg, unit: "")
             DayStat(label: "書いた日", value: String(w.count), unit: "/ 7 日")
         }
     }

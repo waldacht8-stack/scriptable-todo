@@ -37,11 +37,12 @@ final class MoodStatsTests: TokyoTestCase {
     }
 
     func testWakeFactorNeedsThreeDaysEachSide() {
-        let few = MoodStats.make([day(0, .great, wake: 90), day(1, .bad, wake: 50)], now: T.now)
+        // wake は何回目のアラームで起きたか（1回目まで＝よい日）
+        let few = MoodStats.make([day(0, .great, wake: 1), day(1, .bad, wake: 3)], now: T.now)
         XCTAssertFalse(few.factors.contains { $0.title.hasPrefix("起床") })
 
-        let days = [day(0, .great, wake: 90), day(1, .good, wake: 85), day(2, .great, wake: 95),
-                    day(3, .low, wake: 60), day(4, .bad, wake: 55), day(5, .low, wake: 70)]
+        let days = [day(0, .great, wake: 1), day(1, .good, wake: 0), day(2, .great, wake: 1),
+                    day(3, .low, wake: 2), day(4, .bad, wake: 4), day(5, .low, wake: 3)]
         let s = MoodStats.make(days, now: T.now)
         let f = s.factors.first { $0.title.hasPrefix("起床") }
         XCTAssertNotNil(f)

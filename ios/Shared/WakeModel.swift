@@ -176,8 +176,9 @@ struct WakeSession: Codable, Hashable, Identifiable {
     var day: String
     var checkInAt: Date?
     var stage: Int          // 0 = 最初のアラームより前
-    var score: Int
-    var missed: Bool?
+    /// 昔の点数。もう表示も計算もしない（古い記録を読めるように残すだけ）
+    var score: Int? = nil
+    var missed: Bool? = nil
     // 二度寝の見張り（Shared/WakeWatch.swift）。見張りが無かった日は nil
     var oversleep: Int? = nil       // 二度寝の分（0 = 二度寝なし）
     var stopAt: Date? = nil         // 元のアラームを止めた時刻
@@ -193,7 +194,6 @@ struct WakePlan: Hashable {
         var number: Int      // 1から
         var name: String
         var at: Date
-        var score: Int
     }
     var day: String
     var dayStart: Date
@@ -263,12 +263,6 @@ enum WakeLogic {
         cal.date(byAdding: .minute, value: m, to: dayStart) ?? dayStart
     }
 
-    /// 段階の点数（0 = 最初のアラームより前）
-    static func score(stage: Int) -> Int {
-        let table = [100, 100, 85, 70, 40]
-        return table[max(0, min(stage, table.count - 1))]
-    }
-
     /// その日の予定（曜日がオフなら nil）
     static func plan(for date: Date, settings s: WakeSettings, state: WakeDayState) -> WakePlan? {
         let start = cal.startOfDay(for: date)
@@ -276,7 +270,7 @@ enum WakeLogic {
         guard d.on, !s.stages.isEmpty else { return nil }
         let k = key(start)
         let stages = s.stages.enumerated().map { i, st in
-            WakePlan.Stage(number: i + 1, name: st.name, at: minutes(d.wake + st.offset, on: start), score: score(stage: i + 1))
+            WakePlan.Stage(number: i + 1, name: st.name, at: minutes(d.wake + st.offset, on: start))
         }
         var reason: String? = nil
         if s.paused { reason = "アラームを停止中" }
@@ -376,23 +370,61 @@ enum WakeLogic {
         s.routine.filter { !state.routineDone.contains($0.id) }
     }
 
-    /// 連続記録（新しい順に、段階3までに起きた日が続いた数）
+    /// 連続記録（新しい順に、3回目までに起きて二度寝しなかった日が続いた数）
     static func streak(_ sessions: [WakeSession]) -> Int {
         var n = 0
         for s in sessions.sorted(by: { $0.day > $1.day }) {
-            if s.isMissed || s.score < 70 { break }
+            if s.isMissed || s.stage > 3 || (s.oversleep ?? 0) > 0 { break }
             n += 1
         }
         return n
     }
 
-    /// 直近 days 日の平均スコア
-    static func average(_ sessions: [WakeSession], days: Int, now: Date) -> Int? {
-        guard let from = cal.date(byAdding: .day, value: -(days - 1), to: cal.startOfDay(for: now)) else { return nil }
-        let k = key(from)
-        let xs = sessions.filter { $0.day >= k }
+    /// 「1回目で起床」「アラームの前に起床」「未チェックイン」
+    static func stageText(_ s: WakeSession) -> String {
+        s.isMissed ? "未チェックイン" : stageText(stage: s.stage)
+    }
+
+    static func stageText(stage: Int) -> String {
+        stage <= 0 ? "アラームの前に起床" : "\(stage)回目で起床"
+    }
+
+    /// 「二度寝なし」「二度寝 15分」（見張りが無かった日は nil）
+    static func oversleepText(_ s: WakeSession) -> String? {
+        guard let over = s.oversleep else { return nil }
+        return over > 0 ? "二度寝 \(over)分" : "二度寝なし"
+    }
+
+    /// 「1回目で起床・二度寝なし」
+    static func resultText(_ s: WakeSession) -> String {
+        let st: String = stageText(s)
+        guard let o = oversleepText(s) else { return st }
+        return "\(st)・\(o)"
+    }
+
+    /// 起きた時刻（0時からの分）。未チェックインなら nil
+    static func wakeMinutes(_ s: WakeSession) -> Int? {
+        guard !s.isMissed, let at = s.checkInAt else { return nil }
+        let c: DateComponents = cal.dateComponents([.hour, .minute], from: at)
+        return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+    }
+
+    private static func recent(_ sessions: [WakeSession], days: Int, now: Date) -> [WakeSession] {
+        guard let from = cal.date(byAdding: .day, value: -(days - 1), to: cal.startOfDay(for: now)) else { return [] }
+        let k: String = key(from)
+        return sessions.filter { $0.day >= k }
+    }
+
+    /// 直近 days 日の平均の起床時刻（0時からの分）。チェックインした日だけで数える
+    static func averageWakeMinutes(_ sessions: [WakeSession], days: Int, now: Date) -> Int? {
+        let xs: [Int] = recent(sessions, days: days, now: now).compactMap { wakeMinutes($0) }
         guard !xs.isEmpty else { return nil }
-        return xs.map(\.score).reduce(0, +) / xs.count
+        return xs.reduce(0, +) / xs.count
+    }
+
+    /// 直近 days 日のうち、二度寝した日の数
+    static func oversleepDays(_ sessions: [WakeSession], days: Int, now: Date) -> Int {
+        recent(sessions, days: days, now: now).filter { ($0.oversleep ?? 0) > 0 }.count
     }
 
     /// 正午までにチェックインがなかった起床日を「未チェックイン」として記録する
@@ -405,7 +437,7 @@ enum WakeLogic {
         let s = WakeStore.settings()
         for d in state.pendingDays where d < todayKey || (d == todayKey && hour >= 12 && checkedIn(state, now: now) == nil) {
             if !sessions.contains(where: { $0.day == d }) {
-                sessions.append(WakeSession(day: d, checkInAt: nil, stage: s.stages.count, score: 0, missed: true))
+                sessions.append(WakeSession(day: d, checkInAt: nil, stage: s.stages.count, missed: true))
             }
             state.pendingDays.removeAll { $0 == d }
             changed = true
@@ -448,7 +480,8 @@ struct WakeSnapshot {
     var reached: Int
     var nextStage: WakePlan.Stage?
     var checkInAt: Date?
-    var score: Int?
+    /// 今朝の記録（チェックイン後だけ）。「1回目で起床」などを出す
+    var session: WakeSession?
     var departure: Date?
     var nextStep: WakeRoutineItem?
     var stepsLeft: Int
@@ -469,7 +502,7 @@ struct WakeSnapshot {
         return WakeSnapshot(
             phase: phase, next: next, today: today, reached: reached,
             nextStage: today?.stages.first { $0.at > now },
-            checkInAt: checkIn, score: checkIn != nil ? session?.score : nil,
+            checkInAt: checkIn, session: checkIn != nil ? session : nil,
             departure: WakeLogic.departure(now: now, settings: s),
             nextStep: checkIn != nil ? remaining.first : nil, stepsLeft: remaining.count,
             bedtime: next.map { WakeLogic.bedtime(before: $0, settings: s) },

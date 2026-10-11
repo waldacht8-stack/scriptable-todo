@@ -261,8 +261,8 @@ struct WakeWidgetView: View {
             } else if checked {
                 Text("今朝の起床").font(.caption.weight(.bold)).foregroundStyle(p.sub)
                 bigTime(Text(s.checkInAt.map { JP.time($0) } ?? ""), size: 30)
-                Text("\(s.score ?? 0)点").font(.headline).foregroundStyle(p.accent)
-                    .contentTransition(.numericText(value: Double(s.score ?? 0)))
+                Text(s.session.map { WakeLogic.stageText($0) } ?? "").font(.headline).foregroundStyle(p.accent)
+                    .lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 0)
                 nextLine
             } else {
@@ -283,8 +283,8 @@ struct WakeWidgetView: View {
                 } else if checked {
                     Text("今朝の起床").font(.caption.weight(.bold)).foregroundStyle(p.sub)
                     bigTime(Text(s.checkInAt.map { JP.time($0) } ?? ""), size: 36)
-                    Text("\(s.score ?? 0)点").font(.headline).foregroundStyle(p.accent)
-                        .contentTransition(.numericText(value: Double(s.score ?? 0)))
+                    Text(s.session.map { WakeLogic.resultText($0) } ?? "").font(.headline).foregroundStyle(p.accent)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 } else {
                     nextAlarmBlock(size: 40)
                 }

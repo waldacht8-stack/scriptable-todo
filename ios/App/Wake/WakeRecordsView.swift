@@ -6,23 +6,32 @@ struct WakeRecordsView: View {
     @ObservedObject var model: WakeViewModel
     @Environment(\.palette) private var p
 
-    private struct Bar: Identifiable {
+    /// グラフの点（起きた時刻）。未チェックインの日は時刻がないので出さない
+    private struct Dot: Identifiable {
         var id: String { day }
         let day: String
         let date: Date
-        let score: Int
-        let missed: Bool
+        let minutes: Int     // 0時からの分
+        let overslept: Bool
     }
 
-    private var bars: [Bar] {
+    private var dots: [Dot] {
         let cal = Calendar.current
         let today = cal.startOfDay(for: model.now)
-        return (0..<14).reversed().compactMap { i -> Bar? in
+        return (0..<14).reversed().compactMap { i -> Dot? in
             guard let d = cal.date(byAdding: .day, value: -i, to: today) else { return nil }
             let k = WakeLogic.key(d)
-            guard let s = model.sessions.first(where: { $0.day == k }) else { return nil }
-            return Bar(day: k, date: d, score: s.score, missed: s.isMissed)
+            guard let s = model.sessions.first(where: { $0.day == k }), let m = WakeLogic.wakeMinutes(s) else { return nil }
+            return Dot(day: k, date: d, minutes: m, overslept: (s.oversleep ?? 0) > 0)
         }
+    }
+
+    /// 縦軸の範囲（30分きざみ）。早い時刻を上にするため、値は「-分」で描く
+    private var yRange: (lo: Int, hi: Int) {
+        let ms: [Int] = dots.map(\.minutes)
+        let lo: Int = ((ms.min() ?? 420) - 15) / 30 * 30
+        let hi: Int = ((ms.max() ?? 420) + 15 + 29) / 30 * 30
+        return (lo, max(hi, lo + 60))
     }
 
     var body: some View {
@@ -31,16 +40,26 @@ struct WakeRecordsView: View {
                 WakeSummaryTiles(model: model)
                 WakeOversleepSummary(sessions: model.sessions, now: model.now)
                 VStack(alignment: .leading, spacing: 12) {
-                    WakeCardTitle(text: "2週間のスコア", icon: "chart.bar.fill")
-                    if bars.isEmpty {
+                    WakeCardTitle(text: "2週間の起床時刻", icon: "chart.dots.scatter")
+                    if dots.isEmpty {
                         Text("まだ記録がありません").foregroundStyle(p.sub)
                     } else {
-                        Chart(bars) { b in
-                            BarMark(x: .value("日", b.date, unit: .day), y: .value("点", b.score))
-                                .foregroundStyle(b.missed ? p.overdue : p.accent)
-                                .cornerRadius(4)
+                        let r = yRange
+                        let ticks: [Int] = Array(stride(from: -r.hi, through: -r.lo, by: 30))
+                        Chart(dots) { b in
+                            PointMark(x: .value("日", b.date, unit: .day), y: .value("起床", -b.minutes))
+                                .foregroundStyle(b.overslept ? p.overdue : p.accent)
+                                .symbolSize(90)
                         }
-                        .chartYScale(domain: 0...100)
+                        .chartYScale(domain: -r.hi ... -r.lo)
+                        .chartYAxis {
+                            AxisMarks(position: .leading, values: ticks) { value in
+                                AxisGridLine()
+                                AxisValueLabel {
+                                    if let v = value.as(Int.self) { Text(WakeLogic.clock(-v)) }
+                                }
+                            }
+                        }
                         // 日付は1日おきに「9日」のように短く（狭い画面で切れないように）
                         .chartXAxis {
                             AxisMarks(values: .stride(by: .day, count: 2)) { value in
@@ -68,7 +87,7 @@ struct WakeRecordsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(WakeLogic.date(fromKey: s.day).map { JP.date($0) } ?? s.day)
                                     .font(.body.weight(.semibold)).foregroundStyle(p.text)
-                                Text(s.isMissed ? "未チェックイン" : (s.stage == 0 ? "アラームの前に起床" : "\(s.stage)回目で起床"))
+                                Text(WakeLogic.stageText(s))
                                     .font(.caption).foregroundStyle(s.isMissed ? p.overdue : p.sub)
                                 // 二度寝の見張り：二度寝の分か、「二度寝なし」
                                 if let over = s.oversleep {
@@ -79,9 +98,8 @@ struct WakeRecordsView: View {
                                 }
                             }
                             Spacer(minLength: 0)
-                            Text(s.checkInAt.map { JP.time($0) } ?? "--:--").font(.headline).monospacedDigit().foregroundStyle(p.sub)
-                            Text("\(s.score)").font(.system(size: 24, weight: .heavy, design: p.fontDesign))
-                                .foregroundStyle(s.isMissed ? p.overdue : p.accent).frame(width: 52, alignment: .trailing)
+                            Text(s.checkInAt.map { JP.time($0) } ?? "--:--").font(.system(size: 24, weight: .heavy, design: p.fontDesign))
+                                .monospacedDigit().foregroundStyle(s.isMissed ? p.overdue : p.accent)
                         }
                         .padding(.vertical, 10)
                     }
@@ -105,8 +123,8 @@ struct WakeSummaryTiles: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            tile("7日の平均", WakeLogic.average(model.sessions, days: 7, now: model.now).map { "\($0)" } ?? "―", "点")
-            tile("30日の平均", WakeLogic.average(model.sessions, days: 30, now: model.now).map { "\($0)" } ?? "―", "点")
+            tile("7日の平均起床", WakeLogic.averageWakeMinutes(model.sessions, days: 7, now: model.now).map { WakeLogic.clock($0) } ?? "―", "")
+            tile("30日の平均起床", WakeLogic.averageWakeMinutes(model.sessions, days: 30, now: model.now).map { WakeLogic.clock($0) } ?? "―", "")
             tile("連続", "\(WakeLogic.streak(model.sessions))", "日")
         }
     }
@@ -124,7 +142,7 @@ struct WakeSummaryTiles: View {
     }
 }
 
-/// 二度寝の見張りのまとめ（30日）。点数は「止めたのが何回目か」から、二度寝の分だけ引く
+/// 二度寝の見張りのまとめ（30日）
 struct WakeOversleepSummary: View {
     @Environment(\.palette) private var p
     let sessions: [WakeSession]
@@ -143,7 +161,7 @@ struct WakeOversleepSummary: View {
                 let line: String = late.isEmpty ? "見張った\(watched.count)日とも二度寝なし" : "見張った\(watched.count)日のうち二度寝 \(late.count)回・平均\(avg)分"
                 Text(line).font(Font.headline).foregroundStyle(late.isEmpty ? p.accent : p.text)
             }
-            Text("点数は、止めたのが何回目のアラームか（1回目=100）から、二度寝した分を引きます（最大50点）")
+            Text("アラームを止めてから5分たっても動き出さないと、二度寝として数えます")
                 .font(Font.caption).foregroundStyle(p.sub).fixedSize(horizontal: false, vertical: true)
         }
         .paletteCard(p, padding: 16)

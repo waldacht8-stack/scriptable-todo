@@ -164,13 +164,6 @@ enum WakeWatchLogic {
         return m > graceMinutes ? m : 0
     }
 
-    /// 点数：止めたのが何回目か（WakeLogic.score）から、二度寝の分だけ引く（最大50点）
-    static func score(stage: Int, oversleepMinutes: Int) -> Int {
-        let base = WakeLogic.score(stage: stage)
-        guard oversleepMinutes > 0 else { return base }
-        return max(0, base - min(50, 10 + oversleepMinutes))
-    }
-
     // MARK: 計算のミッション
 
     struct MathQuestion: Hashable {

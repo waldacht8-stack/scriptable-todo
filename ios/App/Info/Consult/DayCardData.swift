@@ -14,7 +14,7 @@ struct DayCard: Codable, Identifiable, Equatable {
     var note: String
     var doneCount: Int
     var doneTitles: [String]        // 3件まで
-    var wakeScore: Int?
+    var wakeStage: Int?             // 何回目のアラームで起きたか（0 = アラームの前）。昔の wakeScore（点数）は読まない
     var wakeTime: Date?
     var mood: ConsultMood?
     var photo: String?              // アプリの中の写真のファイル名
@@ -22,13 +22,25 @@ struct DayCard: Codable, Identifiable, Equatable {
 
     var id: String { day }
     var date: Date { WakeLogic.date(fromKey: day) ?? savedAt }
+    /// 「起床 7:08・1回目」（起きた記録がない日は nil）
+    var wakeText: String? { DayCard.wakeValue(time: wakeTime, stage: wakeStage).map { "起床 \($0)" } }
+
+    /// 「7:08・1回目」（時刻がなければ nil。何回目か分からない昔の記録は時刻だけ）
+    static func wakeValue(time: Date?, stage: Int?) -> String? {
+        guard let time else { return nil }
+        let cal = Calendar.current
+        let clock: String = WakeLogic.clock(cal.component(.hour, from: time) * 60 + cal.component(.minute, from: time))
+        guard let stage else { return clock }
+        let st: String = stage <= 0 ? "アラーム前" : "\(stage)回目"
+        return "\(clock)・\(st)"
+    }
 }
 
 /// 今日の自動で入る項目
 struct DayCardAuto: Equatable {
     var doneCount = 0
     var doneTitles: [String] = []
-    var wakeScore: Int?
+    var wakeStage: Int?
     var wakeTime: Date?
     var mood: ConsultMood?
 
@@ -40,7 +52,7 @@ struct DayCardAuto: Equatable {
         a.doneTitles = done.suffix(3).map(\.title)
         let key = WakeLogic.key(now)
         if let s = WakeStore.sessions().first(where: { $0.day == key && !$0.isMissed }) {
-            a.wakeScore = s.score
+            a.wakeStage = s.stage
             a.wakeTime = s.checkInAt
         }
         a.mood = MoodData.today(now: now)
@@ -166,7 +178,7 @@ enum DayCardData {
         cards.sorted { $0.day < $1.day }.map { c in
             var parts: [String] = [JP.shortDate(c.date)]
             parts.append("TODO完了 \(c.doneCount)件")
-            if let w = c.wakeScore { parts.append("起床 \(w)点") }
+            if let w = c.wakeText { parts.append(w) }
             if let m = c.mood { parts.append("気分 \(m.title)") }
             let note = c.note.trimmingCharacters(in: .whitespacesAndNewlines)
             if !note.isEmpty { parts.append("ひとこと「\(String(note.prefix(120)))」") }
@@ -268,11 +280,11 @@ enum DayCardDemo {
             guard let d = cal.date(byAdding: .day, value: -i, to: today) else { continue }
             if i == 6 { continue }   // 書かなかった日
             let k = i % notes.count
-            let wake: Int? = i % 4 == 2 ? nil : 62 + (i * 11) % 34
+            let wake: Int? = i % 4 == 2 ? nil : [1, 2, 1, 3, 1, 0][i % 6]   // 何回目で起きたか
             let wakeAt = cal.date(bySettingHour: 6, minute: 20 + (i * 7) % 30, second: 0, of: d)
             out.append(DayCard(day: WakeLogic.key(d), note: notes[k].isEmpty ? "ゆっくりした日" : notes[k],
                                doneCount: todos[k].count + i % 3, doneTitles: todos[k],
-                               wakeScore: wake, wakeTime: wake == nil ? nil : wakeAt, mood: moods[k], photo: nil,
+                               wakeStage: wake, wakeTime: wake == nil ? nil : wakeAt, mood: moods[k], photo: nil,
                                savedAt: d.addingTimeInterval(21 * 3600 + 600)))
         }
         return out.sorted { $0.day < $1.day }
@@ -333,7 +345,7 @@ final class DayCardModel: ObservableObject {
         let previous = DayCardData.load(day: todayKey)
         let card = DayCard(day: todayKey, note: note.trimmingCharacters(in: .whitespacesAndNewlines),
                            doneCount: a.doneCount, doneTitles: Array(a.doneTitles.prefix(3)),
-                           wakeScore: a.wakeScore, wakeTime: a.wakeTime, mood: a.mood, photo: photoName, savedAt: .now)
+                           wakeStage: a.wakeStage, wakeTime: a.wakeTime, mood: a.mood, photo: photoName, savedAt: .now)
         if let old = previous?.photo, old != photoName { DayCardData.removePhoto(old) }
         DayCardData.save(card)
         savedToday = true
