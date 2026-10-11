@@ -35,7 +35,33 @@ import Foundation
 //   "month": "2026-10",               // 集計した月（yyyy-MM）。今月でなければ支出 0 として扱う
 //   "spent": 32400,                   // 今月の支出（円・整数）
 //   "budget": 50000,                  // 今月の予算（円。未設定なら省略）
-//   "remaining": 17600                // 予算の残り（円。省略なら budget - spent）
+//   "remaining": 17600,               // 予算の残り（円。省略なら budget - spent）
+//   "topCategories": [                // 今月の支出の多い分類（多い順。中サイズに上位3つ。任意）
+//     { "name": "食費", "amount": 12800 }
+//   ]
+// }
+//
+// consult-widget.json（相談。情報・相談の担当が書く）
+// {
+//   "day": "2026-10-11",              // この状態の日（yyyy-MM-dd）。今日でなければ気分は未記録・1日1枚はまだ
+//   "todayMood": 1,                   // 今日の気分（ConsultMood の番号：0 最高・1 いい・2 ふつう・3 いまいち・4 つらい。未記録なら省略）
+//   "dayCardWritten": false,          // 今日の「1日1枚」を書いたか
+//   "streakDays": 5                   // 気分を記録した連続日数
+// }
+// ※ 気分のボタンは LogMoodIntent(level:)。level は todayMood と同じ番号（0 最高〜4 つらい）
+//
+// info-widget.json（情報。情報の担当が書く）
+// {
+//   "headlines": [                    // 未読の話題の見出し（新しい順。ウィジェットは先頭の 2〜3 件）
+//     { "title": "…", "source": "はてな", "topic": "猫", "colorIndex": 0 }   // colorIndex は InfoTopicColor の番号（0 強調色・1 青・2 オレンジ・3 緑・4 ピンク・5 紫・6 青緑）
+//   ],
+//   "splat": {                        // スプラトゥーン3 のいまのステージ（任意）
+//     "endsAt": "2026-10-11T15:00:00+09:00",   // いまの時間帯が終わる（次に切り替わる）時刻
+//     "regular": "ユノハナ大渓谷",              // レギュラーマッチのステージ（「・」区切りで2つでもよい）
+//     "bankara": "ヤガラ市場",                  // バンカラマッチ
+//     "x": "マテガイ放水路"                     // Xマッチ
+//   },
+//   "steamSale": { "title": "…", "discount": 75 }   // Steam のセール（任意。discount は割引率 %）
 // }
 //
 // ファイルが無いときは見本のデータを返し、isSample を true にする（ウィジェットに「見本」と小さく出す）。
@@ -154,12 +180,24 @@ struct KakeiboFeed: Codable, Equatable {
     var spent: Int? = nil
     var budget: Int? = nil
     var remaining: Int? = nil
+    var topCategories: [Category]? = nil
     var isSample: Bool = false
+
+    struct Category: Codable, Equatable, Hashable {
+        var name: String
+        var amount: Int
+    }
 
     static let file = "kakeibo-summary.json"
 
     private enum CodingKeys: String, CodingKey {
-        case month, spent, budget, remaining
+        case month, spent, budget, remaining, topCategories
+    }
+
+    /// 今月の分類の上位（違う月なら空）
+    func categories(_ now: Date) -> [Category] {
+        guard month == nil || month == WidgetFeedDay.monthKey(now) else { return [] }
+        return (topCategories ?? []).sorted { $0.amount > $1.amount }
     }
 
     static func load(now: Date = .now) -> KakeiboFeed {
@@ -172,7 +210,9 @@ struct KakeiboFeed: Codable, Equatable {
     }
 
     static func demo(now: Date = .now) -> KakeiboFeed {
-        KakeiboFeed(month: WidgetFeedDay.monthKey(now), spent: 32400, budget: 50000, remaining: 17600)
+        KakeiboFeed(month: WidgetFeedDay.monthKey(now), spent: 32400, budget: 50000, remaining: 17600,
+                    topCategories: [Category(name: "食費", amount: 12800), Category(name: "日用品", amount: 6400),
+                                    Category(name: "交通", amount: 4200), Category(name: "趣味", amount: 3900)])
     }
 
     /// 今月の支出（違う月のファイルなら 0）
@@ -192,6 +232,126 @@ struct KakeiboFeed: Codable, Equatable {
     func usedFraction(_ now: Date) -> Double? {
         guard let b = budget, b > 0 else { return nil }
         return min(1, Double(spentThisMonth(now)) / Double(b))
+    }
+}
+
+/// 相談：今日の気分と「1日1枚」
+struct ConsultFeed: Codable, Equatable {
+    var day: String? = nil
+    var todayMood: Int? = nil
+    var dayCardWritten: Bool? = nil
+    var streakDays: Int? = nil
+    var isSample: Bool = false
+
+    static let file = "consult-widget.json"
+
+    private enum CodingKeys: String, CodingKey {
+        case day, todayMood, dayCardWritten, streakDays
+    }
+
+    static func load(now: Date = .now) -> ConsultFeed {
+        guard let f = SharedStore.load(ConsultFeed.self, from: file) else {
+            var d = demo(now: now)
+            d.isSample = true
+            return d
+        }
+        return f
+    }
+
+    /// 見本：今日は「いい」、1日1枚はまだ、5日連続
+    static func demo(now: Date = .now) -> ConsultFeed {
+        ConsultFeed(day: WidgetFeedDay.key(now), todayMood: 1, dayCardWritten: false, streakDays: 5)
+    }
+
+    private func isToday(_ now: Date) -> Bool { day == nil || day == WidgetFeedDay.key(now) }
+
+    /// 今日の気分（0 最高〜4 つらい。未記録なら nil）
+    func mood(_ now: Date) -> Int? {
+        guard isToday(now), let m = todayMood, (0...4).contains(m) else { return nil }
+        return m
+    }
+
+    func cardWritten(_ now: Date) -> Bool { isToday(now) && (dayCardWritten ?? false) }
+
+    /// 夕方（18時）以降で、今日の1枚がまだか
+    func cardDue(_ now: Date) -> Bool {
+        Calendar.current.component(.hour, from: now) >= 18 && !cardWritten(now)
+    }
+}
+
+/// 気分の印（相談の ConsultMood と同じ番号・名前・アイコン。ウィジェットからはアプリの型が見えないため別に持つ）
+enum WidgetMood {
+    static let titles: [String] = ["最高", "いい", "ふつう", "いまいち", "つらい"]
+    static let symbols: [String] = ["sun.max.fill", "cloud.sun.fill", "cloud.fill", "cloud.drizzle.fill", "cloud.heavyrain.fill"]
+
+    static func title(_ level: Int) -> String { titles[max(0, min(4, level))] }
+    static func symbol(_ level: Int) -> String { symbols[max(0, min(4, level))] }
+}
+
+/// 情報：未読の見出し・スプラトゥーンのステージ・Steam のセール
+struct InfoFeed: Codable, Equatable {
+    struct Headline: Codable, Equatable, Hashable {
+        var title: String
+        var source: String? = nil
+        var topic: String? = nil
+        var colorIndex: Int? = nil
+    }
+
+    struct Splat: Codable, Equatable {
+        var endsAt: Date? = nil
+        var regular: String? = nil
+        var bankara: String? = nil
+        var x: String? = nil
+    }
+
+    struct SteamSale: Codable, Equatable {
+        var title: String
+        var discount: Int? = nil
+    }
+
+    var headlines: [Headline]? = nil
+    var splat: Splat? = nil
+    var steamSale: SteamSale? = nil
+    var isSample: Bool = false
+
+    static let file = "info-widget.json"
+
+    private enum CodingKeys: String, CodingKey {
+        case headlines, splat, steamSale
+    }
+
+    static func load(now: Date = .now) -> InfoFeed {
+        guard let f = SharedStore.load(InfoFeed.self, from: file) else {
+            var d = demo(now: now)
+            d.isSample = true
+            return d
+        }
+        return f
+    }
+
+    /// 見本：一般的な話題の見出し3件、次の切り替わりは次の奇数時、Steam のセール
+    static func demo(now: Date = .now) -> InfoFeed {
+        let cal = Calendar.current
+        let h: Int = cal.component(.hour, from: now)
+        let nextOdd: Int = h % 2 == 0 ? h + 1 : h + 2
+        let ends: Date = cal.date(byAdding: .hour, value: nextOdd, to: cal.startOfDay(for: now)) ?? now
+        return InfoFeed(
+            headlines: [
+                Headline(title: "保護猫カフェが駅前にオープン、譲渡会も毎月開催", source: "Google ニュース", topic: "猫", colorIndex: 0),
+                Headline(title: "新しい iPhone のバッテリー持ちを1週間試した", source: "はてな", topic: "iPhone", colorIndex: 1),
+                Headline(title: "秋のキャンプ場、予約が取りやすい穴場まとめ", source: "Bluesky", topic: "キャンプ", colorIndex: 3),
+            ],
+            splat: Splat(endsAt: ends, regular: "ユノハナ大渓谷・ヤガラ市場", bankara: "マテガイ放水路", x: "ナメロウ金属"),
+            steamSale: SteamSale(title: "秋のセール：インディーゲーム", discount: 75))
+    }
+
+    var shownHeadlines: [Headline] { headlines ?? [] }
+
+    /// いまのステージ（終わっていれば nil）
+    func currentSplat(_ now: Date) -> Splat? {
+        guard let s = splat else { return nil }
+        if let e = s.endsAt, e <= now { return nil }
+        return s
     }
 }
 

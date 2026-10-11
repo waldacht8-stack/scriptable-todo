@@ -13,12 +13,15 @@ struct DayWidgetEntry: TimelineEntry {
     let kakeibo: KakeiboFeed
     let wake: WakeSnapshot
     var groupOK: Bool = true
+    var consult: ConsultFeed = ConsultFeed()
+    var info: InfoFeed = InfoFeed()
 
     /// アプリと共有したファイルから読む（ウィジェットのタイムライン用）
     static func load(at date: Date, todos: [TodoItem]? = nil) -> DayWidgetEntry {
         DayWidgetEntry(date: date, todos: todos ?? TodoData.all(), palette: AppTheme.current(),
                        review: .load(now: date), watch: .load(), kakeibo: .load(now: date),
-                       wake: WakeSnapshot.make(now: date), groupOK: SharedStore.isGroupAvailable)
+                       wake: WakeSnapshot.make(now: date), groupOK: SharedStore.isGroupAvailable,
+                       consult: .load(now: date), info: .load(now: date))
     }
 
     var day: DayTodos { DayTodos(todos, now: date) }
@@ -116,4 +119,6 @@ enum WidgetLinks {
     static let wake = URL(string: "hiyori://wake")!
     static let todo = URL(string: "hiyori://todo")!
     static let kakeibo = URL(string: "hiyori://kakeibo")!
+    static let consult = URL(string: "hiyori://consult")!
+    static let info = URL(string: "hiyori://info")!
 }

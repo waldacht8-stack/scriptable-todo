@@ -104,3 +104,45 @@ struct DayLockWidget: Widget {
         .supportedFamilies([.accessoryRectangular, .accessoryCircular, .accessoryInline])
     }
 }
+
+// MARK: - タブごと：家計簿・相談・情報
+
+/// 家計簿（今月の支出と予算の残り）
+struct KakeiboWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "KakeiboWidget", provider: DayProvider(step: 60 * 60, span: 6 * 3600)) { entry in
+            KakeiboWidgetView(entry: entry)
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette) }
+        }
+        .configurationDisplayName("家計簿")
+        .description("今月の支出と予算の残り。中サイズは支出の多い分類も出します。")
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryCircular, .accessoryInline])
+    }
+}
+
+/// 相談（今日の気分をその場で記録・夜は「1日1枚」）
+struct ConsultWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "ConsultWidget", provider: DayProvider(step: 60 * 60, span: 12 * 3600)) { entry in
+            ConsultWidgetView(entry: entry)
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette) }
+        }
+        .configurationDisplayName("相談")
+        .description("今日の気分を5つのボタンで記録。夜に「1日1枚」がまだなら知らせます。")
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryCircular, .accessoryInline])
+    }
+}
+
+/// 情報（未読の見出し・スプラトゥーンのステージ・Steam のセール）
+struct InfoWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "InfoWidget", provider: DayProvider(step: 30 * 60, span: 6 * 3600)) { entry in
+            InfoWidgetView(entry: entry)
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette) }
+        }
+        .configurationDisplayName("情報")
+        .description("未読の話題の見出し。中・大はスプラトゥーンのいまのステージと Steam のセールも。")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge,
+                            .accessoryRectangular, .accessoryCircular, .accessoryInline])
+    }
+}

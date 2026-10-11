@@ -209,6 +209,12 @@ jobs:
           shot shots/widgets-r4-wake-aurora.png -demo -widgetpreview -widgetsize wake4 -world aurora
           shot shots/widgets-r4-lock.png -demo -widgetpreview -widgetsize lock4 -theme focus
           shot shots/widgets-r4-lock-swiss.png -demo -widgetpreview -widgetsize lock4 -world swiss
+          # タブごとのウィジェット（家計簿・相談・情報）：小・中・大とロック画面
+          shot shots/widgets-r4-tabs.png -demo -widgetpreview -widgetsize tabs -theme focus
+          shot shots/widgets-r4-tabs-bento.png -demo -widgetpreview -widgetsize tabs -world bento
+          shot shots/widgets-r4-tabs-night.png -demo -widgetpreview -widgetsize tabs -theme night
+          shot shots/widgets-r4-tabslock.png -demo -widgetpreview -widgetsize tabslock -theme focus
+          shot shots/widgets-r4-tabslock-brutal.png -demo -widgetpreview -widgetsize tabslock -world brutal
           # 設定画面を色合いごとに（暗い色合い・下の見出し・カスタマイズも）。カスタマイズは保存されて残るので最後に。
           # どれも -demo を付ける（付けないと起床のアラーム許可の確認が出て、答えるまで以降の写真にも重なり続ける）
           shot shots/settings-night.png -settings -demo -theme night

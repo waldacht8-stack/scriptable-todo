@@ -22,6 +22,8 @@ struct WidgetPreviewScreen: View {
         case "summary": kind = "今日のまとめ"
         case "wake4": kind = "起床・夜と見張り"
         case "lock4": kind = "ロック画面・時間帯"
+        case "tabs": kind = "家計簿・相談・情報"
+        case "tabslock": kind = "家計簿・相談・情報（大・ロック画面）"
         case "sunmoon": kind = "太陽と月・\(JP.time(Self.previewNow))"
         default: kind = "小・中"
         }
@@ -43,6 +45,8 @@ struct WidgetPreviewScreen: View {
                 case "wake4": wake4Page
                 case "lock4": lock4Page
                 case "sunmoon": sunMoonPage
+                case "tabs": tabsPage
+                case "tabslock": tabsLockPage
                 default: smallMediumPage
                 }
             }
@@ -344,7 +348,8 @@ extension WidgetPreviewScreen {
     func dayEntry(at now: Date, watch: WakeWatchFeed = .none, wake: WakeSnapshot? = nil) -> DayWidgetEntry {
         let snap: WakeSnapshot = wake ?? Self.wakeNight(alarm: true)
         return DayWidgetEntry(date: now, todos: Self.r4Items(now: now), palette: p, review: ReviewFeed.demo(now: now),
-                              watch: watch, kakeibo: KakeiboFeed.demo(now: now), wake: snap)
+                              watch: watch, kakeibo: KakeiboFeed.demo(now: now), wake: snap,
+                              consult: ConsultFeed.demo(now: now), info: InfoFeed.demo(now: now))
     }
 
     func wakeEntry(at now: Date, snap: WakeSnapshot, watch: WakeWatchFeed = .none) -> WakeEntry {
@@ -353,6 +358,61 @@ extension WidgetPreviewScreen {
     }
 
     // MARK: ページ
+
+    /// タブごと（家計簿・相談・情報）の小・中。相談は 20:00（「今日の1枚 まだ」が出る時刻）
+    var tabsPage: some View {
+        let e: DayWidgetEntry = dayEntry(at: Self.today(20, 0))
+        return VStack(alignment: .leading, spacing: 6) {
+            caption("家計簿")
+            HStack(alignment: .top, spacing: 6) {
+                frame(KakeiboWidgetView(entry: e, familyOverride: .systemSmall), Self.small, scale: 0.55)
+                frame(KakeiboWidgetView(entry: e, familyOverride: .systemMedium), Self.medium, scale: 0.55)
+            }
+            frame(KakeiboWidgetView(entry: e, familyOverride: .systemMedium), Self.medium, scale: 0.9)
+            caption("相談（20:00）")
+            HStack(alignment: .top, spacing: 6) {
+                frame(ConsultWidgetView(entry: e, familyOverride: .systemSmall), Self.small, scale: 0.55)
+                frame(InfoWidgetView(entry: e, familyOverride: .systemSmall), Self.small, scale: 0.55)
+            }
+            frame(ConsultWidgetView(entry: e, familyOverride: .systemMedium), Self.medium, scale: 0.9)
+            caption("情報（小は上の右）")
+            frame(InfoWidgetView(entry: e, familyOverride: .systemMedium), Self.medium, scale: 0.9)
+        }
+    }
+
+    /// 情報（大）と、3つのロック画面
+    var tabsLockPage: some View {
+        let e: DayWidgetEntry = dayEntry(at: Self.today(20, 0))
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        let circle = CGSize(width: 64, height: 64)
+        let rect = CGSize(width: 160, height: 66)
+        let panel: Color = Color(uiColor: .secondarySystemBackground)
+        return VStack(alignment: .leading, spacing: 6) {
+            caption("情報（大）")
+            frame(InfoWidgetView(entry: e, familyOverride: .systemLarge), Self.large, scale: 0.8)
+            caption("ロック画面：家計簿・相談・情報")
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    accessory(KakeiboWidgetView(entry: e, familyOverride: .accessoryRectangular), rect, round: false)
+                    accessory(KakeiboWidgetView(entry: e, familyOverride: .accessoryCircular), circle, round: true)
+                    accessory(ConsultWidgetView(entry: e, familyOverride: .accessoryCircular), circle, round: true)
+                }
+                HStack(spacing: 10) {
+                    accessory(ConsultWidgetView(entry: e, familyOverride: .accessoryRectangular), rect, round: false)
+                    accessory(InfoWidgetView(entry: e, familyOverride: .accessoryCircular), circle, round: true)
+                }
+                accessory(InfoWidgetView(entry: e, familyOverride: .accessoryRectangular), rect, round: false)
+                KakeiboWidgetView(entry: e, familyOverride: .accessoryInline).font(.subheadline.weight(.semibold)).lineLimit(1)
+                ConsultWidgetView(entry: e, familyOverride: .accessoryInline).font(.subheadline.weight(.semibold)).lineLimit(1)
+                InfoWidgetView(entry: e, familyOverride: .accessoryInline).font(.subheadline.weight(.semibold)).lineLimit(1)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .foregroundStyle(.primary)
+            .background(panel, in: shape)
+            .environment(\.colorScheme, .dark)
+        }
+    }
 
     /// 太陽と月の一日（小・中・大。-widgettime の時刻で）
     var sunMoonPage: some View {

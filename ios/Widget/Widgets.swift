@@ -14,6 +14,10 @@ struct AppWidgets: WidgetBundle {
         ReviewWidget()
         SummaryWidget()
         DayLockWidget()
+        // タブごと：家計簿・相談・情報（Widget/DayWidgets.swift。この一覧は 10 個まで）
+        KakeiboWidget()
+        ConsultWidget()
+        InfoWidget()
         // 習慣・集中のタブを外したので、そのウィジェットも一覧から外す（リリース4）
     }
 }
