@@ -218,8 +218,16 @@ final class ConsultModel: ObservableObject {
             error = "API キーが使えませんでした。キーを確かめてください。"
         } catch GeminiError.quota {
             error = "無料枠の上限に達しました。しばらくしてからもう一度送ってください。"
+        } catch GeminiError.http(let code) where code >= 500 {
+            self.error = "AI が混み合っています（\(code)）。少しおいてもう一度送ってください。"
+        } catch GeminiError.http(let code) {
+            self.error = "返事を受け取れませんでした（エラー \(code)）。"
+        } catch GeminiError.empty {
+            self.error = "AI の返事が空でした。もう一度送ってください。"
+        } catch let e as URLError {
+            self.error = "通信できませんでした（\(e.code.rawValue)）。電波を確かめてください。"
         } catch {
-            self.error = "返事を受け取れませんでした。通信を確認してください。"
+            self.error = "返事を読み取れませんでした。もう一度送ってください。"
         }
     }
 
@@ -268,8 +276,11 @@ enum GeminiAPI {
         for model in models {
             do {
                 return try await call(model: model, key: key, system: system, history: history)
-            } catch GeminiError.http(let code) where code == 404 {
-                last = GeminiError.http(code)
+            } catch GeminiError.http(let code) where code == 404 || code >= 500 {
+                last = GeminiError.http(code)   // 終了したモデル・混雑は次のモデルで試す
+                continue
+            } catch GeminiError.empty {
+                last = GeminiError.empty        // 考える分で上限を使い切ったときも次で試す
                 continue
             }
         }
@@ -287,7 +298,7 @@ enum GeminiAPI {
         let contents: [RawContent] = history.map { RawContent(role: $0.fromUser ? "user" : "model", parts: [RawPart(text: $0.text)]) }
         let body = RawRequest(system_instruction: RawContent(role: nil, parts: [RawPart(text: system)]),
                               contents: contents,
-                              generationConfig: RawConfig(temperature: 0.8, maxOutputTokens: 1024))
+                              generationConfig: RawConfig(temperature: 0.8, maxOutputTokens: 4096))   // 2.5 系は「考える」分もここから使う
         req.httpBody = try JSONEncoder().encode(body)
         let (data, res) = try await URLSession.shared.data(for: req)
         let code = (res as? HTTPURLResponse)?.statusCode ?? 200
