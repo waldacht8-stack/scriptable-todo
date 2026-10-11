@@ -9,8 +9,7 @@ struct AppWidgets: WidgetBundle {
         TodoWidget()
         WakeWidget()
         WakeLiveActivity()
-        HabitWidget()
-        FocusTimerLiveActivity()
+        // 習慣・集中のタブを外したので、そのウィジェットも一覧から外す（リリース4）
     }
 }
 

@@ -138,7 +138,7 @@ jobs:
           shot shots/todo-widgets.png -demo -theme focus -tab 0 -todowidgets
           shot shots/todo-widgets-night.png -demo -theme night -tab 0 -todowidgets
           # 起床・習慣・集中・情報のタブ（見本データ）
-          for tab in 1 2 3 4; do
+          for tab in 1 2 4; do
             shot "shots/tab-$tab.png" -demo -theme focus -tab $tab
           done
           # 起床の時間帯（起床前・起床中・夜）と、起床の設定・記録

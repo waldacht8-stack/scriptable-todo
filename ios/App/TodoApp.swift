@@ -73,8 +73,8 @@ struct RootView: View {
                 TabView(selection: $tab) {
                     HomeView().tabItem { Label("TODO", systemImage: "checklist") }.tag(0)
                     WakeRootView().tabItem { Label("起床", systemImage: "alarm") }.tag(1)
-                    HabitRootView().tabItem { Label("習慣", systemImage: "leaf") }.tag(2)
-                    FocusTimerRootView().tabItem { Label("集中", systemImage: "timer") }.tag(3)
+                    // 習慣・集中はタブから外した（コードと記録は残す。リリース4）
+                    KakeiboRootView().tabItem { Label("家計簿", systemImage: "yensign.circle") }.tag(2)
                     InfoRootView().tabItem { Label("情報", systemImage: "newspaper") }.tag(4)
                 }
                 .environment(\.openAppSettings, OpenAppSettingsAction { showSettings = true })
