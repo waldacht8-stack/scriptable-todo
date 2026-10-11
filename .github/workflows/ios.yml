@@ -182,6 +182,13 @@ jobs:
           shot shots/world-clay-checklist.png -demo -layout checklist -world clay -tab 0
           shot shots/world-bento-focus.png -demo -world bento -tab 3
           shot shots/settings-world.png -settings -demo -world hinata -settingsSection world
+          # ウィジェットの世界観（TODO の小・中・大、起床・習慣・ロック画面）
+          for world in hinata brutal aurora bento clay swiss; do
+            shot "shots/widgets-world-$world.png" -demo -widgetpreview -world $world
+            shot "shots/widgets-world-$world-large.png" -demo -widgetpreview -widgetsize large -world $world
+            shot "shots/widgets-world-$world-other.png" -demo -widgetpreview -widgetsize other -world $world
+          done
+          shot shots/widgets-other.png -demo -widgetpreview -widgetsize other -theme focus
           # 設定画面を色合いごとに（暗い色合い・下の見出し・カスタマイズも）。カスタマイズは保存されて残るので最後に。
           # どれも -demo を付ける（付けないと起床のアラーム許可の確認が出て、答えるまで以降の写真にも重なり続ける）
           shot shots/settings-night.png -settings -demo -theme night

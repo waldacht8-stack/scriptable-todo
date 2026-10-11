@@ -33,13 +33,10 @@ struct TodoWidgetData {
     }
 }
 
-/// ウィジェットの背景（色合いに合わせる）
+/// ウィジェットの背景（色合いと世界観に合わせる。飾りは WorldWidget.swift）
 struct WidgetPaletteBackground: View {
     let p: Palette
-    var body: some View {
-        LinearGradient(colors: p.background.count > 1 ? p.background : [p.background[0], p.background[0]],
-                       startPoint: .top, endPoint: .bottom)
-    }
+    var body: some View { WidgetWorldBackground(p: p) }
 }
 
 struct TodoWidgetView: View {
@@ -54,6 +51,10 @@ struct TodoWidgetView: View {
         self.familyOverride = familyOverride
     }
     private var p: Palette { data.palette }
+    /// 行の出入りの動き（世界観ごと）
+    private var rowT: AnyTransition { p.world.widgetRowTransition(p) }
+    /// 描き直しで動かす目印（並び・件数が変わったら世界観の動き方で動かす）
+    private var changeKey: [String] { data.items.map(\.id) + ["\(data.doneToday)", "\(data.overdue)"] }
 
     var body: some View {
         Group {
@@ -77,6 +78,7 @@ struct TodoWidgetView: View {
             }
         }
         .fontDesign(p.fontDesign)
+        .worldWidgetAnimation(p, value: changeKey)
     }
 
     // MARK: ホーム画面
@@ -86,9 +88,7 @@ struct TodoWidgetView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text("あと").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
-                Text("\(data.items.count)").font(.system(size: 22, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
-                    .contentTransition(.numericText())
-                    .widgetAccentable()
+                WidgetCount(p: p, text: "\(data.items.count)", value: Double(data.items.count), size: 22)
                 Text("件").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
                 Spacer()
                 if data.overdue > 0 {
@@ -107,12 +107,12 @@ struct TodoWidgetView: View {
                         .foregroundStyle(p.text).lineLimit(2).minimumScaleFactor(0.7)
                 }
                 .id(first.id)
-                .transition(.push(from: .bottom))
+                .transition(p.world.widgetSwapTransition(p))
                 Spacer(minLength: 0)
                 Button(intent: ToggleTodoIntent(id: first.id)) {
                     Label("完了", systemImage: "checkmark").font(.caption.weight(.bold))
                         .frame(maxWidth: .infinity).padding(.vertical, 7)
-                        .background(p.accent, in: RoundedRectangle(cornerRadius: min(p.radius, 12), style: .continuous))
+                        .widgetButton(p, radius: 12)
                         .foregroundStyle(p.onAccent)
                         .invalidatableContent()
                 }
@@ -150,18 +150,15 @@ struct TodoWidgetView: View {
         let n: Int = data.items.filter { WGroup.of($0) == g }.count
         let barColor: Color = g.color(p)
         let numberColor: Color = n > 0 ? barColor : p.sub
-        let shape = RoundedRectangle(cornerRadius: min(p.radius, 10), style: .continuous)
         return HStack(spacing: 7) {
             RoundedRectangle(cornerRadius: 2).fill(barColor).frame(width: 4, height: 20)
             Text(g.name).font(.subheadline.weight(.bold)).foregroundStyle(p.text).lineLimit(1)
             Spacer(minLength: 0)
-            Text("\(n)").font(.system(size: 22, weight: .heavy, design: p.fontDesign)).foregroundStyle(numberColor)
-                .contentTransition(.numericText())
-                .widgetAccentable()
+            WidgetCount(p: p, text: "\(n)", value: Double(n), size: p.world == .swiss ? 18 : 22, color: numberColor)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(p.card, in: shape)
+        .widgetCard(p, radius: 10)
     }
 
     private var groupRows: [WGroupRow] {
@@ -203,16 +200,15 @@ struct TodoWidgetView: View {
         .padding(.top, 1)
     }
 
-    /// 行の出入り：完了した行は右へ抜け、新しい行は下から入る（ボタンを押したあとの描き直しで動く）
-    static let rowTransition: AnyTransition = .asymmetric(
-        insertion: AnyTransition.move(edge: .bottom).combined(with: .opacity),
-        removal: AnyTransition.move(edge: .trailing).combined(with: .opacity)
-    )
+    // 行の出入り（rowT）：完了した行が抜け、新しい行が入る（ボタンを押したあとの描き直しで動く）。
+    // 「なし」は右へ抜けて下から入る。世界観ごとの動きは World.widgetRowTransition（WorldWidget.swift）
 
     /// 丸の印：押すと処理中は薄くなり（invalidatableContent）、描き直しで印が入れ替わる
-    private func checkIcon(_ symbol: String, size: CGFloat, color: Color) -> some View {
-        Image(systemName: symbol).font(.system(size: size, weight: .semibold)).foregroundStyle(color)
-            .contentTransition(.symbolEffect(.replace))
+    /// 印の形・太さ・入れ替わりの動きは世界観ごと（ブルータルは四角）
+    private func checkIcon(size: CGFloat, color: Color) -> some View {
+        Image(systemName: p.world.widgetCheckSymbol(done: false))
+            .font(.system(size: size, weight: p.world.widgetCheckWeight)).foregroundStyle(color)
+            .contentTransition(p.world.widgetSymbolTransition)
             .invalidatableContent()
             .widgetAccentable()
     }
@@ -226,7 +222,7 @@ struct TodoWidgetView: View {
         let circleSize: CGFloat = small ? 11 : 13
         return Button(intent: ToggleTodoIntent(id: item.id)) {
             HStack(alignment: .firstTextBaseline, spacing: small ? 4 : 6) {
-                checkIcon("circle", size: circleSize, color: color)
+                checkIcon(size: circleSize, color: color)
                 if small && !clock.isEmpty {
                     // 小さいサイズは時刻を左に（折り返さない）
                     Text(clock).font(clockFont).foregroundStyle(color).lineLimit(1).fixedSize()
@@ -240,7 +236,7 @@ struct TodoWidgetView: View {
             }
         }
         .buttonStyle(.plain)
-        .transition(Self.rowTransition)
+        .transition(rowT)
     }
 
     private func emptyText(_ s: String) -> some View {
@@ -295,12 +291,11 @@ struct TodoWidgetView: View {
         let small: Bool = family == .systemSmall
         let has: Bool = data.items.contains { item in item.due.map { cal.isDate($0, inSameDayAs: d) } ?? false }
         let fg: Color = selected ? p.onAccent : p.text
-        let bg: Color = selected ? p.accent : p.card
         let dot: Color = has ? (selected ? p.onAccent : p.accent) : Color.clear
         let wd: String = Self.weekdaySymbols[cal.component(.weekday, from: d) - 1]
         let wdSize: CGFloat = small ? 8 : 10
         let daySize: CGFloat = small ? 11 : 15
-        let shape = RoundedRectangle(cornerRadius: small ? 6 : 9, style: .continuous)
+        let radius: CGFloat = small ? 6 : 9
         return VStack(spacing: 1) {
             Text(wd).font(.system(size: wdSize, weight: .bold)).lineLimit(1).minimumScaleFactor(0.6)
             Text("\(cal.component(.day, from: d))").font(.system(size: daySize, weight: .heavy).monospacedDigit())
@@ -310,7 +305,9 @@ struct TodoWidgetView: View {
         .foregroundStyle(fg)
         .frame(maxWidth: .infinity)
         .padding(.vertical, small ? 3 : 5)
-        .background(bg, in: shape)
+        .background {
+            if selected { WidgetButtonSurface(p: p, radius: radius) } else { WidgetCardSurface(p: p, radius: radius) }
+        }
     }
 
     // MARK: ながれ（1本の線と「いま」の印）
@@ -372,7 +369,7 @@ struct TodoWidgetView: View {
         } else {
             Button(intent: ToggleTodoIntent(id: item.id)) { flowRowBody(item) }
                 .buttonStyle(.plain)
-                .transition(Self.rowTransition)
+                .transition(rowT)
         }
     }
 
@@ -380,7 +377,7 @@ struct TodoWidgetView: View {
         let color: Color = item.isOverdue() ? p.overdue : p.accent
         let timeColor: Color = item.done ? p.sub : color
         let titleColor: Color = item.done ? p.sub : p.text
-        let symbol: String = item.done ? "checkmark.circle.fill" : "circle"
+        let symbol: String = p.world.widgetCheckSymbol(done: item.done)
         let dotBack: Color = p.background.first ?? p.card
         let small: Bool = family == .systemSmall
         let timeFont: Font = small ? Font.system(size: 10, weight: .bold).monospacedDigit() : Font.caption2.weight(.bold).monospacedDigit()
@@ -390,8 +387,8 @@ struct TodoWidgetView: View {
                 .lineLimit(1).fixedSize()
                 .frame(width: flowTimeWidth, alignment: .leading)
                 .padding(.top, 1)
-            Image(systemName: symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(timeColor)
-                .contentTransition(.symbolEffect(.replace)).invalidatableContent()
+            Image(systemName: symbol).font(.system(size: 13, weight: p.world.widgetCheckWeight)).foregroundStyle(timeColor)
+                .contentTransition(p.world.widgetSymbolTransition).invalidatableContent()
                 .frame(width: 14, height: 14)
                 .background(Circle().fill(dotBack))
             Text(item.title).strikethrough(item.done).font(titleFont).foregroundStyle(titleColor)
@@ -421,11 +418,11 @@ struct TodoWidgetView: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("今日").font(.caption.weight(.heavy)).foregroundStyle(p.accent)
-                    Text("\(todays.count)").font(.system(size: 18, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
-                        .contentTransition(.numericText()).widgetAccentable()
+                    WidgetCount(p: p, text: "\(todays.count)", value: Double(todays.count), size: 18)
                     Spacer(minLength: 0)
                     Text("明日 \(kanbanItems(.tomorrow).count)・あとで \(kanbanItems(.later).count)")
                         .font(.system(size: 9, weight: .bold)).foregroundStyle(p.sub).lineLimit(1).fixedSize()
+                        .contentTransition(.numericText())
                 }
                 if todays.isEmpty {
                     emptyText("今日のTODOはありません")
@@ -466,11 +463,10 @@ struct TodoWidgetView: View {
 
     private func kanbanCard(_ item: TodoItem) -> some View {
         let color: Color = item.isOverdue() ? p.overdue : p.accent
-        let shape = RoundedRectangle(cornerRadius: min(p.radius, 9), style: .continuous)
         let titleFont: Font = Font.system(size: 11, weight: .semibold)
         return Button(intent: ToggleTodoIntent(id: item.id)) {
             HStack(alignment: .top, spacing: 4) {
-                checkIcon("circle", size: 10, color: color)
+                checkIcon(size: 10, color: color)
                     .padding(.top, 1)
                 Text(item.title).font(titleFont).foregroundStyle(p.text).lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -478,10 +474,10 @@ struct TodoWidgetView: View {
             }
             .padding(.horizontal, 5).padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(p.card, in: shape)
+            .widgetCard(p, radius: 9)
         }
         .buttonStyle(.plain)
-        .transition(Self.rowTransition)
+        .transition(rowT)
     }
 
     // MARK: チェックリスト（紙のリスト）
@@ -498,6 +494,7 @@ struct TodoWidgetView: View {
                 Spacer(minLength: 0)
                 if data.doneToday > 0 {
                     Text("完了 \(data.doneToday)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+                        .contentTransition(.numericText())
                 }
             }
             Group {
@@ -513,8 +510,8 @@ struct TodoWidgetView: View {
             .background(alignment: .leading) {
                 Rectangle().fill(p.overdue.opacity(0.3)).frame(width: 1).padding(.leading, marginX)
             }
-            .background(p.card, in: shape)
             .clipShape(shape)
+            .widgetCard(p, radius: 12)
         }
     }
 
@@ -524,7 +521,7 @@ struct TodoWidgetView: View {
         } else {
             Button(intent: ToggleTodoIntent(id: item.id)) { checkRowBody(item) }
                 .buttonStyle(.plain)
-                .transition(Self.rowTransition)
+                .transition(rowT)
         }
     }
 
@@ -537,8 +534,8 @@ struct TodoWidgetView: View {
         let clock: String = item.done ? "" : JP.clock(item, none: "")
         return VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: small ? 8 : 10) {
-                Image(systemName: symbol).font(.system(size: small ? 13 : 14, weight: .semibold)).foregroundStyle(boxColor)
-                    .contentTransition(.symbolEffect(.replace)).invalidatableContent()
+                Image(systemName: symbol).font(.system(size: small ? 13 : 14, weight: p.world.widgetCheckWeight)).foregroundStyle(boxColor)
+                    .contentTransition(p.world.widgetSymbolTransition).invalidatableContent()
                 Text(item.title).strikethrough(item.done, color: p.sub).font(titleFont)
                     .foregroundStyle(item.done ? p.sub : p.text)
                     .lineLimit(small ? 2 : 1)
@@ -571,26 +568,36 @@ struct TodoWidgetView: View {
         return Text(first.map { "\(JP.clock($0, none: "")) \($0.title)" } ?? "やることはありません")
     }
 
+    /// 丸：件数。世界観は輪の形と数字の太さ・字詰めで出す（ロック画面は色を使わない）
     private var circular: some View {
-        ZStack {
-            AccessoryWidgetBackground()
+        let w: World = p.world
+        let numberFont: Font = w == .none ? Font.title2.weight(.heavy) : w.accessoryNumberFont(22)
+        let labelFont: Font = Font.system(size: 9, weight: w.accessoryWeight(.semibold), design: w.accessoryDesign ?? .default)
+        return ZStack {
+            AccessoryWorldBackground(world: w)
             VStack(spacing: 0) {
-                Text("\(data.items.count)").font(.title2.weight(.heavy))
-                    .contentTransition(.numericText())
-                Text("のこり").font(.system(size: 9, weight: .semibold))
+                Text("\(data.items.count)").font(numberFont).tracking(w.accessoryTracking)
+                    .contentTransition(.numericText(value: Double(data.items.count)))
+                Text("のこり").font(labelFont)
             }
         }
     }
 
     private var rectangular: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text("次のTODO" + (data.overdue > 0 ? "・期限切れ\(data.overdue)" : "")).font(.caption2.weight(.semibold))
+        let w: World = p.world
+        let head: Font = w == .none ? Font.caption2.weight(.semibold) : w.accessoryFont(.caption2, .semibold)
+        let line: Font = w == .none ? Font.caption.weight(.bold) : w.accessoryFont(.caption, .bold)
+        return VStack(alignment: .leading, spacing: 1) {
+            Text("次のTODO" + (data.overdue > 0 ? "・期限切れ\(data.overdue)" : "")).font(head)
+                .contentTransition(.numericText())
             ForEach(data.items.prefix(2)) { item in
-                Text("\(JP.clock(item, none: "―")) \(item.title)").font(.caption.weight(.bold)).lineLimit(1)
+                Text("\(JP.clock(item, none: "―")) \(item.title)").font(line).lineLimit(1)
+                    .transition(rowT)
             }
-            if data.items.isEmpty { Text("やることはありません").font(.caption.weight(.bold)) }
+            if data.items.isEmpty { Text("やることはありません").font(line) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessoryWorldFrame(w)
     }
 }
 
