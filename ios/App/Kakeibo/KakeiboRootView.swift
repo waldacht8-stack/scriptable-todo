@@ -310,6 +310,7 @@ struct KakeiboCategoryCard: View {
                     Text("この月の支出はまだありません").font(.subheadline).foregroundStyle(p.sub)
                 }
                 ForEach(list) { s in legendRow(s) }
+                    .padding(.trailing, 44)   // 右下の＋ボタンに金額が隠れないように
             }
         }
         .paletteCard(p, padding: 14)
