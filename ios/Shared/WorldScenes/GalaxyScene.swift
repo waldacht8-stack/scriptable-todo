@@ -131,6 +131,8 @@ struct GalaxyBackdrop: View {
     let p: Palette
     var still: Bool = false
     var compact: Bool = false
+    /// 止まった絵の時刻（ウィジェット用。entry.date から）
+    var stillT: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -152,7 +154,7 @@ struct GalaxyBackdrop: View {
                 .sceneSpin(animated, period: 140)
                 .position(x: size.width * 0.5, y: size.height * 0.33)
                 .opacity(0.9)
-                SceneClock(fps: 20, animated: animated) { t in
+                SceneClock(fps: 20, animated: animated, stillT: stillT) { t in
                     Canvas { ctx, s in
                         GalaxyScene.drawSparkle(ctx, size: s, t: t)
                     }

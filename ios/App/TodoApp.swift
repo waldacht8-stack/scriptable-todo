@@ -83,9 +83,12 @@ struct RootView: View {
                 .onOpenURL { url in openWidgetLink(url) }
                 .onReceive(NotificationCenter.default.publisher(for: .openConsultTab)) { _ in tab = 3 }
                 .onAppear { if ConsultDeepLink.consumePending() { tab = 3 } }
+                // 世界観の住人（モグラ・猫など）はタブの画面の背景にだけ出す。設定には出さない
+                .environment(\.worldCritters, true)
                 .environment(\.openAppSettings, OpenAppSettingsAction { showSettings = true })
                 .sheet(isPresented: $showSettings) {
                     SettingsView().environmentObject(store).environment(\.palette, p)
+                        .environment(\.worldCritters, false)
                 }
             }
         }

@@ -41,8 +41,26 @@ struct DayProvider: TimelineProvider {
         }
         let watch: WakeWatchFeed = .load()
         if let w = watch.nextWatchAt, w > now { times.append(w) }
+        let loadTimes: Set<Date> = Set(times)
+        // その間にも15分ごとの絵を足す（世界観の住人が少しずつ進む）。読み直さず、直前の中身を時刻だけ変えて使う
+        let quarter: TimeInterval = 15 * 60
+        if step > quarter {
+            let qslot: Double = (now.timeIntervalSinceReferenceDate / quarter).rounded(.up) * quarter
+            var q: Date = Date(timeIntervalSinceReferenceDate: qslot)
+            while q <= end {
+                times.append(q)
+                q = q.addingTimeInterval(quarter)
+            }
+        }
         let sorted: [Date] = Array(Set(times)).sorted()
-        let entries: [DayWidgetEntry] = sorted.prefix(60).map { DayWidgetEntry.load(at: $0, todos: todos) }
+        var entries: [DayWidgetEntry] = []
+        for d in sorted.prefix(72) {
+            if loadTimes.contains(d) || entries.isEmpty {
+                entries.append(DayWidgetEntry.load(at: d, todos: todos))
+            } else if let prev = entries.last {
+                entries.append(prev.moved(to: d))
+            }
+        }
         let last: Date = sorted.last ?? end
         let refresh: Date = watch.isWatching(now) ? now.addingTimeInterval(5 * 60) : last
         completion(Timeline(entries: entries, policy: .after(refresh)))
@@ -71,7 +89,7 @@ struct ReviewWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "ReviewWidget", provider: DayProvider(step: 30 * 60, span: 6 * 3600)) { entry in
             ReviewWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, done: entry.day.doneToday.count) }
         }
         .configurationDisplayName("見返し")
         .description("朝・昼・夜の見返しが済んだかと、次の見返しまでの時間。押すと見返しを始めます。")
@@ -84,7 +102,7 @@ struct SummaryWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "SummaryWidget", provider: DayProvider(step: 30 * 60, span: 6 * 3600)) { entry in
             SummaryWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, done: entry.day.doneToday.count) }
         }
         .configurationDisplayName("今日のまとめ")
         .description("次のアラームか見張りの歩数、今日の TODO の上位3件（丸で完了）、見返し、今月の支出。")
@@ -112,7 +130,7 @@ struct KakeiboWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "KakeiboWidget", provider: DayProvider(step: 60 * 60, span: 6 * 3600)) { entry in
             KakeiboWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, done: entry.day.doneToday.count) }
         }
         .configurationDisplayName("家計簿")
         .description("今月の支出と予算の残り。中サイズは支出の多い分類も出します。")
@@ -125,7 +143,7 @@ struct ConsultWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "ConsultWidget", provider: DayProvider(step: 60 * 60, span: 12 * 3600)) { entry in
             ConsultWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, done: entry.day.doneToday.count) }
         }
         .configurationDisplayName("相談")
         .description("今日の気分を5つのボタンで記録。夜に「1日1枚」がまだなら知らせます。")
@@ -138,7 +156,7 @@ struct InfoWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "InfoWidget", provider: DayProvider(step: 30 * 60, span: 6 * 3600)) { entry in
             InfoWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, done: entry.day.doneToday.count) }
         }
         .configurationDisplayName("情報")
         .description("未読の話題の見出し。中・大はスプラトゥーンのいまのステージと Steam のセールも。")

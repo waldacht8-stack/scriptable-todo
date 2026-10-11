@@ -8,15 +8,17 @@ import SwiftUI
 /// ウィジェット全体の背景
 struct WidgetSceneBackground: View {
     let p: Palette
+    /// 止まった絵の時刻（entry.date から。雲・砂粒・泡が15分ごとに少し進む）
+    var stillT: Double = 0
 
     var body: some View {
         let v: AnyView
         switch p.world {
-        case .strata: v = AnyView(StrataBackdrop(p: p, still: true, compact: true))
-        case .galaxy: v = AnyView(GalaxyBackdrop(p: p, still: true, compact: true))
-        case .sky: v = AnyView(SkyBackdrop(p: p, still: true, compact: true))
+        case .strata: v = AnyView(StrataBackdrop(p: p, still: true, compact: true, stillT: stillT))
+        case .galaxy: v = AnyView(GalaxyBackdrop(p: p, still: true, compact: true, stillT: stillT))
+        case .sky: v = AnyView(SkyBackdrop(p: p, still: true, compact: true, stillT: stillT))
         case .mist: v = AnyView(MistBackdrop(p: p, still: true, compact: true))
-        case .deepsea: v = AnyView(DeepSeaBackdrop(p: p, still: true, compact: true))
+        case .deepsea: v = AnyView(DeepSeaBackdrop(p: p, still: true, compact: true, stillT: stillT))
         default: v = AnyView(p.background[0])
         }
         return v

@@ -31,6 +31,8 @@ struct SceneRandom {
 struct SceneClock<Content: View>: View {
     let fps: Double
     let animated: Bool
+    /// 止まった絵の時刻（ウィジェットは entry.date から決めて、15分ごとに雲や砂粒を少し進める）
+    var stillT: Double = 0
     @ViewBuilder let content: (Double) -> Content
 
     var body: some View {
@@ -39,7 +41,7 @@ struct SceneClock<Content: View>: View {
                 content(ctx.date.timeIntervalSinceReferenceDate)
             }
         } else {
-            content(0)
+            content(stillT)
         }
     }
 }

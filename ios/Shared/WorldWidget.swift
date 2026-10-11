@@ -18,15 +18,31 @@ fileprivate func wwx(_ v: UInt32, _ a: Double = 1) -> Color {
 /// ネオブルータルは平らな色に太い黒枠、クレイはパステルのふくらみ、スイスは白地に罫線、ベントはタイルの格子
 struct WidgetWorldBackground: View {
     let p: Palette
+    /// いつの絵か（タイムラインの entry.date。住人の位置・雲の流れが決まる）
+    var date: Date = .now
+    /// 今日完了した数（ネオブルータルのシール。nil なら TODO を読んで数える）
+    var done: Int? = nil
+    /// 見本の画面用：時刻の代わりにこの位相（0〜1）で描く
+    var phase: Double? = nil
 
     var body: some View {
+        ZStack {
+            scenery
+            if WorldMotion.hasCritters(p.world) {
+                WidgetWorldCritters(p: p, date: date, done: done, phase: phase)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var scenery: some View {
         let colors: [Color] = p.background.count > 1 ? p.background : [p.background[0], p.background[0]]
         let base = LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
         switch p.world {
         case .none:
             base
         case .strata, .galaxy, .sky, .mist, .deepsea:
-            WidgetSceneBackground(p: p)
+            WidgetSceneBackground(p: p, stillT: phase.map { 1 + $0 * 2400 } ?? WorldMotion.sceneTime(date))
         case .hinata:
             ZStack {
                 base

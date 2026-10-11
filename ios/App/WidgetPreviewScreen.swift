@@ -25,6 +25,7 @@ struct WidgetPreviewScreen: View {
         case "lock4": kind = "ロック画面・時間帯"
         case "tabs": kind = "家計簿・相談・情報"
         case "tabslock": kind = "情報（大）・ロック画面"
+        case "motion": kind = "動き"
         case "sunmoon": kind = "太陽と月・\(JP.time(Self.previewNow))"
         default: kind = "小・中"
         }
@@ -52,6 +53,7 @@ struct WidgetPreviewScreen: View {
                 case "sunmoon": sunMoonPage
                 case "tabs": tabsPage
                 case "tabslock": tabsLockPage
+                case "motion": motionPage
                 default: smallMediumPage
                 }
             }
@@ -179,12 +181,13 @@ struct WidgetPreviewScreen: View {
     }
 
     /// ウィジェットの枠（余白 16・角丸 22。背景は containerBackground と同じもの）
-    private func frame<V: View>(_ view: V, _ size: CGSize, scale: CGFloat, padded: Bool = true) -> some View {
+    private func frame<V: View>(_ view: V, _ size: CGSize, scale: CGFloat, padded: Bool = true,
+                                phase: Double? = nil, done: Int? = nil) -> some View {
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
         return view
             .padding(padded ? 16 : 0)
             .frame(width: size.width, height: size.height)
-            .background(WidgetPaletteBackground(p: p))
+            .background(WidgetPaletteBackground(p: p, done: done, phase: phase))
             .containerShape(shape)
             .clipShape(shape)
             .scaleEffect(scale)
@@ -577,5 +580,31 @@ extension WidgetPreviewScreen {
         .foregroundStyle(.primary)
         .background(panel, in: shape)
         .environment(\.colorScheme, .dark)
+    }
+}
+
+// MARK: - 世界観の動き（-widgetsize motion）：15分ごとの絵で住人が進む様子を、3つの位相で並べる
+
+extension WidgetPreviewScreen {
+    var motionPage: some View {
+        let items: [TodoItem] = Self.sampleItems()
+        let focus: TodoWidgetData = Self.data(items, layout: .focus, palette: p)
+        let board: TodoWidgetData = Self.data(items, layout: .board, palette: p)
+        let phases: [Double] = [0.3, 0.5, 0.7]
+        let dones: [Int] = [1, 3, 5]
+        let night: WakeEntry = wakeEntry(at: Self.today(22, 40), snap: Self.wakeNight(alarm: true))
+        return VStack(alignment: .leading, spacing: 6) {
+            caption("15分ごとの絵（7時・12時・17時の位置）")
+            HStack(spacing: 6) {
+                ForEach(0..<3, id: \.self) { i in
+                    frame(TodoWidgetView(data: focus, familyOverride: .systemSmall), Self.small, scale: 0.53,
+                          phase: phases[i], done: dones[i])
+                }
+            }
+            caption("中：グループ（12時の位置）")
+            frame(TodoWidgetView(data: board, familyOverride: .systemMedium), Self.medium, scale: 0.8, phase: 0.5, done: 3)
+            caption("起床（夜）：「いま寝ると」はタイマーで進む")
+            frame(WakeWidgetView(entry: night, familyOverride: .systemMedium), Self.medium, scale: 0.8, phase: 0.85, done: 3)
+        }
     }
 }

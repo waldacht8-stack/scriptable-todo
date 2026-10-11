@@ -39,11 +39,22 @@ struct TodoProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TodoEntry>) -> Void) {
-        // 期限切れへの切り替わりを反映するため、次の期限の直後にも描き直す
-        let data = TodoWidgetData.load()
-        let next = data.next?.due.map { $0.addingTimeInterval(1) }
-        let refresh = min(next ?? .distantFuture, .now.addingTimeInterval(15 * 60))
-        completion(Timeline(entries: [TodoEntry(date: .now, data: data)], policy: .after(refresh)))
+        // 15分ごとの絵を2時間ぶん先に用意する（読み直しではなく entry で。世界観の住人が少しずつ進む）。
+        // 期限切れへの切り替わりを反映するため、その間の期限の直後にも1枚足す
+        let now = Date()
+        let data = TodoWidgetData.load(now: now)
+        let quarter: TimeInterval = 15 * 60
+        let slot: Double = (now.timeIntervalSinceReferenceDate / quarter).rounded(.up) * quarter
+        let first: Date = Date(timeIntervalSinceReferenceDate: slot)
+        var times: [Date] = [now]
+        for i in 0..<8 { times.append(first.addingTimeInterval(Double(i) * quarter)) }
+        let end: Date = times.last ?? now.addingTimeInterval(2 * 3600)
+        for item in data.items {
+            if let due = item.due, due > now, due < end { times.append(due.addingTimeInterval(1)) }
+        }
+        let sorted: [Date] = Array(Set(times)).sorted()
+        let entries: [TodoEntry] = sorted.prefix(24).map { TodoEntry(date: $0, data: data.at($0)) }
+        completion(Timeline(entries: entries, policy: .after(end)))
     }
 }
 
@@ -51,7 +62,9 @@ struct TodoWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "TodoWidget", provider: TodoProvider()) { entry in
             TodoWidgetView(data: entry.data)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.data.palette) }
+                .containerBackground(for: .widget) {
+                    WidgetPaletteBackground(p: entry.data.palette, date: entry.date, done: entry.data.doneToday)
+                }
         }
         .configurationDisplayName("TODO")
         .description("期限が近いTODO。アプリと同じ構成・色合いで表示し、ボタンで完了にできます。")

@@ -172,6 +172,8 @@ struct SkyBackdrop: View {
     let p: Palette
     var still: Bool = false
     var compact: Bool = false
+    /// 止まった絵の時刻（ウィジェット用。entry.date から）
+    var stillT: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -188,7 +190,7 @@ struct SkyBackdrop: View {
                     let veil: Double = (mood.clouds - 0.5) * (mood.rain ? 0.7 : 0.5)
                     sceneColor(0x9AA6B2, veil)
                 }
-                SceneClock(fps: 15, animated: animated) { t in
+                SceneClock(fps: 15, animated: animated, stillT: stillT) { t in
                     Canvas { ctx, s in
                         SkyScene.draw(ctx, size: s, t: t, phase: phase, mood: mood, compact: compact)
                     }
