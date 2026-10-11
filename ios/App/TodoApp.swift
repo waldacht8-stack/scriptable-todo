@@ -80,6 +80,7 @@ struct RootView: View {
                     InfoRootView().tabItem { Label("情報", systemImage: "newspaper") }.tag(4)
                 }
                 .kakeiboOpenURL { tab = 2 }
+                .onOpenURL { url in openWidgetLink(url) }
                 .onReceive(NotificationCenter.default.publisher(for: .openConsultTab)) { _ in tab = 3 }
                 .onAppear { if ConsultDeepLink.consumePending() { tab = 3 } }
                 .environment(\.openAppSettings, OpenAppSettingsAction { showSettings = true })
@@ -96,6 +97,30 @@ struct RootView: View {
         .preferredColorScheme(p.scheme)
         .splatoonDemoLaunch()   // -splatdemo / -splatcard でスプラトゥーンを開く（スクリーンショット用）
         .steamDemoLaunch()      // -steamdemo で Steam を開く（スクリーンショット用）
+    }
+
+    /// ウィジェットのリンク（hiyori://todo|wake|kakeibo|consult|info|review）でタブを開く。
+    /// ファイルの URL（家計簿の CSV・PDF）は .kakeiboOpenURL が受け取るので、ここでは hiyori:// だけを見る
+    private func openWidgetLink(_ url: URL) {
+        guard url.scheme?.lowercased() == "hiyori" else {
+            // 念のため：同じ URL を受け取っても家計簿の側で1回にまとめる
+            if KakeiboInbox.shared.receive(url) { tab = 2 }
+            return
+        }
+        switch url.host?.lowercased() ?? "" {
+        case "todo": tab = 0
+        case "wake": tab = 1
+        case "kakeibo": tab = 2
+        case "consult": tab = 3
+        case "info": tab = 4
+        case "review":
+            tab = 0
+            let now = Date()
+            let due: ReviewSlot? = ReviewState.load(now: now).dueSlot
+            let slot: ReviewSlot = due ?? ReviewLogic.slot(at: now, settings: ReviewStore.settings())
+            ReviewPresenter.shared.request = slot
+        default: break
+        }
     }
 }
 

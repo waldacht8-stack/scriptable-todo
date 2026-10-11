@@ -49,6 +49,11 @@ targets:
             LSHandlerRank: Alternate
             LSItemContentTypes:
               - com.adobe.pdf
+        # ウィジェットから開く（hiyori://todo|wake|kakeibo|consult|info|review）
+        CFBundleURLTypes:
+          - CFBundleURLName: com.todoapp.TodoApp.widget
+            CFBundleURLSchemes:
+              - hiyori
     entitlements:
       path: App/TodoApp.entitlements
       properties:

@@ -25,6 +25,7 @@ struct ConsultWidgetFeed: Codable, Equatable {
     var todayMood: Int?          // 1〜5（未記録は nil）
     var dayCardWritten: Bool     // 今日の「1日1枚」を書いたか
     var streakDays: Int          // 「1日1枚」を続けて書いた日数（今日、まだなら昨日から数える）
+    var day: String? = nil       // この状態の日（yyyy-MM-dd）。ウィジェットは今日でなければ未記録として扱う
 }
 
 enum ConsultWidgetSync {
@@ -59,7 +60,8 @@ enum ConsultWidgetSync {
         }
         return ConsultWidgetFeed(todayMood: MoodData.today(now: now)?.score,
                                  dayCardWritten: days.contains(WakeLogic.key(now)),
-                                 streakDays: streak(days: days, now: now))
+                                 streakDays: streak(days: days, now: now),
+                                 day: WakeLogic.key(now))
     }
 
     /// 書き直して、ウィジェットを更新する（-demo のときは書かない）
