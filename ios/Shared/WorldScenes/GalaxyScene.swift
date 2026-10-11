@@ -10,6 +10,7 @@ enum GalaxyScene {
     static let tints: [Color] = [Color.white, sceneColor(0xDCE4FF), sceneColor(0xB9A8FF), sceneColor(0xFFC2E6), sceneColor(0x9FC4FF)]
 
     /// 渦の腕の星（中心を 0.5,0.5 とした比の座標）
+    @_optimize(none)
     static func armStars(count: Int) -> [Star] {
         var rnd = SceneRandom(2026)
         var out: [Star] = []
@@ -49,6 +50,7 @@ enum GalaxyScene {
     }()
 
     /// 腕（止まった絵）。size は正方形
+    @_optimize(none)
     static func drawArms(_ ctx: GraphicsContext, size: CGSize, compact: Bool) {
         let w: Double = Double(size.width)
         let center = CGPoint(x: w / 2, y: w / 2)
@@ -83,6 +85,7 @@ enum GalaxyScene {
     }
 
     /// またたきと流れ星（t は秒。t = 0 は止まった絵）
+    @_optimize(none)
     static func drawSparkle(_ ctx: GraphicsContext, size: CGSize, t: Double) {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)

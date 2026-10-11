@@ -119,6 +119,7 @@ enum SkyScene {
     }()
 
     /// 1つの雲（ふちのやわらかい楕円を重ねる。ぼかしは使わない）
+    @_optimize(none)
     static func drawCloud(_ ctx: GraphicsContext, at c: CGPoint, width: Double, color: Color, seed: UInt64) {
         var rnd = SceneRandom(seed)
         let puffs: Int = 5
@@ -137,6 +138,7 @@ enum SkyScene {
         }
     }
 
+    @_optimize(none)
     static func draw(_ ctx: GraphicsContext, size: CGSize, t: Double, phase: SkyPhase, mood: SkyWeather.Mood, compact: Bool) {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)

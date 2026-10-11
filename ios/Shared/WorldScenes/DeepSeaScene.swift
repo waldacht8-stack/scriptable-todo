@@ -36,6 +36,7 @@ enum DeepSeaScene {
     }()
 
     /// 水面の光の網（上ほど明るく、下へ消える）
+    @_optimize(none)
     static func drawCaustics(_ ctx: GraphicsContext, size: CGSize, t: Double, compact: Bool) {
         let w: Double = Double(size.width)
         let depth: Double = Double(size.height) * (compact ? 0.4 : 0.26)
@@ -80,6 +81,7 @@ enum DeepSeaScene {
     }
 
     /// マリンスノー・発光の粒・クラゲ
+    @_optimize(none)
     static func drawLife(_ ctx: GraphicsContext, size: CGSize, t: Double, compact: Bool) {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
@@ -109,6 +111,7 @@ enum DeepSeaScene {
     static func bob(_ t: Double, _ delay: Double) -> Double { t == 0 ? 0 : sin((t + delay) * 2 * .pi / 9) * 9 }
 
     /// クラゲ（傘と触手。淡く光る）
+    @_optimize(none)
     static func drawJelly(_ ctx: GraphicsContext, at c: CGPoint, size: Double, tint: Color, t: Double) {
         let glow: Double = t == 0 ? 0.6 : 0.4 + 0.45 * (0.5 + 0.5 * sin(t * 2 * .pi / 5))
         let bell = CGRect(x: c.x - size / 2, y: c.y - size * 0.32, width: size, height: size * 0.64)

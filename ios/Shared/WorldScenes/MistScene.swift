@@ -16,6 +16,7 @@ enum MistScene {
     static let horizon: Double = 0.47
 
     /// 遠くの山・木立・湖・両脇の針葉樹（止まった絵）
+    @_optimize(none)
     static func drawLand(_ ctx: GraphicsContext, size: CGSize, compact: Bool) {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
@@ -77,6 +78,7 @@ enum MistScene {
         }
     }
 
+    @_optimize(none)
     static func drawConifer(_ ctx: GraphicsContext, baseX: Double, baseY: Double, height: Double, width: Double) {
         var p = Path()
         let tiers: Int = 4

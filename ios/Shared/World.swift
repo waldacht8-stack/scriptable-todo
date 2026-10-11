@@ -195,16 +195,8 @@ struct WorldBackground: View {
                     }
                 }
             }
-        case .strata:
-            StrataBackdrop(p: p)
-        case .galaxy:
-            GalaxyBackdrop(p: p)
-        case .sky:
-            SkyBackdrop(p: p)
-        case .mist:
-            MistBackdrop(p: p)
-        case .deepsea:
-            DeepSeaBackdrop(p: p)
+        case .strata, .galaxy, .sky, .mist, .deepsea:
+            SceneBackdrop(p: p)
         default:
             base
         }
@@ -274,16 +266,8 @@ struct WorldCardSurface: View {
                 .shadow(color: wx(0x784614, 0.18), radius: 18, y: 10)
         case .bento:
             shape.fill(p.card)
-        case .strata:
-            StrataSlab(p: p)
-        case .galaxy:
-            GalaxyCard(p: p)
-        case .sky:
-            SkyCloudCard(p: p)
-        case .mist:
-            MistCard(p: p)
-        case .deepsea:
-            DeepSeaGlass(p: p)
+        case .strata, .galaxy, .sky, .mist, .deepsea:
+            SceneCardSurface(p: p)
         case .none:
             let shadow: Color = .black.opacity(p.scheme == .dark || p.outline != nil ? 0 : 0.06)
             shape.fill(p.card).shadow(color: shadow, radius: 12, y: 4)
@@ -294,23 +278,62 @@ struct WorldCardSurface: View {
 
 // MARK: - 世界観ごとの大きな数字の光（BigCount が使う）
 
-extension View {
-    /// 大きな数字に世界観の光をのせる。銀河は星のように光り、深海は冷たく光る。地層は刻んだような白い縁
-    @ViewBuilder
-    func worldNumberGlow(_ p: Palette) -> some View {
-        switch p.world {
-        case .galaxy:
-            self.shadow(color: wx(0xFFE4B8, 0.75), radius: 6).shadow(color: wx(0x8A6BFF, 0.65), radius: 18)
-        case .deepsea:
-            self.shadow(color: wx(0x7DF9E6, 0.5), radius: 10)
-        case .strata:
-            self.shadow(color: Color.white.opacity(0.6), radius: 0, x: 0, y: 1)
-        case .sky:
-            self.shadow(color: Color.white.opacity(p.scheme == .dark ? 0.25 : 0.55), radius: 10)
-        case .mist:
-            self.shadow(color: wx(0xFFE2BC, 0.7), radius: 12)
-        default:
-            self
+extension World {
+    /// 大きな数字の光（内側・外側の2つの影）。銀河は星のように光り、深海は冷たく光る。地層は刻んだような白い縁
+    func numberGlow(_ p: Palette) -> (inner: Color, innerRadius: CGFloat, innerY: CGFloat, outer: Color, outerRadius: CGFloat) {
+        switch self {
+        case .galaxy: return (wx(0xFFE4B8, 0.75), 6, 0, wx(0x8A6BFF, 0.65), 18)
+        case .deepsea: return (wx(0x7DF9E6, 0.5), 10, 0, .clear, 0)
+        case .strata: return (Color.white.opacity(0.6), 0, 1, .clear, 0)
+        case .sky: return (Color.white.opacity(p.scheme == .dark ? 0.25 : 0.55), 10, 0, .clear, 0)
+        case .mist: return (wx(0xFFE2BC, 0.7), 12, 0, .clear, 0)
+        default: return (.clear, 0, 0, .clear, 0)
         }
+    }
+}
+
+extension View {
+    /// 大きな数字に世界観の光をのせる（ほかの世界観では透明な影なので見た目は変わらない）
+    func worldNumberGlow(_ p: Palette) -> some View {
+        let g = p.world.numberGlow(p)
+        return self
+            .shadow(color: g.inner, radius: g.innerRadius, x: 0, y: g.innerY)
+            .shadow(color: g.outer, radius: g.outerRadius)
+    }
+}
+
+/// 新しい世界観（地層・銀河・空・霧・深海）の背景。型を消して1つにまとめる（Release の最適化が重くならないように）
+struct SceneBackdrop: View {
+    let p: Palette
+
+    var body: some View {
+        let v: AnyView
+        switch p.world {
+        case .strata: v = AnyView(StrataBackdrop(p: p))
+        case .galaxy: v = AnyView(GalaxyBackdrop(p: p))
+        case .sky: v = AnyView(SkyBackdrop(p: p))
+        case .mist: v = AnyView(MistBackdrop(p: p))
+        case .deepsea: v = AnyView(DeepSeaBackdrop(p: p))
+        default: v = AnyView(p.background[0])
+        }
+        return v
+    }
+}
+
+/// 新しい世界観のカードの面（型を消して1つにまとめる）
+struct SceneCardSurface: View {
+    let p: Palette
+
+    var body: some View {
+        let v: AnyView
+        switch p.world {
+        case .strata: v = AnyView(StrataSlab(p: p))
+        case .galaxy: v = AnyView(GalaxyCard(p: p))
+        case .sky: v = AnyView(SkyCloudCard(p: p))
+        case .mist: v = AnyView(MistCard(p: p))
+        case .deepsea: v = AnyView(DeepSeaGlass(p: p))
+        default: v = AnyView(RoundedRectangle(cornerRadius: p.radius, style: .continuous).fill(p.card))
+        }
+        return v
     }
 }

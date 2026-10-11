@@ -59,6 +59,7 @@ enum StrataScene {
         return a + c + settle
     }
 
+    @_optimize(none)
     static func draw(_ ctx: GraphicsContext, size: CGSize, t: Double, compact: Bool) {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
