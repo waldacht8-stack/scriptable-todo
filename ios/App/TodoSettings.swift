@@ -1,7 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 設定画面の TODO まわり（TODO・通知・カレンダー・データ）。部品は Settings.swift のもの
+/// 設定画面の TODO まわり（通知・カレンダー・データ）。部品は Settings.swift のもの
+/// 以前の「TODO」の見出し（期限前の通知）は「通知」にまとめた。-settingsSection todo は通知へ送る
 struct TodoSettingsSections: View {
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
@@ -11,8 +12,7 @@ struct TodoSettingsSections: View {
     @State private var message: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 30 * p.density.scale) {
-            todoSection.id("todo")
+        VStack(alignment: .leading, spacing: 28 * p.density.scale) {
             notifySection.id("notify")
             calendarSection.id("calendar")
             dataSection.id("data")
@@ -39,14 +39,21 @@ struct TodoSettingsSections: View {
         }
     }
 
-    // MARK: TODO
+    // MARK: 通知（TODO の期限・朝・夜）
 
-    private var todoSection: some View {
-        SettingsSection("TODO", icon: "checklist", footer: "期限のあるTODOを、期限の少し前に通知でお知らせします。") {
+    private var notifySection: some View {
+        SettingsSection("通知", icon: "bell.badge.fill",
+                        footer: "通知を長押しすると、アプリを開かずに「完了」「10分後に再通知」を選べます。") {
             SettingsCard {
-                MenuRow(title: "期限前の通知", icon: "bell.fill",
+                MenuRow(title: "TODO の期限前", icon: "checklist",
                         selection: Binding(get: { s.remindMinutes ?? -1 }, set: { s.remindMinutes = $0 < 0 ? nil : $0; save() }),
                         options: remindOptions)
+                RowDivider()
+                hourRow("朝に今日の一覧", icon: "sunrise.fill",
+                        value: Binding(get: { s.morningHour }, set: { s.morningHour = $0; save() }), hours: Array(4...11))
+                RowDivider()
+                hourRow("夜に残りのTODO", icon: "moon.stars.fill",
+                        value: Binding(get: { s.eveningHour }, set: { s.eveningHour = $0; save() }), hours: Array(17...23))
                 // ここに TODO の表示の設定（完了したTODOの表示など）を足す
             }
         }
@@ -60,21 +67,6 @@ struct TodoSettingsSections: View {
         return list
     }
 
-    // MARK: 通知
-
-    private var notifySection: some View {
-        SettingsSection("通知", icon: "bell.badge.fill",
-                        footer: "通知を長押しすると「完了」「10分後に再通知」を選べます。アプリを開かずに操作できます。") {
-            SettingsCard {
-                hourRow("朝に今日の一覧", icon: "sunrise.fill",
-                        value: Binding(get: { s.morningHour }, set: { s.morningHour = $0; save() }), hours: Array(4...11))
-                RowDivider()
-                hourRow("夜に残りのTODO", icon: "moon.stars.fill",
-                        value: Binding(get: { s.eveningHour }, set: { s.eveningHour = $0; save() }), hours: Array(17...23))
-            }
-        }
-    }
-
     private func hourRow(_ title: String, icon: String, value: Binding<Int?>, hours: [Int]) -> some View {
         var options: [(value: Int, label: String)] = [(value: -1, label: "通知しない")]
         for h in hours { options.append((value: h, label: "\(h):00")) }
@@ -86,7 +78,7 @@ struct TodoSettingsSections: View {
 
     private var calendarSection: some View {
         SettingsSection("カレンダー", icon: "calendar",
-                        footer: "iPhoneのカレンダーの予定を、TODOとして取り込みます。予定を変更・削除すると、まだ完了していないTODOにも反映されます。") {
+                        footer: "iPhoneのカレンダーの予定をTODOとして取り込みます。予定の変更・削除は、未完了のTODOにも反映されます。") {
             SettingsCard {
                 ToggleRow(title: "カレンダーから取り込む", icon: "square.and.arrow.down.fill",
                           isOn: Binding(get: { s.calendarImport }, set: { s.calendarImport = $0; save() }))
@@ -128,28 +120,41 @@ struct TodoSettingsSections: View {
 
     private var dataSection: some View {
         SettingsSection("データ", icon: "externaldrive.fill",
-                        footer: "毎日自動でバックアップします（14日分）。保存先は「ファイル」アプリ →「このiPhone内」→「日和」→「バックアップ」です。Scriptable版のデータは、iCloud Drive の「Scriptable」→「todo-data」→「todo-data.json」を選ぶと取り込めます。") {
+                        footer: "毎日自動で14日分を保存します（「ファイル」→「このiPhone内」→「日和」→「バックアップ」）。Scriptable版のデータは「バックアップから戻す」で「todo-data.json」を選ぶと取り込めます。") {
             SettingsCard {
-                ActionRow(title: "今すぐバックアップ", icon: "arrow.clockwise.icloud.fill") {
-                    guard Backup.write() != nil else { message = "バックアップできませんでした"; return }
-                    var x = SettingsData.load()
-                    x.lastBackup = .now
-                    SettingsData.save(x)
-                    s = x
-                    message = "バックアップしました"
-                }
-                if let last = s.lastBackup {
-                    RowDivider()
-                    SettingsRow(title: "前回のバックアップ", icon: "clock.fill") {
-                        Text("\(JP.date(last)) \(JP.time(last))").font(.subheadline).foregroundStyle(p.sub)
+                Button(action: backupNow) {
+                    SettingsRow(title: "今すぐバックアップ", icon: "arrow.clockwise.icloud.fill") {
+                        HStack(spacing: 6) {
+                            if let last = s.lastBackup {
+                                Text("前回 \(Self.monthDay(last)) \(JP.time(last))")
+                                    .font(.caption)
+                                    .foregroundStyle(p.sub)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(p.sub)
+                        }
                     }
                 }
+                .buttonStyle(.plain)
                 RowDivider()
                 ActionRow(title: "バックアップから戻す", icon: "clock.arrow.circlepath") { importing = true }
-                RowDivider()
-                ActionRow(title: "Scriptable版から取り込む", icon: "square.and.arrow.down.on.square.fill") { importing = true }
             }
         }
+    }
+
+    private static func monthDay(_ d: Date) -> String {
+        let c = Calendar.current.dateComponents([.month, .day], from: d)
+        return "\(c.month ?? 0)/\(c.day ?? 0)"
+    }
+
+    private func backupNow() {
+        guard Backup.write() != nil else { message = "バックアップできませんでした"; return }
+        var x = SettingsData.load()
+        x.lastBackup = .now
+        SettingsData.save(x)
+        s = x
+        message = "バックアップしました"
     }
 
     /// TODO の項目だけを書き戻す（デザインなど他の画面で変えた設定を古い値で上書きしない）
