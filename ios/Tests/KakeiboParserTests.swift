@@ -266,6 +266,36 @@ final class KakeiboParserTests: TokyoTestCase {
         XCTAssertEqual(s.progress, 0.3, accuracy: 0.0001)
     }
 
+    func testSummaryFileShape() throws {
+        func e(_ cat: String, _ a: Int) -> KakeiboEntry {
+            KakeiboEntry(date: T.d(2026, 10, 5), amount: a, category: cat, memo: "見本", source: .manual, dedupeKey: "")
+        }
+        let list = [e("食費", 3000), e("交通", 1000), e("日用品", 2000), e("娯楽", 500)]
+        let s = KakeiboSummary.make(entries: list, budget: 10_000, month: T.now, now: T.now)
+        let obj = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(s)) as? [String: Any])
+        XCTAssertEqual(Set(obj.keys), ["month", "spent", "budget", "remaining", "topCategories"])
+        XCTAssertEqual(obj["month"] as? String, "2026-10")
+        XCTAssertEqual(obj["spent"] as? Int, 6500)
+        XCTAssertEqual(obj["budget"] as? Int, 10_000)
+        XCTAssertEqual(obj["remaining"] as? Int, 3500)
+        let top = try XCTUnwrap(obj["topCategories"] as? [[String: Any]])
+        XCTAssertEqual(top.count, 3)
+        XCTAssertEqual(top.first?["name"] as? String, "食費")
+        XCTAssertEqual(top.first?["amount"] as? Int, 3000)
+
+        // 予算なしは null
+        let none = KakeiboSummary.make(entries: list, budget: 0, month: T.now, now: T.now)
+        let obj2 = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(none)) as? [String: Any])
+        XCTAssertTrue(obj2["budget"] is NSNull)
+        XCTAssertTrue(obj2["remaining"] is NSNull)
+
+        // 読み戻せる
+        let back = try JSONDecoder().decode(KakeiboSummary.self, from: JSONEncoder().encode(s))
+        XCTAssertEqual(back.spent, 6500)
+        XCTAssertEqual(back.budget, 10_000)
+        XCTAssertEqual(back.topCategories.map(\.name), ["食費", "日用品", "交通"])
+    }
+
     func testDemoSampleCSVParses() throws {
         let t = try XCTUnwrap(KakeiboCSV.table(KakeiboDemo.sampleCSV(now: T.now)))
         XCTAssertEqual(t.headers, KakeiboDemo.sampleHeaders)

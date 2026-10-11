@@ -438,7 +438,10 @@ struct KakeiboImportView: View {
             case "pick": step = 1
             case "jcb": institution = .jcb
             case "mufg": institution = .mufg
-            case "help": showHelp = true
+            case "help":
+                // 取り込みのシートが出きってから重ねる
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                showHelp = true
             case "mapping", "preview": await loadSample()
             case "done":
                 await loadSample()

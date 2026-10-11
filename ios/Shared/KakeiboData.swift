@@ -177,12 +177,21 @@ enum KakeiboData {
 
     static func saveEntries(_ list: [KakeiboEntry]) {
         write(list.sorted { $0.date > $1.date }, entriesFile)
-        WidgetCenter.shared.reloadAllTimelines()
+        writeSummary(entries: list, budget: settings().budget)
     }
 
     static func settings() -> KakeiboSettings { read(KakeiboSettings.self, settingsFile) ?? KakeiboSettings() }
 
-    static func saveSettings(_ s: KakeiboSettings) { write(s, settingsFile) }
+    static func saveSettings(_ s: KakeiboSettings) {
+        write(s, settingsFile)
+        writeSummary(entries: entries(), budget: s.budget)
+    }
+
+    /// ウィジェット用の今月のまとめ（kakeibo-summary.json）を書き、ウィジェットを更新する
+    static func writeSummary(entries list: [KakeiboEntry], budget: Int, now: Date = .now) {
+        write(KakeiboSummary.make(entries: list, budget: budget, month: now, now: now), KakeiboSummary.file)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
 
     /// 読んで、変えて、書く（アプリとショートカットが同時に書いても、直前の中身から変える）
     @discardableResult
@@ -317,18 +326,24 @@ enum KakeiboMonth {
 
 // MARK: - ウィジェット向けの読み出し用（今月の支出・予算・残り）
 
-/// 家計簿の今月のまとめ（ウィジェットはこれを読むだけにする）
+/// 家計簿の今月のまとめ。ウィジェットは共有フォルダの kakeibo-summary.json を読むだけにする。
+/// ファイルの形（名前は固定）：
+/// { "month": "2026-10", "spent": 12345, "budget": 50000, "remaining": 37655,
+///   "topCategories": [ { "name": "食費", "amount": 4938 }, … 最大3つ ] }
+/// budget・remaining は予算なし（0）のとき null。アプリの中だけで使う項目（収入・残り日数など）はファイルに書かない
 struct KakeiboSummary: Codable, Hashable {
+    static let file = "kakeibo-summary.json"
+
     var month: Date             // 月の初日
-    var spent: Int              // 今月の支出（円）
-    var income: Int             // 今月の収入（円）
-    var budget: Int             // 1か月の予算（円）
-    var daysLeft: Int           // 月末まであと何日（今日を含む）
-    var pendingCount: Int       // 金額の入力待ち（Apple Pay で金額が届かなかったもの）
-    var topCategories: [Slice]  // 支出の多い分類（多い順、最大4つ）
+    var spent: Int              // その月の支出（円、プラス）
+    var income: Int = 0         // その月の収入（円。ファイルには書かない）
+    var budget: Int             // 1か月の予算（円。0 は予算なし）
+    var daysLeft: Int = 0       // 月末まであと何日（今日を含む。ファイルには書かない）
+    var pendingCount: Int = 0   // 金額の入力待ち（ファイルには書かない）
+    var topCategories: [Slice]  // 支出の多い分類（多い順、最大3つ）
 
     struct Slice: Codable, Hashable {
-        var category: String
+        var name: String
         var amount: Int
     }
 
@@ -337,9 +352,59 @@ struct KakeiboSummary: Codable, Hashable {
     var progress: Double { budget > 0 ? min(1, Double(spent) / Double(budget)) : 0 }
     var isOver: Bool { budget > 0 && spent > budget }
 
-    /// 共有フォルダのファイルから今月のまとめを作る
+    init(month: Date, spent: Int, income: Int = 0, budget: Int, daysLeft: Int = 0, pendingCount: Int = 0, topCategories: [Slice]) {
+        self.month = month
+        self.spent = spent
+        self.income = income
+        self.budget = budget
+        self.daysLeft = daysLeft
+        self.pendingCount = pendingCount
+        self.topCategories = topCategories
+    }
+
+    // MARK: ファイルの形（yyyy-MM の月、予算なしは null）
+
+    enum CodingKeys: String, CodingKey {
+        case month, spent, budget, remaining, topCategories
+    }
+
+    private static let monthFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM"
+        return f
+    }()
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(Self.monthFormat.string(from: month), forKey: .month)
+        try c.encode(spent, forKey: .spent)
+        let b: Int? = budget > 0 ? budget : nil
+        try c.encode(b, forKey: .budget)
+        let r: Int? = budget > 0 ? remaining : nil
+        try c.encode(r, forKey: .remaining)
+        try c.encode(Array(topCategories.prefix(3)), forKey: .topCategories)
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let m = try c.decode(String.self, forKey: .month)
+        month = Self.monthFormat.date(from: m) ?? KakeiboMonth.start(.now)
+        spent = try c.decode(Int.self, forKey: .spent)
+        budget = try c.decodeIfPresent(Int.self, forKey: .budget) ?? 0
+        topCategories = try c.decodeIfPresent([Slice].self, forKey: .topCategories) ?? []
+    }
+
+    /// 共有フォルダのファイルから今月のまとめを作る（アプリ用。ウィジェットは read() で書かれたものを読む）
     static func current(now: Date = .now) -> KakeiboSummary {
         make(entries: KakeiboData.entries(), budget: KakeiboData.settings().budget, month: now, now: now)
+    }
+
+    /// kakeibo-summary.json を読む（なければ nil）
+    static func read() -> KakeiboSummary? {
+        guard let data = try? Data(contentsOf: SharedStore.url(file)) else { return nil }
+        return try? JSONDecoder().decode(KakeiboSummary.self, from: data)
     }
 
     static func make(entries: [KakeiboEntry], budget: Int, month: Date, now: Date = .now) -> KakeiboSummary {
@@ -350,7 +415,7 @@ struct KakeiboSummary: Codable, Hashable {
         let income = counted.filter { $0.kind == .income }.reduce(0) { $0 + $1.amount }
         var byCat: [String: Int] = [:]
         for e in counted where e.kind == .expense { byCat[e.category, default: 0] += e.amount }
-        let top = byCat.sorted { $0.value > $1.value }.prefix(4).map { Slice(category: $0.key, amount: $0.value) }
+        let top: [Slice] = byCat.sorted { $0.value > $1.value }.prefix(3).map { Slice(name: $0.key, amount: $0.value) }
         let cal = Calendar.current
         let days = cal.range(of: .day, in: .month, for: m)?.count ?? 30
         let left: Int
@@ -360,12 +425,11 @@ struct KakeiboSummary: Codable, Hashable {
             left = now < m ? days : 0
         }
         return KakeiboSummary(month: m, spent: spent, income: income, budget: budget, daysLeft: left,
-                              pendingCount: inMonth.filter(\.isPending).count, topCategories: Array(top))
+                              pendingCount: inMonth.filter(\.isPending).count, topCategories: top)
     }
 
-    static let placeholder = KakeiboSummary(month: KakeiboMonth.start(.now), spent: 12_345, income: 0, budget: 50_000,
-                                            daysLeft: 20, pendingCount: 0,
-                                            topCategories: [Slice(category: "食費", amount: 4_938), Slice(category: "日用品", amount: 3_086)])
+    static let placeholder = KakeiboSummary(month: KakeiboMonth.start(.now), spent: 12_345, budget: 50_000, daysLeft: 20,
+                                            topCategories: [Slice(name: "食費", amount: 4_938), Slice(name: "日用品", amount: 3_086)])
 }
 
 extension Notification.Name {
