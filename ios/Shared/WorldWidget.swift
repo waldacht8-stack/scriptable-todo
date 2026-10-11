@@ -81,7 +81,7 @@ private struct SwissRules: View {
     }
 }
 
-/// ベント：上の帯と下の2枚のタイル（中身の下にうっすら敷く）
+/// ベント：上の帯と下のタイル（中身の下にうっすら敷く）。小さいサイズは下を1枚にして、題名がタイルの境目にかからないようにする
 private struct BentoTiles: View {
     let p: Palette
     let base: LinearGradient
@@ -91,9 +91,11 @@ private struct BentoTiles: View {
             let gap: CGFloat = 6
             let w: CGFloat = geo.size.width - gap * 2
             let h: CGFloat = geo.size.height - gap * 2
-            let topH: CGFloat = (h - gap) * 0.3
+            let topH: CGFloat = (h - gap) * 0.26
             let bottomH: CGFloat = h - gap - topH
-            let half: CGFloat = (w - gap) / 2
+            let wide: Bool = geo.size.width > 250
+            let mainW: CGFloat = wide ? (w - gap) * 0.74 : w
+            let sideW: CGFloat = w - gap - mainW
             let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
             let tile: Color = p.card.opacity(0.55)
             ZStack {
@@ -101,8 +103,10 @@ private struct BentoTiles: View {
                 VStack(spacing: gap) {
                     shape.fill(tile).frame(width: w, height: topH)
                     HStack(spacing: gap) {
-                        shape.fill(tile).frame(width: half * 1.2, height: bottomH)
-                        shape.fill(p.accent.opacity(0.08)).frame(width: half * 0.8, height: bottomH)
+                        shape.fill(tile).frame(width: mainW, height: bottomH)
+                        if wide {
+                            shape.fill(p.accent.opacity(0.06)).frame(width: sideW, height: bottomH)
+                        }
                     }
                 }
             }

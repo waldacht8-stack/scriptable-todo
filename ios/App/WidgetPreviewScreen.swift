@@ -2,7 +2,7 @@ import SwiftUI
 import WidgetKit
 
 /// ウィジェットの見本（起動引数 -widgetpreview のときだけ表示。スクリーンショット用）
-/// 色合いは -theme、世界観は -world に従う。-widgetsize large で大サイズ、-widgetsize other で起床・習慣・ロック画面を並べる
+/// 色合いは -theme、世界観は -world に従う。-widgetsize large で大サイズ、-widgetsize other で起床・習慣、-widgetsize lock でロック画面を並べる
 struct WidgetPreviewScreen: View {
     @Environment(\.palette) private var p
     private let size: String = {
@@ -15,7 +15,8 @@ struct WidgetPreviewScreen: View {
         let kind: String
         switch size {
         case "large": kind = "大"
-        case "other": kind = "起床・習慣・ロック画面"
+        case "other": kind = "起床・習慣"
+        case "lock": kind = "ロック画面"
         default: kind = "小・中"
         }
         let world: String = p.world.isOn ? "・\(p.world.name)" : ""
@@ -29,6 +30,7 @@ struct WidgetPreviewScreen: View {
                 switch size {
                 case "large": largePage
                 case "other": otherPage
+                case "lock": lockPage
                 default: smallMediumPage
                 }
             }
@@ -76,7 +78,6 @@ struct WidgetPreviewScreen: View {
         let before: WakeEntry = WakeEntry(date: .now, snap: Self.wakeBefore(), palette: p)
         let after: WakeEntry = WakeEntry(date: .now, snap: Self.wakeAfter(), palette: p)
         let habit: HabitWidgetData = Self.habitData(p)
-        let todo: TodoWidgetData = Self.data(Self.sampleItems(), layout: .focus, palette: p)
         return VStack(alignment: .leading, spacing: 10) {
             caption("起床（起きる前）")
             HStack(alignment: .top, spacing: 6) {
@@ -93,7 +94,16 @@ struct WidgetPreviewScreen: View {
                 frame(HabitWidgetView(data: habit, familyOverride: .systemSmall), Self.small, scale: 0.55)
                 frame(HabitWidgetView(data: habit, familyOverride: .systemMedium), Self.medium, scale: 0.55)
             }
-            caption("ロック画面（単色で表示されるので、世界観は形と文字だけ）")
+        }
+    }
+
+    private var lockPage: some View {
+        let before: WakeEntry = WakeEntry(date: .now, snap: Self.wakeBefore(), palette: p)
+        let after: WakeEntry = WakeEntry(date: .now, snap: Self.wakeAfter(), palette: p)
+        let habit: HabitWidgetData = Self.habitData(p)
+        let todo: TodoWidgetData = Self.data(Self.sampleItems(), layout: .focus, palette: p)
+        return VStack(alignment: .leading, spacing: 10) {
+            caption("単色で表示されるので、世界観は形と文字だけで出す")
             lockPanel(todo: todo, before: before, after: after, habit: habit)
         }
     }
@@ -101,11 +111,11 @@ struct WidgetPreviewScreen: View {
     /// ロック画面の見本（暗い面に白い文字。実機では壁紙の上に半透明で描かれる）
     private func lockPanel(todo: TodoWidgetData, before: WakeEntry, after: WakeEntry, habit: HabitWidgetData) -> some View {
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
-        let circle = CGSize(width: 72, height: 72)
-        let rect = CGSize(width: 160, height: 72)
+        let circle = CGSize(width: 68, height: 68)
+        let rect = CGSize(width: 154, height: 72)
         let panel: Color = Color(uiColor: .secondarySystemBackground)
         return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 accessory(TodoWidgetView(data: todo, familyOverride: .accessoryCircular), circle, round: true)
                 accessory(WakeWidgetView(entry: before, familyOverride: .accessoryCircular), circle, round: true)
                 accessory(WakeWidgetView(entry: after, familyOverride: .accessoryCircular), circle, round: true)
