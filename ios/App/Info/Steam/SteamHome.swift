@@ -32,6 +32,12 @@ enum SteamFormat {
         if m < 60 * 24 { return "\(m / 60)時間前" }
         return "\(m / (60 * 24))日前"
     }
+
+    /// セールの終わり（「10/20 まで」）
+    static func until(_ d: Date) -> String {
+        let c: DateComponents = Calendar.current.dateComponents([.month, .day], from: d)
+        return "\(c.month ?? 0)/\(c.day ?? 0) まで"
+    }
 }
 
 // MARK: - 全画面（情報タブのゲームから push される）
@@ -42,11 +48,7 @@ struct SteamHome: View {
     var body: some View {
         let content = VStack(alignment: .leading, spacing: 20) {
             if let s = store.snapshot {
-                SteamProfileHeader(snapshot: s)
-                SteamStatsRow(snapshot: s)
-                SteamRecentSection(games: s.recent)
-                SteamDealsSection(deals: s.deals)
-                SteamNewsSection(news: s.news)
+                SteamSnapshotContent(snapshot: s, hasKey: store.hasKey)
             } else if store.isConfigured {
                 SteamLoadingPanel()
             } else {
@@ -55,8 +57,8 @@ struct SteamHome: View {
             if let err = store.error {
                 Text(err).font(.footnote).foregroundStyle(SteamInk.warn)
             }
-            SteamSettingsSection()
-            Text("データは Steam Web API と Steam ストアから読み込みます。Valve とは関係のない個人のアプリです。")
+            SteamSettingsSection().id("settings")
+            Text("データは Steam コミュニティ・Steam ストア・Steam Web API から読み込みます。Valve とは関係のない個人のアプリです。")
                 .font(.caption2).foregroundStyle(SteamInk.sub)
         }
         .padding(.horizontal, 16)
@@ -64,7 +66,11 @@ struct SteamHome: View {
         .padding(.bottom, 40)
         .frame(maxWidth: .infinity, alignment: .leading)
 
-        ScrollView { content }
+        let scroll = ScrollViewReader { proxy in
+            ScrollView { content }
+                .onAppear { Self.scrollForShot(proxy) }
+        }
+        scroll
             .scrollDismissesKeyboard(.interactively)
             .refreshable { await store.refresh() }
             .background(SteamInk.background.ignoresSafeArea())
@@ -74,6 +80,42 @@ struct SteamHome: View {
             .toolbarBackground(SteamInk.top, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .task { await store.refreshIfNeeded() }
+    }
+
+    /// 画面写真用：起動引数 -steamscroll sales|settings でその欄まで下げておく
+    private static func scrollForShot(_ proxy: ScrollViewProxy) {
+        let args: [String] = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-steamscroll"), i + 1 < args.count else { return }
+        let target: String = args[i + 1]
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo(target, anchor: .top) }
+    }
+}
+
+/// 読み込んだ中身（キーがなければ最近のゲームの代わりに案内を出す）
+private struct SteamSnapshotContent: View {
+    let snapshot: SteamSnapshot
+    let hasKey: Bool
+
+    var body: some View {
+        let s: SteamSnapshot = snapshot
+        let failed: [String] = s.failed ?? []
+        VStack(alignment: .leading, spacing: 20) {
+            SteamProfileHeader(snapshot: s)
+            if s.looksPrivate { SteamPrivacyHint(snapshot: s) }
+            if !failed.isEmpty {
+                Text("読み込めなかったもの：\(failed.joined(separator: "・"))（前のデータを表示しています）")
+                    .font(.caption).foregroundStyle(SteamInk.warn)
+            }
+            if hasKey {
+                SteamStatsRow(snapshot: s)
+                SteamRecentSection(games: s.recent)
+            } else {
+                SteamKeyNote()
+            }
+            SteamDealsSection(deals: s.deals, hidden: s.wishlistHidden == true)
+            SteamSpecialsSection(specials: s.specials ?? []).id("sales")
+            SteamNewsSection(news: s.news)
+        }
     }
 }
 
@@ -272,12 +314,14 @@ private struct SteamBar: View {
 
 private struct SteamDealsSection: View {
     let deals: [SteamDeal]
+    var hidden: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SteamSectionTitle(title: "ウィッシュリスト")
             if deals.isEmpty {
-                Text("ウィッシュリストのゲームが見つかりませんでした").font(.footnote).foregroundStyle(SteamInk.sub)
+                Text(hidden ? "ウィッシュリストを読めませんでした。空か、非公開になっています。" : "ウィッシュリストのゲームが見つかりませんでした")
+                    .font(.footnote).foregroundStyle(SteamInk.sub)
             }
             ForEach(deals) { d in
                 SteamDealRow(deal: d)
@@ -316,6 +360,103 @@ private struct SteamDealRow: View {
     }
 }
 
+// MARK: - キーなしのときの小さな案内・非公開の案内
+
+private struct SteamKeyNote: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "key.fill").font(.footnote).foregroundStyle(SteamInk.blue)
+            Text("API キーを入れると、最近遊んだゲームと実績も出ます")
+                .font(.footnote).foregroundStyle(SteamInk.sub)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(SteamInk.panel.opacity(0.7), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct SteamPrivacyHint: View {
+    let snapshot: SteamSnapshot
+
+    private var what: String {
+        var parts: [String] = []
+        if snapshot.profile?.isPublic == false { parts.append("プロフィール") }
+        if snapshot.wishlistHidden == true { parts.append("ウィッシュリスト") }
+        return parts.joined(separator: "と")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("\(what)が非公開のようです", systemImage: "lock.fill")
+                .font(.subheadline.weight(.bold)).foregroundStyle(SteamInk.warn)
+            Text("Steam の「プロフィールを編集 → プライバシー設定」で、プロフィール・ゲームの詳細・ウィッシュリストの公開設定を「公開」にすると表示できます。ウィッシュリストが空のときもこの案内が出ます。")
+                .font(.footnote).foregroundStyle(SteamInk.sub)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SteamInk.panel, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(SteamInk.warn.opacity(0.5), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - ストアのセール（特集・売上上位・新作のうち割引中のもの）
+
+private struct SteamSpecialsSection: View {
+    let specials: [SteamSpecial]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SteamSectionTitle(title: "ストアのセール中")
+            if specials.isEmpty {
+                Text("いまセール中の特集は見つかりませんでした").font(.footnote).foregroundStyle(SteamInk.sub)
+            }
+            ForEach(specials.prefix(6)) { sp in
+                SteamSpecialRow(special: sp)
+            }
+        }
+    }
+}
+
+private struct SteamSpecialRow: View {
+    @Environment(\.openURL) private var openURL
+    let special: SteamSpecial
+
+    var body: some View {
+        let parts: [String?] = [special.originalText, special.endsAt.map { SteamFormat.until($0) }]
+        let sub: String = parts.compactMap { $0 }.joined(separator: "・")
+        Button {
+            if let u = special.storeURL { openURL(u) }
+        } label: {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(special.name).font(.subheadline.weight(.bold)).foregroundStyle(SteamInk.text).lineLimit(1)
+                    if !sub.isEmpty {
+                        Text(sub).font(.caption2).foregroundStyle(SteamInk.sub).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 6)
+                Text("-\(special.discount)%")
+                    .font(.footnote.weight(.heavy))
+                    .foregroundStyle(SteamInk.top)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(SteamInk.sale, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                Text(special.finalText ?? "—")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(SteamInk.text)
+            }
+            .padding(12)
+            .background(SteamInk.panel, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(special.name)、\(special.discount)%引き、\(special.finalText ?? "")、\(sub)")
+        .accessibilityHint("ストアのページを開きます")
+    }
+}
+
 // MARK: - ゲームのニュース
 
 private struct SteamNewsSection: View {
@@ -326,7 +467,7 @@ private struct SteamNewsSection: View {
         VStack(alignment: .leading, spacing: 8) {
             SteamSectionTitle(title: "ゲームのニュース")
             if news.isEmpty {
-                Text("最近遊んだゲームのニュースはまだありません").font(.footnote).foregroundStyle(SteamInk.sub)
+                Text("遊んだゲームやウィッシュリストのニュースはまだありません").font(.footnote).foregroundStyle(SteamInk.sub)
             }
             ForEach(news) { n in
                 Button {
@@ -354,9 +495,9 @@ private struct SteamIntroPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             Image(systemName: "gamecontroller.fill").font(.system(size: 40)).foregroundStyle(SteamInk.blue)
             Text("Steam とつなぐ").font(.title2.weight(.heavy)).foregroundStyle(SteamInk.text)
-            Text("下の設定に SteamID（またはプロフィールの URL）と Web API キーを入れると、最近遊んだゲームとプレイ時間、実績、ウィッシュリストのセール、ゲームのニュースを表示します。")
+            Text("下の設定に SteamID・カスタム URL の名前・プロフィールの URL のどれかを入れると、プロフィール、ウィッシュリストのセール、ストアのセール、ゲームのニュースを表示します。Web API キーはなくても使えます。")
                 .font(.subheadline).foregroundStyle(SteamInk.sub)
-            Text("Steam のプロフィールと「ゲームの詳細」を公開にしておく必要があります。")
+            Text("Steam のプライバシー設定で、プロフィール・ゲームの詳細・ウィッシュリストを「公開」にしておくと、すべて表示できます。")
                 .font(.footnote).foregroundStyle(SteamInk.sub)
         }
         .padding(18)
@@ -407,8 +548,8 @@ private struct SteamSettingsSection: View {
                     .steamField()
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text("Web API キー").font(.caption.weight(.semibold)).foregroundStyle(SteamInk.sub)
-                SecureField("", text: $keyText, prompt: Text(store.hasKey ? "保存済み（変えるときだけ入力）" : "32文字のキー")
+                Text("Web API キー（なくても使えます）").font(.caption.weight(.semibold)).foregroundStyle(SteamInk.sub)
+                SecureField("", text: $keyText, prompt: Text(store.hasKey ? "保存済み（変えるときだけ入力）" : "任意・32文字のキー")
                     .foregroundStyle(SteamInk.sub.opacity(0.8)))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -420,8 +561,13 @@ private struct SteamSettingsSection: View {
                         .font(.caption.weight(.semibold)).foregroundStyle(SteamInk.blue)
                 }
                 .buttonStyle(.plain)
-                Text("キーはこの iPhone の Keychain にだけ保存します。ほかの人に見せないでください。")
+                Text("キーを入れると、最近遊んだゲーム・プレイ時間・実績も出ます。キーはこの iPhone の Keychain にだけ保存します。ほかの人に見せないでください。")
                     .font(.caption2).foregroundStyle(SteamInk.sub)
+                if store.hasKey && !store.isDemo {
+                    Button("キーだけ消す") { Task { await store.removeKey() } }
+                        .font(.caption.weight(.semibold)).foregroundStyle(SteamInk.warn)
+                        .buttonStyle(.plain)
+                }
             }
             HStack(spacing: 10) {
                 Button {
@@ -486,7 +632,7 @@ struct SteamEntryCard: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                if let s {
+                if let s, !s.recent.isEmpty {
                     VStack(alignment: .trailing, spacing: 0) {
                         Text(SteamFormat.hours(s.hours2Weeks)).font(.title2.weight(.heavy)).foregroundStyle(SteamInk.text)
                         Text("時間・2週間").font(.caption2).foregroundStyle(SteamInk.sub)
@@ -504,12 +650,12 @@ struct SteamEntryCard: View {
                 }
                 .accessibilityHidden(true)
             }
-            if let deal = s?.deals.first(where: { $0.discount > 0 }) {
+            if let sale = saleLine(s) {
                 HStack(spacing: 6) {
-                    Text("-\(deal.discount)%").font(.caption2.weight(.heavy)).foregroundStyle(SteamInk.top)
+                    Text("-\(sale.discount)%").font(.caption2.weight(.heavy)).foregroundStyle(SteamInk.top)
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(SteamInk.sale, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    Text("\(deal.name) がセール中").font(.caption.weight(.semibold)).foregroundStyle(SteamInk.text).lineLimit(1)
+                    Text(sale.text).font(.caption.weight(.semibold)).foregroundStyle(SteamInk.text).lineLimit(1)
                 }
             }
         }
@@ -522,17 +668,35 @@ struct SteamEntryCard: View {
 
     private func subtitle(_ s: SteamSnapshot?) -> String {
         if let p = s?.profile { return p.stateText }
-        return store.isConfigured ? "読み込み中…" : "遊んだゲーム・セール・ニュース（設定が必要）"
+        return store.isConfigured ? "読み込み中…" : "セール・ニュース（SteamID を入れるだけ）"
     }
+
+    /// ウィッシュリストのセールを先に、なければストアのセール
+    private func saleLine(_ s: SteamSnapshot?) -> SteamSaleLine? {
+        if let d = s?.deals.first(where: { $0.discount > 0 }) { return SteamSaleLine(discount: d.discount, text: "\(d.name) がセール中") }
+        if let sp = s?.specials?.first { return SteamSaleLine(discount: sp.discount, text: "ストア：\(sp.name)") }
+        return nil
+    }
+}
+
+private struct SteamSaleLine {
+    let discount: Int
+    let text: String
 }
 
 // MARK: - 画面写真用：起動引数 -steamdemo で Steam を全画面で開く（RootView に .steamDemoLaunch() を1行）
 
 struct SteamDemoLaunch: ViewModifier {
-    @State private var show = ProcessInfo.processInfo.arguments.contains("-steamdemo")
+    @State private var show = false
 
+    // 起動直後に isPresented を true にしておくと、遅いシミュレーターでは出ないことがある。描いたあと少し待って開く
     func body(content: Content) -> some View {
         content
+            .task {
+                guard ProcessInfo.processInfo.arguments.contains("-steamdemo") else { return }
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                show = true
+            }
             .fullScreenCover(isPresented: $show) {
                 NavigationStack {
                     SteamHome()

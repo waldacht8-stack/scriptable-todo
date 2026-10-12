@@ -37,8 +37,13 @@ enum InfoWidgetSync {
                                     bankara: names(.bankaraChallenge) ?? names(.bankaraOpen), x: names(.x))
     }
 
-    static func steam(_ s: SteamSnapshot?) -> InfoWidgetFeed.SteamSale? {
-        guard let d = s?.deals.filter({ $0.discount > 0 }).max(by: { $0.discount < $1.discount }) else { return nil }
-        return InfoWidgetFeed.SteamSale(title: d.name, discount: d.discount)
+    /// ウィッシュリストで割引のいちばん大きいセール。なければストアのセール（どちらもキーなしで読める）
+    nonisolated static func steam(_ s: SteamSnapshot?) -> InfoWidgetFeed.SteamSale? {
+        if let d = s?.deals.filter({ $0.discount > 0 }).max(by: { $0.discount < $1.discount }) {
+            return InfoWidgetFeed.SteamSale(title: d.name, discount: d.discount)
+        }
+        let specials: [SteamSpecial] = s?.specials ?? []
+        guard let sp = specials.max(by: { $0.discount < $1.discount }) else { return nil }
+        return InfoWidgetFeed.SteamSale(title: sp.name, discount: sp.discount)
     }
 }
