@@ -622,7 +622,7 @@ struct FocusCard: View {
         .rotationEffect(.degrees(Double(drag.width) / 20))
     }
 
-    /// カードの面。世界観があればその描き方。日なたは先頭の1件にだけ日が当たり、後ろは日陰になる
+    /// カードの面。世界観があればその描き方
     @ViewBuilder
     private var surface: some View {
         let shape = RoundedRectangle(cornerRadius: p.radius + 4, style: .continuous)
@@ -632,16 +632,6 @@ struct FocusCard: View {
             let q: Palette = { var q = p; q.radius = p.radius + 4; return q }()
             ZStack {
                 WorldCardSurface(p: q)
-                if p.world == .hinata {
-                    if index == 0 {
-                        let sun = RadialGradient(colors: [Color(red: 1, green: 0.85, blue: 0.55).opacity(0.75), .clear],
-                                                 center: .topTrailing, startRadius: 0, endRadius: 320)
-                        shape.fill(sun)
-                            .shadow(color: Color(red: 1, green: 0.62, blue: 0.25).opacity(0.45), radius: 28, y: 6)
-                    } else {
-                        shape.fill(Color(red: 0.24, green: 0.23, blue: 0.32).opacity(0.22))
-                    }
-                }
             }
         }
     }

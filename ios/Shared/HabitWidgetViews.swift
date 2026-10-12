@@ -98,7 +98,7 @@ struct HabitWidgetView: View {
             ZStack {
                 ring(size: 76, line: 9)
                 VStack(spacing: 0) {
-                    WidgetCount(p: p, text: "\(data.doneCount)", value: Double(data.doneCount), size: p.world == .swiss ? 22 : 26)
+                    WidgetCount(p: p, text: "\(data.doneCount)", value: Double(data.doneCount), size: 26)
                     Text("/ \(data.rows.count)").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
                 }
             }
@@ -123,8 +123,8 @@ struct HabitWidgetView: View {
     private func rowButton(_ row: HabitWidgetRow, compact: Bool) -> some View {
         let c = row.habit.tint.color(p)
         let side: CGFloat = compact ? 22 : 24
-        let outline: CGFloat = p.world == .brutal ? 2 : 0
-        let iconWeight: Font.Weight = p.world == .brutal ? .black : .bold
+        let outline: CGFloat = 0
+        let iconWeight: Font.Weight = .bold
         return Button(intent: CheckHabitIntent(id: row.habit.id)) {
             HStack(spacing: 7) {
                 ZStack {

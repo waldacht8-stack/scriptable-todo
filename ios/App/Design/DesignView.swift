@@ -520,7 +520,6 @@ private struct HeroRows: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8 * p.density.scale)
                 .background(WorldCardSurface(p: small))
-                .padding(.trailing, p.world == .brutal ? 5 : 0)
             }
         }
     }
@@ -555,7 +554,6 @@ private struct HeroFocusCard: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(WorldCardSurface(p: small))
-        .padding(.trailing, p.world == .brutal ? 5 : 0)
     }
 }
 

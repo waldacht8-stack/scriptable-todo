@@ -182,12 +182,12 @@ struct WidgetPreviewScreen: View {
 
     /// ウィジェットの枠（余白 16・角丸 22。背景は containerBackground と同じもの）
     private func frame<V: View>(_ view: V, _ size: CGSize, scale: CGFloat, padded: Bool = true,
-                                phase: Double? = nil, done: Int? = nil) -> some View {
+                                phase: Double? = nil) -> some View {
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
         return view
             .padding(padded ? 16 : 0)
             .frame(width: size.width, height: size.height)
-            .background(WidgetPaletteBackground(p: p, done: done, phase: phase))
+            .background(WidgetPaletteBackground(p: p, phase: phase))
             .containerShape(shape)
             .clipShape(shape)
             .scaleEffect(scale)
@@ -592,20 +592,19 @@ extension WidgetPreviewScreen {
         let focus: TodoWidgetData = Self.data(items, layout: .focus, palette: p)
         let board: TodoWidgetData = Self.data(items, layout: .board, palette: p)
         let phases: [Double] = [0.3, 0.5, 0.7]
-        let dones: [Int] = [1, 3, 5]
         let night: WakeEntry = wakeEntry(at: Self.today(22, 40), snap: Self.wakeNight(alarm: true))
         return VStack(alignment: .leading, spacing: 6) {
             caption("15分ごとの絵（7時・12時・17時の位置）")
             HStack(spacing: 6) {
                 ForEach(0..<3, id: \.self) { i in
                     frame(TodoWidgetView(data: focus, familyOverride: .systemSmall), Self.small, scale: 0.53,
-                          phase: phases[i], done: dones[i])
+                          phase: phases[i])
                 }
             }
             caption("中：グループ（12時の位置）")
-            frame(TodoWidgetView(data: board, familyOverride: .systemMedium), Self.medium, scale: 0.8, phase: 0.5, done: 3)
+            frame(TodoWidgetView(data: board, familyOverride: .systemMedium), Self.medium, scale: 0.8, phase: 0.5)
             caption("起床（夜）：「いま寝ると」はタイマーで進む")
-            frame(WakeWidgetView(entry: night, familyOverride: .systemMedium), Self.medium, scale: 0.8, phase: 0.85, done: 3)
+            frame(WakeWidgetView(entry: night, familyOverride: .systemMedium), Self.medium, scale: 0.8, phase: 0.85)
         }
     }
 }

@@ -63,7 +63,7 @@ struct TodoWidget: Widget {
         StaticConfiguration(kind: "TodoWidget", provider: TodoProvider()) { entry in
             TodoWidgetView(data: entry.data)
                 .containerBackground(for: .widget) {
-                    WidgetPaletteBackground(p: entry.data.palette, date: entry.date, done: entry.data.doneToday)
+                    WidgetPaletteBackground(p: entry.data.palette, date: entry.date)
                 }
         }
         .configurationDisplayName("TODO")

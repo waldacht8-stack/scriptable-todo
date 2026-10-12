@@ -89,7 +89,7 @@ struct ReviewWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "ReviewWidget", provider: DayProvider(step: 30 * 60, span: 6 * 3600)) { entry in
             ReviewWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, done: entry.day.doneToday.count) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date) }
         }
         .configurationDisplayName("見返し")
         .description("朝・昼・夜の見返しが済んだかと、次の見返しまでの時間。押すと見返しを始めます。")
@@ -102,7 +102,7 @@ struct SummaryWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "SummaryWidget", provider: DayProvider(step: 30 * 60, span: 6 * 3600)) { entry in
             SummaryWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, done: entry.day.doneToday.count) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date) }
         }
         .configurationDisplayName("今日のまとめ")
         .description("次のアラームか見張りの歩数、今日の TODO の上位3件（丸で完了）、見返し、今月の支出。")
@@ -130,7 +130,7 @@ struct KakeiboWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "KakeiboWidget", provider: DayProvider(step: 60 * 60, span: 6 * 3600)) { entry in
             KakeiboWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, done: entry.day.doneToday.count) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date) }
         }
         .configurationDisplayName("家計簿")
         .description("今月の支出と予算の残り。中サイズは支出の多い分類も出します。")
@@ -143,7 +143,7 @@ struct ConsultWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "ConsultWidget", provider: DayProvider(step: 60 * 60, span: 12 * 3600)) { entry in
             ConsultWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, done: entry.day.doneToday.count) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date) }
         }
         .configurationDisplayName("相談")
         .description("今日の気分を5つのボタンで記録。夜に「1日1枚」がまだなら知らせます。")
@@ -156,7 +156,7 @@ struct InfoWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "InfoWidget", provider: DayProvider(step: 30 * 60, span: 6 * 3600)) { entry in
             InfoWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, done: entry.day.doneToday.count) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date) }
         }
         .configurationDisplayName("情報")
         .description("未読の話題の見出し。中・大はスプラトゥーンのいまのステージと Steam のセールも。")

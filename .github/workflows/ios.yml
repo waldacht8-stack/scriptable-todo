@@ -92,7 +92,7 @@ jobs:
           # 起動して撮る。真っ白（小さいファイル）なら、待って撮り直す（遅いシミュレーター対策）
           # 担当の枝では、SHOTS_ON_BRANCH に名前が合う写真だけ撮る（時間短縮）。main ではすべて撮る
           # 各担当は自分の枝でこの値に自分の写真の名前（正規表現）を足す。例："kakeibo|tab-2"
-          SHOTS_ON_BRANCH="motion|world-sky|widgets-r4-wake"
+          SHOTS_ON_BRANCH="motion|world-sky|widgets-r4-wake|settings-world|design-world"
           shot() {
             out=$1; shift
             if [ "$GITHUB_REF_NAME" != "main" ] && ! echo "$out" | grep -qE "$SHOTS_ON_BRANCH"; then
@@ -157,7 +157,7 @@ jobs:
           # 家計簿（見本データ。お店・金額はすべて架空）：ホーム・取り込みの4段・列の対応・手入力・Apple Pay の案内・設定
           shot shots/kakeibo.png -demo -theme focus -tab 2
           shot shots/kakeibo-night.png -demo -theme night -tab 2
-          shot shots/kakeibo-world-hinata.png -demo -world hinata -tab 2
+          shot shots/kakeibo-world-aurora.png -demo -world aurora -tab 2
           shot shots/kakeibo-add-menu.png -demo -theme focus -tab 2 -kakeiboadd
           shot shots/kakeibo-import.png -demo -theme focus -tab 2 -kakeiboimport source
           shot shots/kakeibo-import-jcb.png -demo -theme focus -tab 2 -kakeiboimport jcb
@@ -177,7 +177,7 @@ jobs:
           # リリース4（TODO・起床）：TODO の見返し（朝・夜と棚卸し・設定・見出しの1行）と、起床の見張り（見張り中・止める画面・夜の確認・二度寝の記録）
           shot shots/review-morning.png -demo -layout focus -theme focus -tab 0 -reviewdemo morning
           shot shots/review-night-weekly.png -demo -layout focus -theme night -tab 0 -reviewdemo night -reviewweekly
-          shot shots/review-noon-hinata.png -demo -layout focus -world hinata -tab 0 -reviewdemo noon
+          shot shots/review-noon-aurora.png -demo -layout focus -world aurora -tab 0 -reviewdemo noon
           shot shots/review-settings.png -demo -layout board -theme focus -tab 0 -reviewsettings
           shot shots/home-review-line.png -demo -layout board -theme dawn -tab 0
           shot shots/wake-watch.png -demo -theme focus -tab 1 -wakewatchdemo
@@ -216,15 +216,11 @@ jobs:
           shot shots/idv-deadlines.png -demo -theme focus -tab 4 -infogames -idvdemo -idvscroll deadlines
           shot shots/info-games-r4.png -demo -theme night -tab 4 -infogames -gamesscroll
           # 世界観（-world。-demo のたびに「なし」へ戻る）
-          for world in hinata brutal aurora bento clay swiss; do
+          for world in aurora; do
             shot "shots/world-$world.png" -demo -layout focus -world $world -tab 0
           done
-          shot shots/world-brutal-habit.png -demo -world brutal -tab 2
-          shot shots/world-swiss-wake.png -demo -world swiss -tab 1
           shot shots/world-aurora-info.png -demo -world aurora -tab 4
-          shot shots/world-clay-checklist.png -demo -layout checklist -world clay -tab 0
-          shot shots/world-bento-focus.png -demo -world bento -tab 3
-          shot shots/settings-world.png -settings -demo -world hinata -settingsSection world
+          shot shots/settings-world.png -settings -demo -world aurora -settingsSection world
           # 新しい世界観（地層・銀河・空・霧・深海）：TODO・起床・ウィジェット
           for world in strata galaxy sky mist deepsea; do
             shot "shots/world-$world.png" -demo -world $world
@@ -238,15 +234,15 @@ jobs:
           shot shots/widgets-world-deepsea-other.png -demo -widgetpreview -widgetsize other -world deepsea
           shot shots/settings-world-new.png -settings -demo -world galaxy -settingsSection world
           # ウィジェットの世界観（TODO の小・中・大、起床・習慣・ロック画面）
-          for world in hinata brutal aurora bento clay swiss; do
+          for world in aurora; do
             shot "shots/widgets-world-$world.png" -demo -widgetpreview -world $world
             shot "shots/widgets-world-$world-large.png" -demo -widgetpreview -widgetsize large -world $world
             shot "shots/widgets-world-$world-other.png" -demo -widgetpreview -widgetsize other -world $world
             shot "shots/widgets-world-$world-lock.png" -demo -widgetpreview -widgetsize lock -world $world
           done
-          # 世界観の住人と動き（クレイ以外）：-motionphase で位置を固定し、アプリは -motionreact で完了の反応の途中も描く。
+          # 世界観の住人と動き：-motionphase で位置を固定し、アプリは -motionreact で完了の反応の途中も描く。
           # ウィジェットは -widgetsize motion で 15分ごとの絵（3つの位相）を並べる
-          for world in strata galaxy sky mist deepsea hinata brutal aurora bento swiss; do
+          for world in strata galaxy sky mist deepsea aurora; do
             shot "shots/world-$world-motion.png" -demo -layout focus -world $world -tab 0 -motionphase 0.5 -motionreact
             shot "shots/widgets-world-$world-motion.png" -demo -widgetpreview -widgetsize motion -world $world -motionphase 0.5
           done
@@ -257,24 +253,22 @@ jobs:
           shot shots/widgets-r4-sunmoon-0730.png -demo -widgetpreview -widgetsize sunmoon -widgettime 07:30 -theme focus
           shot shots/widgets-r4-sunmoon-1300.png -demo -widgetpreview -widgetsize sunmoon -widgettime 13:00 -theme focus
           shot shots/widgets-r4-sunmoon-2130.png -demo -widgetpreview -widgetsize sunmoon -widgettime 21:30 -theme focus
-          shot shots/widgets-r4-sunmoon-1700-hinata.png -demo -widgetpreview -widgetsize sunmoon -widgettime 17:00 -world hinata
-          shot shots/widgets-r4-sunmoon-1000-brutal.png -demo -widgetpreview -widgetsize sunmoon -widgettime 10:00 -world brutal
+          shot shots/widgets-r4-sunmoon-1700-aurora.png -demo -widgetpreview -widgetsize sunmoon -widgettime 17:00 -world aurora
           shot shots/widgets-r4-review.png -demo -widgetpreview -widgetsize review -theme focus
-          shot shots/widgets-r4-review-swiss.png -demo -widgetpreview -widgetsize review -world swiss
+          shot shots/widgets-r4-review-aurora.png -demo -widgetpreview -widgetsize review -world aurora
           shot shots/widgets-r4-summary.png -demo -widgetpreview -widgetsize summary -theme dawn
-          shot shots/widgets-r4-summary-brutal.png -demo -widgetpreview -widgetsize summary -world brutal
-          shot shots/widgets-r4-summary-clay.png -demo -widgetpreview -widgetsize summary -world clay
+          shot shots/widgets-r4-summary-aurora.png -demo -widgetpreview -widgetsize summary -world aurora
           shot shots/widgets-r4-summary-watch.png -demo -widgetpreview -widgetsize summary2 -theme focus
           shot shots/widgets-r4-wake.png -demo -widgetpreview -widgetsize wake4 -theme night
           shot shots/widgets-r4-wake-aurora.png -demo -widgetpreview -widgetsize wake4 -world aurora
           shot shots/widgets-r4-lock.png -demo -widgetpreview -widgetsize lock4 -theme focus
-          shot shots/widgets-r4-lock-swiss.png -demo -widgetpreview -widgetsize lock4 -world swiss
+          shot shots/widgets-r4-lock-aurora.png -demo -widgetpreview -widgetsize lock4 -world aurora
           # タブごとのウィジェット（家計簿・相談・情報）：小・中・大とロック画面
           shot shots/widgets-r4-tabs.png -demo -widgetpreview -widgetsize tabs -theme focus
-          shot shots/widgets-r4-tabs-bento.png -demo -widgetpreview -widgetsize tabs -world bento
+          shot shots/widgets-r4-tabs-aurora.png -demo -widgetpreview -widgetsize tabs -world aurora
           shot shots/widgets-r4-tabs-night.png -demo -widgetpreview -widgetsize tabs -theme night
           shot shots/widgets-r4-tabslock.png -demo -widgetpreview -widgetsize tabslock -theme focus
-          shot shots/widgets-r4-tabslock-brutal.png -demo -widgetpreview -widgetsize tabslock -world brutal
+          shot shots/widgets-r4-tabslock-aurora.png -demo -widgetpreview -widgetsize tabslock -world aurora
           # 設定画面と「デザインを変える」（-designpage hub|world|theme|layout|tune）。カスタマイズは保存されて残るので、
           # 調整した写真を先に撮り、settings.png で元に戻してから残りを撮る。
           # 設定画面を色合いごとに（暗い色合い・下の見出し・カスタマイズも）。カスタマイズは保存されて残るので最後に。
@@ -287,8 +281,8 @@ jobs:
           shot shots/design-sakura.png -settings -demo -theme sakura -layout timeline -designpage hub -accent purple -corner small -font serif -density regular
           shot shots/settings.png -settings -demo -theme focus -accent theme -corner theme -font theme -density regular
           shot shots/design.png -settings -demo -theme focus -layout focus -designpage hub
-          shot shots/design-world.png -settings -demo -world hinata -designpage world
-          shot shots/design-world-hub.png -settings -demo -world brutal -layout checklist -designpage hub
+          shot shots/design-world.png -settings -demo -world aurora -designpage world
+          shot shots/design-world-hub.png -settings -demo -world galaxy -layout checklist -designpage hub
           shot shots/design-theme.png -settings -demo -theme dawn -layout focus -designpage theme
           shot shots/design-layout.png -settings -demo -theme focus -layout kanban -designpage layout
           shot shots/design-tune.png -settings -demo -theme forest -designpage tune

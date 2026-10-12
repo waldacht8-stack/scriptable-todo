@@ -13,12 +13,7 @@ fileprivate func wx(_ v: UInt32, _ a: Double = 1) -> Color {
 
 enum World: String, CaseIterable, Identifiable {
     case none       // 色合いのまま
-    case hinata     // 日なた：いまの1件に日が当たる。暖かい光
-    case brutal     // ネオブルータル：太い黒枠とずらした影、原色
     case aurora     // オーロラ：流れる光の背景にすりガラス
-    case bento      // ベント：大小のタイルを組んだ1画面
-    case clay       // クレイ：粘土のようにぷっくり
-    case swiss      // スイス：巨大な数字と格子
     case strata     // 地層：用事が積もる。砂の層と堆積した板（WorldScenes/StrataScene.swift）
     case galaxy     // 銀河：深い宇宙で星の腕が回る（WorldScenes/GalaxyScene.swift）
     case sky        // 空：いまの時刻と天気の空に雲が流れる（WorldScenes/SkyScene.swift）
@@ -34,12 +29,7 @@ enum World: String, CaseIterable, Identifiable {
     var name: String {
         switch self {
         case .none: "なし"
-        case .hinata: "日なた"
-        case .brutal: "ネオブルータル"
         case .aurora: "オーロラ"
-        case .bento: "ベント"
-        case .clay: "クレイ"
-        case .swiss: "スイス"
         case .strata: "地層"
         case .galaxy: "銀河"
         case .sky: "空"
@@ -51,12 +41,7 @@ enum World: String, CaseIterable, Identifiable {
     var summary: String {
         switch self {
         case .none: "色合いだけで描く"
-        case .hinata: "いまの1件に日が当たる"
-        case .brutal: "太い黒枠とずらした影"
         case .aurora: "光の背景にすりガラス"
-        case .bento: "大小のタイルを組む"
-        case .clay: "粘土のようにぷっくり"
-        case .swiss: "巨大な数字と細い罫線"
         case .strata: "用事が砂の層に積もる"
         case .galaxy: "星の腕がゆっくり回る"
         case .sky: "いまの時刻の空と雲"
@@ -69,12 +54,7 @@ enum World: String, CaseIterable, Identifiable {
     var motion: MotionStyle? {
         switch self {
         case .none: nil
-        case .hinata: .smooth
-        case .brutal: .crisp
         case .aurora: .smooth
-        case .bento: .snappy
-        case .clay: .bouncy
-        case .swiss: .crisp
         case .strata: .gentle      // 静かに沈んで積もる・削れる
         case .galaxy: .smooth      // 星がなめらかに流れる
         case .sky: .smooth         // 雲のようにふわりと
@@ -88,37 +68,12 @@ enum World: String, CaseIterable, Identifiable {
         switch self {
         case .none:
             return nil
-        case .hinata:
-            return Palette(background: [wx(0xFFF1DC), wx(0xF6D2B4)], card: wx(0xFFFAEE),
-                           text: wx(0x2B2116), sub: wx(0x6B4A1F), accent: wx(0xB4461E),
-                           overdue: wx(0xA8320F), onAccent: .white,
-                           fontDesign: .rounded, radius: 26, scheme: .light, world: .hinata)
-        case .brutal:
-            return Palette(background: [wx(0xFFF3D6)], card: .white,
-                           text: wx(0x111111), sub: wx(0x3D3D3D), accent: wx(0xFF7EB6),
-                           overdue: wx(0xC4122F), onAccent: wx(0x111111),
-                           fontDesign: .default, radius: 14, scheme: .light, outline: wx(0x111111), world: .brutal)
         case .aurora:
             // カードの色は不透明にする（重なったカードの文字が透けないように）。すりガラスの見た目は WorldCardSurface で出す
             return Palette(background: [wx(0x0D0B1E), wx(0x161034)], card: wx(0x231C47),
                            text: wx(0xF4F2FF), sub: wx(0xBDB6E0), accent: wx(0x9EF0E6),
                            overdue: wx(0xFF9D7A), onAccent: wx(0x0D0B1E),
                            fontDesign: .rounded, radius: 24, scheme: .dark, world: .aurora)
-        case .bento:
-            return Palette(background: [wx(0xEEEDE8)], card: .white,
-                           text: wx(0x1E1B16), sub: wx(0x625E55), accent: wx(0x1F3D36),
-                           overdue: wx(0xB83A30), onAccent: .white,
-                           fontDesign: .default, radius: 22, scheme: .light, world: .bento)
-        case .clay:
-            return Palette(background: [wx(0xEEE9FF), wx(0xF8E6F4)], card: wx(0xFBF8FF),
-                           text: wx(0x33286E), sub: wx(0x625897), accent: wx(0x6243D8),
-                           overdue: wx(0xB8400E), onAccent: .white,
-                           fontDesign: .rounded, radius: 30, scheme: .light, world: .clay)
-        case .swiss:
-            return Palette(background: [wx(0xF4F4F1)], card: .white,
-                           text: wx(0x111111), sub: wx(0x555555), accent: wx(0xD71F16),
-                           overdue: wx(0xD71F16), onAccent: .white,
-                           fontDesign: .default, radius: 3, scheme: .light, world: .swiss)
         case .strata:
             // 文字は上〜86% の明るい層に載る（いちばん濃い層 #D9B985 でも本文 8.2・補足 5.4・強調 4.9）
             return Palette(background: [wx(0xF4EADB), wx(0xD9B985)], card: wx(0xFAF3E7),
@@ -150,26 +105,24 @@ enum World: String, CaseIterable, Identifiable {
     /// 画面上部の大きな数字の大きさ
     var bigNumberSize: CGFloat {
         switch self {
-        case .swiss: 76
-        case .brutal: 60
         case .galaxy: 60
         default: 56
         }
     }
 
-    /// 大きな数字の字間（スイスは詰める）
-    var bigNumberTracking: CGFloat { self == .swiss ? -3 : 0 }
+    /// 大きな数字の字間
+    var bigNumberTracking: CGFloat { 0 }
 
     /// 大きな数字を強調色で描くか
-    var bigNumberAccent: Bool { self == .swiss }
+    var bigNumberAccent: Bool { false }
 
-    /// 「今日」のフォーカスで、左へ払ったときの言葉（日なたは「日陰」）
-    var postponeWord: String { self == .hinata ? "日陰へ" : "明日へ" }
+    /// 「今日」のフォーカスで、左へ払ったときの言葉
+    var postponeWord: String { "明日へ" }
 }
 
 // MARK: - 世界観ごとの背景
 
-/// 全画面の背景。日なたは右上から日が差し、オーロラは光がゆっくり流れる
+/// 全画面の背景。オーロラは光がゆっくり流れる
 struct WorldBackground: View {
     let p: Palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -190,12 +143,6 @@ struct WorldBackground: View {
         let colors: [Color] = p.background.count > 1 ? p.background : [p.background[0], p.background[0]]
         let base = LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
         switch p.world {
-        case .hinata:
-            ZStack {
-                base
-                RadialGradient(colors: [wx(0xFFE3A8, 0.95), wx(0xFFD08A, 0.45), .clear],
-                               center: UnitPoint(x: 0.78, y: 0.12), startRadius: 10, endRadius: 520)
-            }
         case .aurora:
             ZStack {
                 base
@@ -248,36 +195,11 @@ struct WorldCardSurface: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: p.radius, style: .continuous)
         switch p.world {
-        case .brutal:
-            // ずらした黒い影の上に、太い黒枠のカード
-            ZStack {
-                shape.fill(Color.black).offset(x: 5, y: 5)
-                shape.fill(p.card)
-                shape.strokeBorder(Color.black, lineWidth: 3)
-            }
         case .aurora:
             // すりガラス（下の光がうっすら見える程度。文字が読めるよう濃いめに）
             shape.fill(.ultraThinMaterial)
                 .overlay(shape.fill(p.card.opacity(0.78)))
                 .overlay(shape.strokeBorder(Color.white.opacity(0.26), lineWidth: 1))
-        case .clay:
-            // 粘土：内側の明るい縁と暗い縁、外側のやわらかい影
-            let inner = p.card
-                .shadow(.inner(color: .white.opacity(0.9), radius: 6, x: 5, y: 5))
-                .shadow(.inner(color: wx(0x5A3CA0, 0.16), radius: 8, x: -6, y: -7))
-            shape.fill(inner)
-                .shadow(color: wx(0x5A3CA0, 0.22), radius: 14, x: 8, y: 10)
-        case .swiss:
-            // 角はほぼ四角。上に黒い罫線
-            ZStack(alignment: .top) {
-                shape.fill(p.card)
-                Rectangle().fill(Color.black).frame(height: 2)
-            }
-        case .hinata:
-            shape.fill(p.card)
-                .shadow(color: wx(0x784614, 0.18), radius: 18, y: 10)
-        case .bento:
-            shape.fill(p.card)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             SceneCardSurface(p: p)
         case .none:

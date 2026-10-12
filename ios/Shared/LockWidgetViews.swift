@@ -151,14 +151,14 @@ struct DayLockView: View {
     }
 }
 
-/// ロック画面の円の輪（ブルータルは太く、スイスは細く角の線端）
+/// ロック画面の円の輪
 struct LockRing: View {
     let world: World
     let fraction: Double
 
     var body: some View {
-        let width: CGFloat = world == .brutal ? 5 : (world == .swiss ? 2.5 : 3.5)
-        let cap: CGLineCap = world == .swiss || world == .brutal ? .butt : .round
+        let width: CGFloat = 3.5
+        let cap: CGLineCap = .round
         let shown: Double = max(0, min(1, fraction))
         ZStack {
             Circle().stroke(HierarchicalShapeStyle.tertiary, lineWidth: width)

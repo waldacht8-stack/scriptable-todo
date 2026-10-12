@@ -52,13 +52,8 @@ enum CritterWidgetArt {
         case .sky: return AnyView(WidgetSky(size: size, band: band, top: topBand(margin: margins.top), k: k))
         case .mist: return mist(w: w, band: band, k: k)
         case .deepsea: return deepsea(w: w, band: band, k: k)
-        case .hinata: return AnyView(WidgetCat(size: size, band: band, k: k))
-        case .brutal:
-            return AnyView(Canvas { c, s in stickers(c, size: s, band: band, count: k.count) })
         case .aurora: return aurora(w: w, band: band, k: k)
-        case .bento: return AnyView(WidgetBento(size: size, band: band, k: k))
-        case .swiss: return AnyView(WidgetSwiss(size: size, band: band, k: k))
-        case .none, .clay: return AnyView(EmptyView())
+        case .none: return AnyView(EmptyView())
         }
     }
 
@@ -140,21 +135,6 @@ enum CritterWidgetArt {
         })
     }
 
-    /// ネオブルータル：今日完了した数だけシールを貼る（下の余白を右から左へ。10枚まで）
-    @_optimize(none)
-    static func stickers(_ ctx: GraphicsContext, size: CGSize, band: CritterBand, count: Int) {
-        let w: Double = Double(size.width)
-        let y0: Double = Double(band.mid)
-        let scale: Double = min(0.42, Double(band.height) / 28)
-        let n: Int = min(10, max(0, count))
-        for i in 0..<n {
-            let x: Double = w - 14 - Double(i) * 13
-            let y: Double = y0 - (i % 2 == 0 ? 0 : 0.8)
-            let angle: Double = i % 2 == 0 ? -0.22 : 0.18
-            C.sticker(D.local(ctx, at: D.pt(x, y), scale: scale, angle: angle), kind: i)
-        }
-    }
-
     /// オーロラ：15分ごとに形の変わるカーテン（上の方にうっすら。背景の光）
     @_optimize(none)
     static func curtains(_ ctx: GraphicsContext, size: CGSize, day: Double) {
@@ -162,6 +142,14 @@ enum CritterWidgetArt {
         let h: Double = Double(size.height)
         let slot: Int = Int(day * 96)
         var rnd = SceneRandom(UInt64(slot + 11))
+        // 星（決まった並び）
+        var srnd = SceneRandom(5150)
+        for _ in 0..<18 {
+            let sx: Double = srnd.next() * w
+            let sy: Double = srnd.range(0, 0.55) * h
+            let sr: Double = srnd.range(0.4, 0.9)
+            D.circle(ctx, sx, sy, sr, Color.white.opacity(srnd.range(0.35, 0.8)))
+        }
         let colors: [UInt32] = [0x5CF2C8, 0xB28CFF]
         for i in 0..<2 {
             let top: Double = h * rnd.range(0.02, 0.16) + Double(i) * h * 0.08
@@ -247,90 +235,6 @@ private struct WidgetSky: View {
             }
             CritterWidgetArt.sprite(18, min(12, band.height), x: px, y: py, angle: tilt) { c, s in
                 Critters.paperPlane(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2, s.height / 2), scale: planeScale), dark: k.dark)
-            }
-        }
-    }
-}
-
-/// 日なた：日の当たる場所（朝は左、夕方は右へ移る）に猫が座る
-private struct WidgetCat: View {
-    let size: CGSize
-    let band: CritterBand
-    let k: CritterKnobs
-
-    var body: some View {
-        let w: CGFloat = size.width
-        let f: Double = CritterDraw.span(k.day, 0.25, 0.75)
-        let x: CGFloat = w * CGFloat(0.12 + 0.76 * f)
-        let ground: CGFloat = band.bottom - 1
-        let scale: CGFloat = min(0.6, (band.height - 1) / 23)
-        let catH: CGFloat = 23 * scale
-        let pool = RadialGradient(colors: [sceneColor(0xFFD08A, 0.8), sceneColor(0xFFD08A, 0)], center: .center,
-                                  startRadius: 0, endRadius: 22)
-        ZStack {
-            Ellipse().fill(pool).frame(width: 44, height: min(8, band.height)).position(x: x, y: ground - 2)
-            CritterWidgetArt.sprite(16, catH, x: x, y: ground - catH / 2, angle: 0) { c, s in
-                Critters.catSitting(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2, s.height), scale: Double(scale)))
-            }
-        }
-    }
-}
-
-/// ベント：右下の余白の小さなタイル。15分ごとに並びが変わる（WidgetKit が入れ替わりを動かす）
-private struct WidgetBento: View {
-    let size: CGSize
-    let band: CritterBand
-    let k: CritterKnobs
-
-    var body: some View {
-        let gap: CGFloat = 1.5
-        let cell: CGFloat = min(5.5, (band.height - gap) / 2)
-        let w: CGFloat = size.width
-        let originX: CGFloat = w - 16 - cell * 3 - gap * 2
-        let originY: CGFloat = band.bottom - cell * 2 - gap
-        let orders: [[Int]] = Critters.bentoOrders
-        let order: [Int] = orders[Int(k.day * 96) % orders.count]
-        ZStack {
-            ForEach(0..<Critters.bentoColors.count, id: \.self) { i in
-                let slot: CGPoint = Critters.bentoSlot(order[i], cell: Double(cell), gap: Double(gap))
-                RoundedRectangle(cornerRadius: 1.6, style: .continuous)
-                    .fill(sceneColor(Critters.bentoColors[i]))
-                    .overlay(RoundedRectangle(cornerRadius: 1.6, style: .continuous).strokeBorder(sceneColor(0x1E1B16, 0.18), lineWidth: 0.5))
-                    .frame(width: cell, height: cell)
-                    .position(x: originX + slot.x + cell / 2, y: originY + slot.y + cell / 2)
-            }
-        }
-    }
-}
-
-/// スイス：右下の余白の小さな時計と図形。針・四角・三角の角度がいまの時刻になる
-private struct WidgetSwiss: View {
-    let size: CGSize
-    let band: CritterBand
-    let k: CritterKnobs
-
-    var body: some View {
-        let w: CGFloat = size.width
-        let hour: Double = k.day * 2 * 360
-        let minute: Double = k.day * 24 * 360
-        let r: CGFloat = min(6, band.height / 2 - 0.5)
-        let cx: CGFloat = w - 18 - r
-        let cy: CGFloat = band.mid
-        let ink: Color = sceneColor(0x111111)
-        ZStack {
-            Circle().strokeBorder(ink, lineWidth: 0.8).frame(width: r * 2, height: r * 2).position(x: cx, y: cy)
-            Capsule().fill(ink).frame(width: 1.4, height: r * 0.55)
-                .offset(y: -r * 0.27).rotationEffect(Angle.degrees(hour)).position(x: cx, y: cy)
-            Capsule().fill(ink).frame(width: 0.9, height: r * 0.85)
-                .offset(y: -r * 0.42).rotationEffect(Angle.degrees(minute)).position(x: cx, y: cy)
-            Circle().fill(sceneColor(0xD71F16)).frame(width: 2, height: 2).position(x: cx, y: cy)
-            Rectangle().fill(sceneColor(0xD71F16)).frame(width: 5, height: 5)
-                .rotationEffect(Angle.degrees(minute / 2)).position(x: cx - r - 8, y: cy)
-            CritterWidgetArt.sprite(8, 8, x: cx - r - 19, y: cy, angle: -hour * Double.pi / 180) { c, s in
-                let mx: Double = Double(s.width) / 2
-                let my: Double = Double(s.height) / 2
-                CritterDraw.polygon(c, [CritterDraw.pt(mx, my - 3.5), CritterDraw.pt(mx + 3.2, my + 2.5),
-                                        CritterDraw.pt(mx - 3.2, my + 2.5)], sceneColor(0x111111))
             }
         }
     }

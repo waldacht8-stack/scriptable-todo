@@ -18,10 +18,7 @@ enum CritterArt {
         case .sky: 26
         case .mist: 75
         case .deepsea: 70
-        case .hinata: 16
         case .aurora: 15
-        case .bento: 19.2
-        case .swiss: 60
         default: 30
         }
     }
@@ -33,8 +30,6 @@ enum CritterArt {
         case .deepsea: 3.2
         case .galaxy: 1.6
         case .aurora: 2.6
-        case .brutal: 2.2
-        case .hinata: 3
         default: 2
         }
     }
@@ -48,12 +43,8 @@ enum CritterArt {
         case .sky: sky(ctx, size: size, k: k, layer: layer)
         case .mist: mist(ctx, size: size, k: k, layer: layer)
         case .deepsea: deepsea(ctx, size: size, k: k, layer: layer)
-        case .hinata: hinata(ctx, size: size, k: k, layer: layer)
-        case .brutal: brutal(ctx, size: size, k: k, layer: layer)
         case .aurora: aurora(ctx, size: size, k: k, layer: layer)
-        case .bento: bento(ctx, size: size, k: k, layer: layer)
-        case .swiss: swiss(ctx, size: size, k: k, layer: layer)
-        case .none, .clay: break
+        case .none: break
         }
     }
 
@@ -426,105 +417,6 @@ enum CritterArt {
         }
     }
 
-    // MARK: 日なた：日だまりで猫が丸くなり、ときどき伸びをする。完了でも伸び
-
-    @_optimize(none)
-    static func hinata(_ ctx: GraphicsContext, size: CGSize, k: CritterKnobs, layer: Layer) {
-        let w: Double = Double(size.width)
-        let lane: Double = laneY(size)
-        let cx: Double = w * 0.3
-        let cy: Double = lane + 16
-        switch layer {
-        case .idle:
-            var pool: GraphicsContext = ctx
-            pool.translateBy(x: cx + 4, y: cy - 2)
-            pool.scaleBy(x: 1, y: 0.32)
-            D.glow(pool, 0, 0, 64, sceneColor(0xFFD08A), 0.7)
-            let u: Double = (k.t / 16).truncatingRemainder(dividingBy: 1)
-            let auto: Double = sin(D.span(u, 0.8, 1) * Double.pi)
-            let byReact: Double = k.react.map { sin($0 * Double.pi) } ?? 0
-            let stretch: Double = D.ease(max(auto, byReact))
-            let breathe: Double = sin(k.t * 1.6)
-            C.cat(D.local(ctx, at: D.pt(cx, cy), scale: 1.15), stretch: stretch, breathe: breathe)
-            if stretch < 0.05 {
-                let zu: Double = (k.t / 3).truncatingRemainder(dividingBy: 1)
-                let z = Text("z").font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundColor(sceneColor(0xB4461E, 0.55 * sin(zu * Double.pi)))
-                ctx.draw(z, at: D.pt(cx - 20 + zu * 4, cy - 26 - zu * 10))
-            }
-        case .reaction:
-            guard let r = k.react else { return }
-            // 伸びは idle の側で描く。ここでは小さな光の粒
-            for i in 0..<3 {
-                let u: Double = D.span(r, Double(i) * 0.12, 0.6 + Double(i) * 0.12)
-                guard u > 0 && u < 1 else { continue }
-                let px: Double = cx - 18 + Double(i) * 16
-                let py: Double = cy - 30 - u * 12
-                D.glow(ctx, px, py, 6, sceneColor(0xFFB347), 0.9 * sin(u * Double.pi))
-            }
-        }
-    }
-
-    // MARK: ネオブルータル：完了で「ペタッ」とシールが貼られ、はんこが押される
-    // 見えるシールは新しい 3 枚まで。4 枚目を貼ると、いちばん古い 1 枚が同じ場所でふっと消える
-
-    static let brutalVisible: Int = 3
-
-    static func stickerSpot(_ slot: Int, w: Double, lane: Double) -> (CGPoint, Double) {
-        let x: Double = w * 0.09 + Double(slot) * 34
-        let y: Double = lane + (slot % 2 == 0 ? -4 : 9)
-        let angle: Double = slot % 2 == 0 ? -0.2 : 0.16
-        return (D.pt(x, y), angle)
-    }
-
-    @_optimize(none)
-    static func brutal(_ ctx: GraphicsContext, size: CGSize, k: CritterKnobs, layer: Layer) {
-        let w: Double = Double(size.width)
-        let lane: Double = laneY(size)
-        let newest: Int = max(0, k.count)
-        let first: Int = max(0, newest - brutalVisible + 1)
-        switch layer {
-        case .idle:
-            // 消えていく古いシール（反応の間だけ）
-            let leaving: Int = newest - brutalVisible
-            if leaving >= 0, let r = k.react {
-                let out: Double = D.span(r, 0.05, 0.4)
-                if out < 1 {
-                    let spot = stickerSpot(leaving % brutalVisible, w: w, lane: lane)
-                    var c: GraphicsContext = D.local(ctx, at: spot.0, scale: 1 - out * 0.4, angle: spot.1 + out * 0.5)
-                    c.opacity = 1 - out
-                    C.sticker(c, kind: leaving)
-                }
-            }
-            for i in first...newest {
-                let spot = stickerSpot(i % brutalVisible, w: w, lane: lane)
-                var scale: Double = 1
-                var alpha: Double = 1
-                if i == newest, i > 0, let r = k.react {
-                    let k2: Double = D.span(r, 0.3, 0.6)
-                    scale = 1.9 - 0.9 * D.bounce(k2)
-                    alpha = min(1, k2 * 4)
-                }
-                var c: GraphicsContext = D.local(ctx, at: spot.0, scale: scale, angle: spot.1)
-                c.opacity = alpha
-                C.sticker(c, kind: i)
-            }
-        case .reaction:
-            guard let r = k.react else { return }
-            let spot = stickerSpot(newest % brutalVisible, w: w, lane: lane)
-            let pa: Double = D.span(r, 0.3, 0.4) * (1 - D.span(r, 0.7, 0.85))
-            let peta = Text("ペタッ").font(.system(size: 12, weight: .black)).foregroundColor(Color.black.opacity(pa))
-            let sx: Double = Double(spot.0.x)
-            let sy: Double = Double(spot.0.y)
-            ctx.draw(peta, at: D.pt(sx + 6, sy - 22))
-            let press: Double = D.span(r, 0.4, 0.55)
-            guard press > 0 else { return }
-            let stampScale: Double = 1.45 - 0.45 * D.bounce(press)
-            let stampAlpha: Double = min(1, press * 3) * (1 - D.span(r, 0.85, 1))
-            C.stamp(D.local(ctx, at: D.pt(sx + 26, sy + 2), scale: stampScale, angle: -0.22), alpha: stampAlpha)
-        }
-    }
-
     // MARK: オーロラ：光のカーテンの下、雪の吹きだまりで狐が座って空を見上げる。完了で駆け抜ける
 
     static let snowFlakes: [Mote] = {
@@ -546,15 +438,17 @@ enum CritterArt {
         let t: Double = k.t
         switch layer {
         case .idle:
+            auroraStars(ctx, w: w, h: h, t: t)
             let colors: [UInt32] = [0x5CF2C8, 0x9EF0E6, 0xB28CFF]
             for i in 0..<3 {
                 let fi: Double = Double(i)
                 let top: Double = h * (0.05 + 0.075 * fi)
                 let phase: Double = t * 0.22 * (1 + fi * 0.3) + fi * 1.7
-                C.auroraCurtain(ctx, width: w, top: top, amp: 14, thick: 64 - fi * 10, wave: 1.1 + fi * 0.35,
+                C.auroraCurtain(ctx, width: w, top: top, amp: 18, thick: 104 - fi * 18, wave: 1.1 + fi * 0.35,
                                 phase: phase, color: sceneColor(colors[i]), alpha: 0.24)
             }
             snowfall(ctx, w: w, h: h, t: t)
+            treeline(ctx, w: w, ground: ground, rim: rim)
             snowDrift(ctx, w: w, h: h, ground: ground, t: t)
             guard k.react == nil else { return }
             let look: Double = 0.5 + 0.5 * sin(t * 0.3)
@@ -577,6 +471,47 @@ enum CritterArt {
                 D.glow(ctx, px, py, 3 + fi * 1.4, Color.white, 0.4 * (1 - fi / 5))
             }
             Fantasy.foxRun(D.local(ctx, at: D.pt(fx, ground + 1 - hop), scale: 1.1), run: run, rim: rim)
+        }
+    }
+
+    /// 北の空の星（上のほうだけ。ゆっくりまたたく）
+    static let auroraStarList: [Mote] = {
+        var rnd = SceneRandom(5150)
+        var out: [Mote] = []
+        for _ in 0..<40 {
+            out.append(Mote(x: rnd.next(), y: rnd.range(0, 0.5), r: rnd.range(0.4, 1.1), speed: rnd.range(0.8, 2), phase: rnd.range(0, 6.28)))
+        }
+        return out
+    }()
+
+    @_optimize(none)
+    static func auroraStars(_ ctx: GraphicsContext, w: Double, h: Double, t: Double) {
+        for m in auroraStarList {
+            let tw: Double = 0.45 + 0.55 * (0.5 + 0.5 * sin(t * m.speed + m.phase))
+            D.circle(ctx, m.x * w, m.y * h, m.r, Color.white.opacity(0.75 * tw))
+        }
+    }
+
+    /// 地平の針葉樹の影（吹きだまりの奥。上のふちにオーロラの光）
+    @_optimize(none)
+    static func treeline(_ ctx: GraphicsContext, w: Double, ground: Double, rim: Color) {
+        var rnd = SceneRandom(808)
+        var x: Double = -6
+        let dark: Color = sceneColor(0x0D0A20, 0.88)
+        while x < w + 6 {
+            let tw: Double = rnd.range(7, 13)
+            let th: Double = rnd.range(10, 30) * (x > w * 0.3 && x < w * 0.7 ? 0.55 : 1)
+            let cx: Double = x + tw / 2
+            let base: Double = ground + 2
+            let tree: Path = Fantasy.smooth([D.pt(cx, base - th), D.pt(cx + tw * 0.28, base - th * 0.55), D.pt(cx + tw / 2, base),
+                                             D.pt(cx - tw / 2, base), D.pt(cx - tw * 0.28, base - th * 0.55)], closed: true)
+            ctx.fill(tree, with: .color(dark))
+            var top = Path()
+            top.move(to: D.pt(cx - tw * 0.2, base - th * 0.7))
+            top.addLine(to: D.pt(cx, base - th))
+            top.addLine(to: D.pt(cx + tw * 0.2, base - th * 0.7))
+            ctx.stroke(top, with: .color(rim.opacity(0.35)), lineWidth: 0.8)
+            x += tw * rnd.range(0.55, 0.9)
         }
     }
 
@@ -604,79 +539,5 @@ enum CritterArt {
         ctx.stroke(drift, with: .linearGradient(edge, startPoint: D.pt(0, ground), endPoint: D.pt(w, ground)), lineWidth: 1)
         let glowA: Double = 0.1 + 0.04 * sin(t * 0.4)
         Fantasy.softEllipse(ctx, w * 0.42, ground + 6, w * 0.5, 12, sceneColor(0x5CF2C8), glowA)
-    }
-
-    // MARK: ベント：小さなタイルの箱。ときどき「ぽこっ」と入れ替わる。完了で新しいタイルが入る
-
-    @_optimize(none)
-    static func bento(_ ctx: GraphicsContext, size: CGSize, k: CritterKnobs, layer: Layer) {
-        let w: Double = Double(size.width)
-        let lane: Double = laneY(size)
-        let cell: Double = 16
-        let gap: Double = 3
-        let ox: Double = w * 0.07
-        let oy: Double = lane - 14
-        let orders: [[Int]] = C.bentoOrders
-        switch layer {
-        case .idle:
-            let boxRect = CGRect(x: ox - 4, y: oy - 4, width: cell * 3 + gap * 2 + 8, height: cell * 2 + gap + 8)
-            ctx.fill(Path(roundedRect: boxRect, cornerRadius: 8), with: .color(Color.white.opacity(0.75)))
-            ctx.stroke(Path(roundedRect: boxRect, cornerRadius: 8), with: .color(sceneColor(0x1E1B16, 0.12)), lineWidth: 1)
-            let step: Double = 3.2
-            let n: Int = Int(floor(k.t / step))
-            let u: Double = k.t / step - Double(n)
-            let now: [Int] = orders[((n % orders.count) + orders.count) % orders.count]
-            let before: [Int] = orders[(((n - 1) % orders.count) + orders.count) % orders.count]
-            let move: Double = D.ease(D.span(u, 0, 0.22))
-            for i in 0..<C.bentoColors.count {
-                let a: CGPoint = C.bentoSlot(before[i], cell: cell, gap: gap)
-                let b: CGPoint = C.bentoSlot(now[i], cell: cell, gap: gap)
-                let x: Double = ox + Double(a.x) + Double(b.x - a.x) * move + cell / 2
-                let y: Double = oy + Double(a.y) + Double(b.y - a.y) * move + cell / 2
-                let moved: Bool = before[i] != now[i]
-                let pop: Double = moved ? sin(D.span(u, 0.12, 0.34) * Double.pi) * 0.22 : 0
-                C.bentoTile(ctx, center: D.pt(x, y), size: cell, color: sceneColor(C.bentoColors[i]), pop: pop)
-            }
-        case .reaction:
-            guard let r = k.react else { return }
-            // 箱の右に、完了のタイルがぽこっと入る
-            let x: Double = ox + cell * 3 + gap * 2 + 18
-            let y: Double = oy + cell / 2 + 2
-            let grow: Double = D.bounce(D.span(r, 0, 0.4))
-            let alpha: Double = 1 - D.span(r, 0.8, 1)
-            var c: GraphicsContext = ctx
-            c.opacity = alpha
-            C.bentoTile(c, center: D.pt(x, y), size: cell * 1.3 * grow, color: sceneColor(0x1F3D36), pop: 0)
-            if grow > 0.5 {
-                let check = Text(Image(systemName: "checkmark")).font(.system(size: 11, weight: .black)).foregroundColor(.white)
-                c.draw(check, at: D.pt(x, y))
-            }
-            let pa: Double = D.span(r, 0.1, 0.2) * (1 - D.span(r, 0.55, 0.75))
-            let poko = Text("ぽこっ").font(.system(size: 10, weight: .heavy)).foregroundColor(sceneColor(0x1F3D36, pa))
-            ctx.draw(poko, at: D.pt(x, y - 22))
-        }
-    }
-
-    // MARK: スイス：円と針・四角・三角が時計の針のように回る。完了で1回転
-
-    @_optimize(none)
-    static func swiss(_ ctx: GraphicsContext, size: CGSize, k: CritterKnobs, layer: Layer) {
-        let w: Double = Double(size.width)
-        let lane: Double = laneY(size)
-        guard layer == .idle else { return }
-        let spin: Double = k.react.map { D.ease($0) * 2 * Double.pi } ?? 0
-        let hour: Double = k.day * 2 * 2 * Double.pi
-        let minute: Double = k.day * 24 * 2 * Double.pi
-        let second: Double = (k.t / 60).truncatingRemainder(dividingBy: 1) * 2 * Double.pi + spin
-        let dx: Double = w * 0.1 + 6
-        let dialAt = D.pt(dx, lane)
-        C.swissDial(D.local(ctx, at: dialAt, scale: 1), hour: hour, minute: minute, second: second, radius: 18)
-        // 赤い四角（秒の半分の速さ）と黒い三角（逆回り）
-        let sq: GraphicsContext = D.local(ctx, at: D.pt(dx + 42, lane + 2), scale: 1, angle: second / 2 + spin)
-        sq.fill(Path(CGRect(x: -7, y: -7, width: 14, height: 14)), with: .color(sceneColor(0xD71F16)))
-        sq.fill(Path(CGRect(x: -1, y: -7, width: 2, height: 7)), with: .color(Color.white))
-        let tri: GraphicsContext = D.local(ctx, at: D.pt(dx + 74, lane + 1), scale: 1, angle: -second / 3 - spin)
-        D.polygon(tri, [D.pt(0, -9), D.pt(8, 6), D.pt(-8, 6)], sceneColor(0x111111))
-        D.line(ctx, D.pt(dx + 24, lane + 16), D.pt(dx + 92, lane + 16), sceneColor(0x111111, 0.35), 1)
     }
 }
