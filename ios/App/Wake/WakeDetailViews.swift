@@ -140,8 +140,11 @@ extension WakeViewModel {
         if isNextSkipped, let any = nextPlanAny {
             return "\(JP.date(any.dayStart)) はオフにしています"
         }
-        guard let plan = nextPlan else { return "明日だけオフ・ボタンの違い" }
-        return "\(plan.stages.count)回・\(JP.time(plan.first))〜\(JP.time(plan.last))・明日だけオフ"
+        guard let plan = nextPlan else { return "ボタンの違い" }
+        // 「明日だけオフ」のカードと同じ言い方（明け方は今朝の分なので「今日だけオフ」）
+        let day: String = WakeLogic.dayLabel(plan.dayStart, now: now)
+        let d: String = (day == "今日" || day == "明日") ? day : "次の起床日"
+        return "\(plan.stages.count)回・\(JP.time(plan.first))〜\(JP.time(plan.last))・\(d)だけオフ"
     }
 
     /// 「起床の記録」の行：7日の平均と連続
