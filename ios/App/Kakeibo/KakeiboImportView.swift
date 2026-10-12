@@ -485,7 +485,9 @@ struct KakeiboImportView: View {
         isPDF = name.lowercased().hasSuffix(".pdf") || data.starts(with: Array("%PDF".utf8))
         defer { loading = false }
         if isPDF {
-            var text = KakeiboPDF.text(from: data)
+            // 三菱UFJ（MUFG カード）の明細は、1ページ目が宛名と請求額の表紙なので読まない
+            let skipFirst: Bool = institution == .mufg
+            var text = KakeiboPDF.text(from: data, skipFirstPage: skipFirst)
             // Safari で印刷した PDF などは、取り出した文字が化けている。そのときも画像から読む
             if let t = text, KakeiboPDF.isGarbled(t) { text = nil }
             // 文字で読めたら、まずその行を試す
@@ -499,7 +501,7 @@ struct KakeiboImportView: View {
                 }
             }
             // 文字が無い・化けた・行が見つからない：画像から読む（化けたと見分けられない PDF もあるので、行が無ければ必ず試す）
-            let pages = await KakeiboPDF.recognizeBoxes(data)
+            let pages = await KakeiboPDF.recognizeBoxes(data, skipFirstPage: skipFirst)
             let ocrText = KakeiboOCRTable.text(pages: pages)
             guard !ocrText.isEmpty else {
                 errorText = text == nil

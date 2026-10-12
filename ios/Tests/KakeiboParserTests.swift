@@ -211,6 +211,23 @@ final class KakeiboParserTests: TokyoTestCase {
         XCTAssertEqual(rows.map(\.text), ["ミホンベーカリー", "ミホン映画館"])
     }
 
+    /// 三菱UFJ（MUFG カード）の形：「8/ 7/ 1」の日付（令和の年）、店名と金額の間に支払回数、金額のあとに摘要
+    func testPDFCardStatementWithEraDateAndPayCount() {
+        XCTAssertEqual(ymd(KakeiboDateParser.parse("8/ 7/ 1", now: T.now)!), "2026-7-1")
+        XCTAssertEqual(ymd(KakeiboDateParser.parse("8/ 8/12", now: T.now)!), "2026-8-12")
+        let text = """
+        ご利用日 ご 利 用 店 名 支払 何 ご利用金額(円) 摘 要
+        8/ 7/ 1 ETC ミホン出口 1 700 車種:普通車
+        8/ 8/12 WL *SAMPLE PURCHASE 1 3,400 3400.00 エン 1.000
+        """
+        // 口座（カードでない）を選んでいても、見出しからカードの明細と分かる
+        let rows = KakeiboPDF.drafts(text: text, isCard: false, now: T.now).rows
+        XCTAssertEqual(rows.map { ymd($0.date) }, ["2026-7-1", "2026-8-12"])
+        XCTAssertEqual(rows.map(\.amount), [700, 3_400])
+        XCTAssertEqual(rows.map(\.kind), [.expense, .expense])
+        XCTAssertEqual(rows.map(\.text), ["ETC ミホン出口", "WL *SAMPLE PURCHASE"])
+    }
+
     // MARK: 分類・重複・記録
 
     func testRulesSuggestAndLearn() {
