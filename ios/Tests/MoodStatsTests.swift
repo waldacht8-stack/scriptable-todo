@@ -5,7 +5,7 @@ import XCTest
 final class MoodStatsTests: TokyoTestCase {
     private func day(_ offset: Int, _ mood: ConsultMood, wake: Int? = nil) -> MoodDay {
         let d = Calendar.current.date(byAdding: .day, value: -offset, to: Calendar.current.startOfDay(for: T.now))!
-        return MoodDay(date: d, mood: mood, wake: wake, habitRate: nil, doneCount: 0, focusMinutes: 0)
+        return MoodDay(date: d, mood: mood, wake: wake, doneCount: 0)
     }
 
     func testScoreRoundTrip() {

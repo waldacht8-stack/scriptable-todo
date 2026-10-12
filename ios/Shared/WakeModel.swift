@@ -470,6 +470,40 @@ enum WakeLogic {
         default: return JP.date(d)
         }
     }
+
+    // MARK: 「今寝ると」の行（アプリの就寝カードとウィジェットで共通）
+
+    /// 次に来る朝（正午より前なら今日、正午からは明日）の0時
+    static func comingMorning(now: Date) -> Date {
+        let today: Date = cal.startOfDay(for: now)
+        let hour: Int = cal.component(.hour, from: now)
+        if hour < 12 { return today }
+        return cal.date(byAdding: .day, value: 1, to: today) ?? today
+    }
+
+    /// 次の朝がお休み（起床の曜日でない・明日だけオフ・祝日）か。
+    /// next は鳴る予定の次の起床日（nextPlan。オフの日は入らない）。それが次の朝でなければ、次の朝にアラームはない
+    static func isMorningOff(next: WakePlan, now: Date) -> Bool {
+        let morning: Date = comingMorning(now: now)
+        return next.day != key(morning)
+    }
+
+    /// 「月 7:00」（1週間より先なら「10月19日（月） 7:00」）
+    static func nextWakeLabel(_ next: WakePlan, now: Date) -> String {
+        let today: Date = cal.startOfDay(for: now)
+        let days: Int = cal.dateComponents([.day], from: today, to: next.dayStart).day ?? 0
+        let time: String = JP.time(next.first)
+        if days >= 7 { return "\(JP.date(next.dayStart)) \(time)" }
+        let symbols: [String] = ["日", "月", "火", "水", "木", "金", "土"]
+        let w: Int = weekday(next.dayStart)
+        return "\(symbols[w]) \(time)"
+    }
+
+    /// 次の朝がお休みのときの行（お休みでなければ nil。そのときは「今寝ると」の残り時間を出す）
+    static func morningOffLine(next: WakePlan, now: Date) -> String? {
+        guard isMorningOff(next: next, now: now) else { return nil }
+        return "明日はお休み・次の起床は \(nextWakeLabel(next, now: now))"
+    }
 }
 
 /// ウィジェットなどに出す要約

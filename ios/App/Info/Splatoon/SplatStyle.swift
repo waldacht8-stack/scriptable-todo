@@ -210,7 +210,9 @@ final class SplatImageCache {
     }
 }
 
-/// 画像（読み込み前・見本のときは名前入りのインクの絵）
+/// 画像（読み込み前・見本のときは名前入りのインクの絵）。
+/// 大きさは置き場所の枠で決め、fill のときは枠いっぱいに広げて中央ではみ出た分を切る。
+/// （画像の縦横比のまま枠を押し広げると、狭い枠ではとなりの文字に重なり、名前の札もずれる）
 struct SplatImage: View {
     let url: String?
     var name: String = ""
@@ -219,18 +221,22 @@ struct SplatImage: View {
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack {
-            if let image {
-                let img = Image(uiImage: image).resizable()
-                if fill { img.scaledToFill() } else { img.scaledToFit() }
-            } else {
-                SplatPlaceholder(name: name)
+        Color.clear
+            .overlay { content }
+            .clipped()
+            .task(id: url) {
+                guard let s = url, let u = URL(string: s) else { image = nil; return }
+                if let c = SplatImageCache.shared.cached(u) { image = c; return }
+                image = await SplatImageCache.shared.load(u)
             }
-        }
-        .task(id: url) {
-            guard let s = url, let u = URL(string: s) else { image = nil; return }
-            if let c = SplatImageCache.shared.cached(u) { image = c; return }
-            image = await SplatImageCache.shared.load(u)
+    }
+
+    @ViewBuilder private var content: some View {
+        if let image {
+            let img: Image = Image(uiImage: image).resizable()
+            if fill { img.scaledToFill() } else { img.scaledToFit() }
+        } else {
+            SplatPlaceholder(name: name)
         }
     }
 }
