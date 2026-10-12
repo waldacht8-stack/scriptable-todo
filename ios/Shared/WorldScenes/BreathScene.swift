@@ -1,21 +1,19 @@
 import SwiftUI
 
-// MARK: - 呼吸：やわらかな色のかたまりが、ゆっくり呼吸している。期限が近いほど鼓動が速く、色が深くなる
-// かたまりはぼかしを使わず、放射状のグラデーションの丸で描く（毎フレーム軽い）。
+// MARK: - 呼吸：やわらかな色のかたまりが3つ、ゆっくり呼吸している（落ち着いているときは12秒で一息、吸う4割・吐く6割）。期限が近いほど少し速く、色が深くなる
+// かたまりはぼかしを使わず、ふちが溶けるように落ちる放射状のグラデーションを、傾けた楕円にして描く（毎フレーム軽い）。
 // 「近さ」は次の期限までの時間（6時間以上先なら 0、期限を過ぎていれば 1）。急に速さが跳ねないよう 6段に丸める。
-// 大きなカードのまわりには、同じ速さで広がる輪（カードの外側だけ。中の文字にはかからない）。
+// 大きなカードのまわりには、吐く息に合わせて1本の輪が広がる（カードの外側だけ）。起床の画面では見出しの横に夜の青の息の円（吸う4秒・吐く6秒）。
 // 完了すると、ひと息大きく吸って吐く（TodoStore.complete の通知）。
 
 enum BreathScene {
-    /// かたまり（位置は比・半径は幅に対する比）
-    struct Blob { let x: Double; let y: Double; let r: Double; let calm: UInt32; let deep: UInt32; let alpha: Double; let phase: Double }
+    /// かたまり（位置は比・半径は幅に対する比）。squash は縦のつぶれ、tilt は傾き（丸すぎないように）
+    struct Blob { let x: Double; let y: Double; let r: Double; let calm: UInt32; let deep: UInt32; let alpha: Double; let phase: Double; let squash: Double; let tilt: Double }
 
     static let blobs: [Blob] = [
-        Blob(x: 0.08, y: 0.08, r: 0.62, calm: 0xFFC2B0, deep: 0xF27A58, alpha: 0.85, phase: 0),
-        Blob(x: 1.02, y: 0.44, r: 0.6, calm: 0xCDB8FF, deep: 0xA88BF0, alpha: 0.7, phase: 1.3),
-        Blob(x: 0.42, y: 0.92, r: 0.58, calm: 0xFFE1A6, deep: 0xFFB57A, alpha: 0.7, phase: 2.4),
-        Blob(x: 0.86, y: 0.06, r: 0.34, calm: 0xFFD9C9, deep: 0xFF9A7E, alpha: 0.55, phase: 3.6),
-        Blob(x: 0.0, y: 0.6, r: 0.4, calm: 0xE6DDFF, deep: 0xC4B0FF, alpha: 0.5, phase: 4.7),
+        Blob(x: 0.06, y: 0.1, r: 0.78, calm: 0xFFC2B0, deep: 0xF27A58, alpha: 0.78, phase: 0, squash: 0.82, tilt: 0.5),
+        Blob(x: 1.0, y: 0.5, r: 0.72, calm: 0xCDB8FF, deep: 0xA88BF0, alpha: 0.58, phase: 2.1, squash: 0.74, tilt: -0.7),
+        Blob(x: 0.34, y: 0.96, r: 0.66, calm: 0xFFE1A6, deep: 0xFFB57A, alpha: 0.6, phase: 4.2, squash: 0.8, tilt: 0.2),
     ]
 
     /// 2つの色の間（k = 0 で a、1 で b）
@@ -32,16 +30,28 @@ enum BreathScene {
         return Color(red: r, green: g, blue: bl, opacity: alpha)
     }
 
-    /// 一息の長さ（秒）。近さ 0 で 10秒、1 で 4秒
-    static func period(_ urgency: Double) -> Double { 10 - 6 * urgency }
+    /// 一息の長さ（秒）。近さ 0 で 12秒（落ち着いた呼吸）、1 で 8秒
+    static func period(_ urgency: Double) -> Double { 12 - 4 * urgency }
 
-    /// 吸って吐く（0〜1。吸う 4割・吐く 6割）
+    /// 吸って吐く（0〜1。吸う 4割・吐く 6割。どちらも始まりと終わりがゆっくり）
     static func breath(_ t: Double, period: Double) -> Double {
         let u: Double = (t / period).truncatingRemainder(dividingBy: 1)
         if u < 0.4 {
-            return CritterDraw.ease(u / 0.4)
+            return 0.5 - 0.5 * cos(Double.pi * u / 0.4)
         }
-        return 1 - CritterDraw.ease((u - 0.4) / 0.6)
+        return 0.5 + 0.5 * cos(Double.pi * (u - 0.4) / 0.6)
+    }
+
+    /// やわらかな光のかたまりの濃さの落ち方（ぼかしたように、ふちが溶ける）
+    static func softStops(_ c: (Double) -> Color) -> [Gradient.Stop] {
+        [
+            Gradient.Stop(color: c(1), location: 0),
+            Gradient.Stop(color: c(0.86), location: 0.2),
+            Gradient.Stop(color: c(0.58), location: 0.4),
+            Gradient.Stop(color: c(0.28), location: 0.6),
+            Gradient.Stop(color: c(0.08), location: 0.8),
+            Gradient.Stop(color: c(0), location: 1),
+        ]
     }
 
     // MARK: 近さ（次の期限までの時間）
@@ -85,37 +95,34 @@ enum BreathScene {
             Gradient(colors: [sceneColor(0xF7F0F4), sceneColor(0xF6ECF1), sceneColor(0xF3E8F0)]),
             startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: 0, y: h))
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: base)
-        let deep: Double = urgency * 0.75
-        let count: Int = compact ? 3 : blobs.count
-        for (i, bl) in blobs.prefix(count).enumerated() {
-            // かたまりごとに少しずれて呼吸し、ゆっくり漂う
-            let own: Double = 0.5 + 0.5 * sin(t * 0.21 + bl.phase)
-            let swell: Double = 1 + 0.1 * b + 0.04 * own + 0.12 * boost
+        let deep: Double = urgency * 0.7
+        for (i, bl) in blobs.enumerated() {
+            // かたまりごとに少しずれて呼吸し、ごくゆっくり漂う（形もわずかに変わる）
+            let lag: Double = 0.5 + 0.5 * sin(t * 0.13 + bl.phase)
+            let swell: Double = 1 + 0.06 * b + 0.02 * lag + 0.08 * boost
             let r: Double = bl.r * w * swell
-            let dx: Double = sin(t / 17 + bl.phase) * w * 0.04
-            let dy: Double = cos(t / 23 + bl.phase * 1.3) * h * 0.02
+            let dx: Double = sin(t / 41 + bl.phase) * w * 0.03
+            let dy: Double = cos(t / 53 + bl.phase * 1.3) * h * 0.015
             let cx: Double = bl.x * w + dx
             let cy: Double = bl.y * h + dy
-            let a: Double = bl.alpha * (0.82 + 0.18 * b)
+            let a: Double = bl.alpha * (0.88 + 0.12 * b)
             let k: Double = i == 0 ? deep : deep * 0.6
-            let c0: Color = mix(bl.calm, bl.deep, k, a)
-            let c1: Color = mix(bl.calm, bl.deep, k, a * 0.45)
-            let c2: Color = mix(bl.calm, bl.deep, k, 0)
-            let center = CGPoint(x: cx, y: cy)
-            let stops: [Gradient.Stop] = [
-                Gradient.Stop(color: c0, location: 0),
-                Gradient.Stop(color: c1, location: 0.5),
-                Gradient.Stop(color: c2, location: 1),
-            ]
-            let shade = GraphicsContext.Shading.radialGradient(Gradient(stops: stops), center: center, startRadius: 0, endRadius: r)
-            ctx.fill(Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)), with: shade)
+            let calm: UInt32 = bl.calm
+            let deepC: UInt32 = bl.deep
+            let stops: [Gradient.Stop] = softStops { f in mix(calm, deepC, k, a * f) }
+            var blob: GraphicsContext = ctx
+            blob.translateBy(x: cx, y: cy)
+            blob.rotate(by: Angle.radians(bl.tilt + 0.15 * sin(t / 61 + bl.phase)))
+            blob.scaleBy(x: 1, y: bl.squash + 0.04 * sin(t / 37 + bl.phase))
+            let shade = GraphicsContext.Shading.radialGradient(Gradient(stops: stops), center: .zero, startRadius: 0, endRadius: r)
+            blob.fill(Path(ellipseIn: CGRect(x: -r, y: -r, width: r * 2, height: r * 2)), with: shade)
         }
         // 全体をうっすら白で包む（文字の読みやすさのため。濃い色でも本文は 4.5:1 以上）
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color.white.opacity(0.14)))
     }
 }
 
-/// 呼吸の全画面の背景
+// 呼吸の全画面の背景
 struct BreathBackdrop: View {
     let p: Palette
     var still: Bool = false
@@ -187,7 +194,7 @@ struct BreathCard: View {
     }
 }
 
-/// いちばん前のカードのまわりの輪（カードの外側へ広がって消える。Homes の FocusCard が先頭の1枚にだけ敷く）
+//// いちばん前のカードのまわりの輪（吐く息に合わせて1本だけ外へ広がって消える。Homes の FocusCard が先頭の1枚にだけ敷く）
 struct BreathRings: View {
     let radius: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -199,18 +206,65 @@ struct BreathRings: View {
             let u: Double = BreathScene.urgency(Date())
             let period: Double = BreathScene.period(u)
             let color: Color = BreathScene.mix(0xFFB59A, 0xD65434, u)
-            ZStack {
-                ForEach(0..<2, id: \.self) { i in
-                    let k: Double = animated ? ((t / period + Double(i) * 0.5).truncatingRemainder(dividingBy: 1)) : 0.35 + Double(i) * 0.3
-                    let grow: CGFloat = CGFloat(k) * 14
-                    let alpha: Double = (1 - k) * 0.5
-                    RoundedRectangle(cornerRadius: radius + grow, style: .continuous)
-                        .stroke(color.opacity(alpha), lineWidth: 1.5)
-                        .padding(-grow)
-                }
-            }
+            // 吸いきったところで現れ、吐く間に広がって消える
+            let phase: Double = animated ? (t / period).truncatingRemainder(dividingBy: 1) : 0.6
+            let k: Double = max(0, (phase - 0.4) / 0.6)
+            let shown: Double = phase < 0.4 ? 0 : (1 - k) * 0.4
+            let grow: CGFloat = CGFloat(CritterDraw.ease(k)) * 12
+            RoundedRectangle(cornerRadius: radius + grow, style: .continuous)
+                .stroke(color.opacity(shown), lineWidth: 1)
+                .padding(-grow)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// 起床の見出しの横：夜の青の、息の円。4秒かけて吸い（ふくらむ）、6秒かけて吐く（しぼむ）
+struct BreathWakeCircle: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let animated: Bool = !reduceMotion && WorldMotion.fixedPhase == nil
+        GeometryReader { geo in
+            let size: CGSize = geo.size
+            SceneClock(fps: 20, animated: animated) { t in
+                let b: Double = animated ? BreathScene.breath(t, period: 10) : 0.7
+                Canvas { ctx, s in
+                    BreathWakeCircle.draw(ctx, size: s, b: b)
+                }
+            }
+            .frame(width: size.width, height: size.height)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    @_optimize(none)
+    static func draw(_ ctx: GraphicsContext, size: CGSize, b: Double) {
+        let w: Double = Double(size.width)
+        let h: Double = Double(size.height)
+        let big: Double = min(h * 0.47, (w - 16) / 2)
+        guard big >= 12 else { return }
+        let cx: Double = w - 10 - big
+        let cy: Double = h / 2
+        let r: Double = big * (0.6 + 0.4 * b)
+        // 吸いきったときの大きさの目安（ごく淡い輪）
+        let guide = CGRect(x: cx - big, y: cy - big, width: big * 2, height: big * 2)
+        ctx.stroke(Path(ellipseIn: guide), with: .color(sceneColor(0x26346E, 0.14)), lineWidth: 0.8)
+        // まわりのやわらかな光（吸うほど広がる）
+        CritterDraw.glow(ctx, cx, cy, r * 1.45, sceneColor(0x2B3A7A), 0.12 + 0.12 * b)
+        // 円そのもの（ふちが溶けるように。少し左上が明るい）
+        let soft: Double = r * 1.12
+        let stops: [Gradient.Stop] = [
+            Gradient.Stop(color: sceneColor(0x34488C, 0.95), location: 0),
+            Gradient.Stop(color: sceneColor(0x26346E, 0.93), location: 0.55),
+            Gradient.Stop(color: sceneColor(0x1D2758, 0.8), location: 0.82),
+            Gradient.Stop(color: sceneColor(0x1D2758, 0), location: 1),
+        ]
+        let center = CGPoint(x: cx - r * 0.12, y: cy - r * 0.14)
+        let shade = GraphicsContext.Shading.radialGradient(Gradient(stops: stops), center: center, startRadius: 0, endRadius: soft)
+        ctx.fill(Path(ellipseIn: CGRect(x: cx - soft, y: cy - soft, width: soft * 2, height: soft * 2)), with: shade)
+        CritterDraw.glow(ctx, cx - r * 0.3, cy - r * 0.35, r * 0.55, Color.white, 0.1)
     }
 }

@@ -1,94 +1,195 @@
 import SwiftUI
 
-// MARK: - 余白：生成りの紙に細い線と広い余白。遠くで円相がゆっくり回り、墨のしずくが静かに輪を広げる
-// 飾りはどれもごく薄く、文字の裏で邪魔をしない。住人の層は「いま」まで墨の線が伸び、綿毛が漂う。完了で朱の印を押す。
+/// MARK: - 余白：生成りの和紙に細い線と広い余白。紙の奥に、筆で一度だけ描いた円相がうっすら残る
+// 和紙（楮の長い繊維・雲のようなむら・小さな塵）と円相は動かないので、1枚の Canvas に一度だけ描く。
+// 動くのは、障子越しの光のようなごく淡い明るさのむらだけ（低いフレームレート）。住人の層は「いま」まで墨の線が伸び、綿毛が漂う。完了で朱の印を押す。
 
 enum YohakuScene {
     static let ink: UInt32 = 0x1A1A18
     static let hair: UInt32 = 0xD6D4CE
     static let shu: UInt32 = 0xB4461E
 
-    /// 紙の繊維（位置は比。毎回同じ）
-    struct Fiber { let x: Double; let y: Double; let len: Double; let angle: Double }
+    /// 楮の繊維（位置は比。毎回同じ）。light は光を通して白く見える繊維
+    struct Fiber { let x: Double; let y: Double; let len: Double; let angle: Double; let bend: Double; let width: Double; let alpha: Double; let light: Bool }
 
     static let fibers: [Fiber] = {
         var rnd = SceneRandom(53)
         var out: [Fiber] = []
-        for _ in 0..<44 {
-            out.append(Fiber(x: rnd.next(), y: rnd.next(), len: rnd.range(4, 11), angle: rnd.range(-0.5, 0.5)))
+        for i in 0..<72 {
+            let light: Bool = i % 4 == 0
+            let x: Double = rnd.next()
+            let y: Double = rnd.next()
+            let len: Double = rnd.range(14, 64)
+            let angle: Double = rnd.range(-3.1, 3.1)
+            let bend: Double = rnd.range(-0.5, 0.5)
+            let width: Double = rnd.range(0.3, 0.7)
+            let alpha: Double = light ? rnd.range(0.35, 0.6) : rnd.range(0.035, 0.08)
+            out.append(Fiber(x: x, y: y, len: len, angle: angle, bend: bend, width: width, alpha: alpha, light: light))
         }
         return out
     }()
 
-    /// 円相（筆で描いた丸）。始まりは太く、終わりはかすれて細くなる
-    static func enso(_ ctx: GraphicsContext, center: CGPoint, radius: Double, start: Double, alpha: Double) {
-        let pieces: Int = 14
-        let sweep: Double = Double.pi * 1.82
-        for i in 0..<pieces {
-            let f0: Double = Double(i) / Double(pieces)
-            let f1: Double = Double(i + 1) / Double(pieces)
-            var arc = Path()
-            arc.addArc(center: center, radius: radius,
-                       startAngle: Angle.radians(start + sweep * f0),
-                       endAngle: Angle.radians(start + sweep * f1 + 0.02), clockwise: false)
-            let width: Double = 7 * (1 - f0 * 0.82)
-            let a: Double = alpha * (1 - f0 * 0.6)
-            ctx.stroke(arc, with: .color(sceneColor(ink, a)), style: StrokeStyle(lineWidth: width, lineCap: .round))
-        }
-    }
+    /// 紙のむら（雲のように少し濃い・薄いところ）
+    struct Cloud { let x: Double; let y: Double; let r: Double; let dark: Bool }
 
+    static let clouds: [Cloud] = {
+        var rnd = SceneRandom(211)
+        var out: [Cloud] = []
+        for i in 0..<7 {
+            let x: Double = rnd.next()
+            let y: Double = rnd.next()
+            let r: Double = rnd.range(0.25, 0.5)
+            out.append(Cloud(x: x, y: y, r: r, dark: i % 2 == 0))
+        }
+        return out
+    }()
+
+    /// 和紙（むら・繊維・塵）
     @_optimize(none)
-    static func draw(_ ctx: GraphicsContext, size: CGSize, t: Double, compact: Bool) {
+    static func drawPaper(_ ctx: GraphicsContext, size: CGSize, compact: Bool) {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
         let rect = CGRect(origin: .zero, size: size)
         let paper = Gradient(colors: [sceneColor(0xFBF8F2), sceneColor(0xF4F1EA)])
         ctx.fill(Path(rect), with: .linearGradient(paper, startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: 0, y: h)))
-        // 紙の繊維
-        let fiberCount: Int = compact ? 16 : fibers.count
-        for f in fibers.prefix(fiberCount) {
+        // むら（ごく淡い。暗いほうは生成りの影、明るいほうは白）
+        for c in clouds {
+            let r: Double = c.r * max(w, h)
+            let center = CGPoint(x: c.x * w, y: c.y * h)
+            let color: Color = c.dark ? sceneColor(0xE6DFCF) : Color.white
+            let a: Double = c.dark ? 0.28 : 0.4
+            let stops: [Gradient.Stop] = [
+                Gradient.Stop(color: color.opacity(a), location: 0),
+                Gradient.Stop(color: color.opacity(a * 0.5), location: 0.45),
+                Gradient.Stop(color: color.opacity(0), location: 1),
+            ]
+            let shade = GraphicsContext.Shading.radialGradient(Gradient(stops: stops), center: center, startRadius: 0, endRadius: r)
+            ctx.fill(Path(ellipseIn: CGRect(x: Double(center.x) - r, y: Double(center.y) - r, width: r * 2, height: r * 2)), with: shade)
+        }
+        // 楮の繊維（ゆるく曲がった長い線。白い繊維は光を通したように見える）
+        let count: Int = compact ? 26 : fibers.count
+        let scale: Double = compact ? 0.6 : 1
+        var lightPath = Path()
+        for f in fibers.prefix(count) {
             let x: Double = f.x * w
             let y: Double = f.y * h
-            let dx: Double = cos(f.angle) * f.len
-            let dy: Double = sin(f.angle) * f.len
+            let len: Double = f.len * scale
+            let ex: Double = x + cos(f.angle) * len
+            let ey: Double = y + sin(f.angle) * len
+            let mx: Double = (x + ex) / 2 - sin(f.angle) * len * f.bend * 0.4
+            let my: Double = (y + ey) / 2 + cos(f.angle) * len * f.bend * 0.4
             var line = Path()
             line.move(to: CGPoint(x: x, y: y))
-            line.addLine(to: CGPoint(x: x + dx, y: y + dy))
-            ctx.stroke(line, with: .color(sceneColor(0x8A877F, 0.07)), lineWidth: 0.6)
+            line.addQuadCurve(to: CGPoint(x: ex, y: ey), control: CGPoint(x: mx, y: my))
+            if f.light {
+                lightPath.addPath(line)
+            } else {
+                ctx.stroke(line, with: .color(sceneColor(0x8E8775, f.alpha)), lineWidth: f.width)
+            }
         }
-        // 遠くの円相（右下。ゆっくり回る）
-        let r: Double = min(w, h) * (compact ? 0.42 : 0.36)
-        let center = CGPoint(x: w * 0.74, y: h * (compact ? 0.62 : 0.58))
-        enso(ctx, center: center, radius: r, start: -1.9 + t / 80, alpha: compact ? 0.045 : 0.05)
-        // 墨のしずくの輪（14秒ごとにどこかで1つ）
-        let cycle: Double = t / 14
-        let index: Int = Int(cycle)
-        let frac: Double = cycle - Double(index)
-        var rnd = SceneRandom(UInt64(max(0, index)) &+ 7)
-        let px: Double = w * rnd.range(0.12, 0.88)
-        let py: Double = h * rnd.range(0.18, 0.78)
-        for ring in 0..<2 {
-            let u: Double = max(0, frac - Double(ring) * 0.18)
-            guard u > 0 else { continue }
-            let rr: Double = 6 + u * (compact ? 26 : 46)
-            let a: Double = 0.11 * (1 - u)
-            let ringRect = CGRect(x: px - rr, y: py - rr * 0.42, width: rr * 2, height: rr * 0.84)
-            ctx.stroke(Path(ellipseIn: ringRect), with: .color(sceneColor(ink, a)), lineWidth: 0.7)
+        ctx.stroke(lightPath, with: .color(Color.white.opacity(0.55)), lineWidth: 0.9)
+        // 小さな塵（漉き込まれた皮のかけら）
+        var rnd = SceneRandom(97)
+        let dots: Int = compact ? 10 : 30
+        var specks = Path()
+        for _ in 0..<dots {
+            let x: Double = rnd.next() * w
+            let y: Double = rnd.next() * h
+            let r: Double = rnd.range(0.3, 0.8)
+            specks.addEllipse(in: CGRect(x: x - r, y: y - r * 0.7, width: r * 2, height: r * 1.4))
         }
-        // 上の細い罫線と、右の縦の細い線
+        ctx.fill(specks, with: .color(sceneColor(0x6E6656, 0.12)))
+    }
+
+    /// 円相（筆で一度だけ描いた丸）。穂先の毛を1本ずつ描き、終わりに近いほど毛が墨切れして、かすれ（飛白）になる
+    @_optimize(none)
+    static func enso(_ ctx: GraphicsContext, center: CGPoint, radius: Double, start: Double, alpha: Double) {
+        let cx: Double = Double(center.x)
+        let cy: Double = Double(center.y)
+        let sweep: Double = Double.pi * 1.84
+        let maxHalf: Double = radius * 0.06
+        let steps: Int = 120
+        let bristles: Int = 22
+        var rnd = SceneRandom(808)
+        var body = Path()
+        for j in 0..<bristles {
+            let o: Double = Double(j) / Double(bristles - 1) * 2 - 1
+            let jitter: Double = rnd.range(-0.04, 0.04)
+            let freq: Double = rnd.range(18, 46)
+            let phase: Double = rnd.range(0, 6.28)
+            // 外側の毛ほど早く墨が切れる
+            let dryStart: Double = 0.42 + 0.4 * (1 - abs(o)) * rnd.range(0.6, 1)
+            let endF: Double = 1 - rnd.range(0, 0.18) * (0.4 + abs(o))
+            var drawing: Bool = false
+            for s in 0...steps {
+                let f: Double = Double(s) / Double(steps)
+                if f > endF { break }
+                // 太さ：入りで押さえて太く、抜けで細くなる
+                let press: Double = min(1, f / 0.06)
+                let half: Double = maxHalf * (0.55 + 0.45 * press) * (1 - 0.55 * f)
+                let wobble: Double = 0.022 * sin(f * 5.3 + 0.8) + 0.012 * sin(f * 12.1) - 0.035 * f
+                let rr: Double = radius * (1 + wobble) + (o + jitter) * half
+                let a: Double = start + sweep * f
+                let pt = CGPoint(x: cx + cos(a) * rr, y: cy + sin(a) * rr)
+                // かすれ：途中から毛がところどころ紙に触れなくなる
+                let dry: Double = max(0, (f - dryStart) / max(0.05, 1 - dryStart))
+                let noise: Double = 0.5 + 0.5 * sin(f * freq + phase) * cos(f * freq * 0.37 + phase * 1.7)
+                let touch: Bool = noise > dry * 0.95
+                if touch {
+                    if drawing { body.addLine(to: pt) } else { body.move(to: pt) }
+                    drawing = true
+                } else {
+                    drawing = false
+                }
+            }
+        }
+        let bristleW: Double = maxHalf * 2 / Double(bristles) * 1.9
+        // 入りのにじみ（筆を置いたところに墨が少しだまる）
+        let px: Double = cx + cos(start + 0.04) * radius
+        let py: Double = cy + sin(start + 0.04) * radius
+        CritterDraw.glow(ctx, px, py, maxHalf * 2.4, sceneColor(ink), alpha * 0.35)
+        var brush: GraphicsContext = ctx
+        brush.opacity = alpha
+        brush.stroke(body, with: .color(sceneColor(ink)), style: StrokeStyle(lineWidth: bristleW, lineCap: .round, lineJoin: .round))
+    }
+
+    /// 円相の置き場所（右下。文字の行の裏をうっすら通る）
+    @_optimize(none)
+    static func ensoFrame(_ size: CGSize, compact: Bool) -> (center: CGPoint, radius: Double) {
+        let w: Double = Double(size.width)
+        let h: Double = Double(size.height)
+        if compact {
+            return (CGPoint(x: w * 0.8, y: h * 0.62), min(w, h) * 0.42)
+        }
+        return (CGPoint(x: w * 0.7, y: h * 0.64), min(w * 0.4, h * 0.24))
+    }
+
+    /// 動かない絵（和紙・円相・上の細い罫線）
+    @_optimize(none)
+    static func drawStill(_ ctx: GraphicsContext, size: CGSize, compact: Bool) {
+        let w: Double = Double(size.width)
+        let h: Double = Double(size.height)
+        drawPaper(ctx, size: size, compact: compact)
+        let f = ensoFrame(size, compact: compact)
+        enso(ctx, center: f.center, radius: f.radius, start: 2.2, alpha: compact ? 0.07 : 0.1)
         let topY: Double = compact ? 6 : h * 0.065
         var top = Path()
         top.move(to: CGPoint(x: 24, y: topY))
         top.addLine(to: CGPoint(x: w - 24, y: topY))
-        ctx.stroke(top, with: .color(sceneColor(hair, compact ? 0.6 : 0.9)), lineWidth: 0.5)
-        if !compact {
-            var side = Path()
-            side.move(to: CGPoint(x: w - 12, y: h * 0.12))
-            side.addLine(to: CGPoint(x: w - 12, y: h * 0.44))
-            ctx.stroke(side, with: .color(sceneColor(hair, 0.7)), lineWidth: 0.5)
-            let dot = CGRect(x: w - 14, y: h * 0.12 - 6, width: 4, height: 4)
-            ctx.fill(Path(dot), with: .color(sceneColor(shu, 0.55)))
-        }
+        ctx.stroke(top, with: .color(sceneColor(hair, compact ? 0.6 : 0.85)), lineWidth: 0.5)
+    }
+
+    /// 障子越しの光（ごく淡い明るさのむらが、90秒ほどでゆっくり動く）
+    @_optimize(none)
+    static func drawLight(_ ctx: GraphicsContext, size: CGSize, t: Double) {
+        let w: Double = Double(size.width)
+        let h: Double = Double(size.height)
+        let u: Double = t / 90 * 2 * Double.pi
+        let cx: Double = w * (0.35 + 0.2 * sin(u))
+        let cy: Double = h * (0.3 + 0.08 * cos(u * 0.7))
+        let reach: Double = max(w, h)
+        CritterDraw.glow(ctx, cx, cy, reach * 0.55, Color.white, 0.22)
+        CritterDraw.glow(ctx, w - cx * 0.5, h * 0.9, reach * 0.5, sceneColor(0xE9E1CF), 0.12)
     }
 }
 
@@ -104,9 +205,16 @@ struct YohakuBackdrop: View {
     var body: some View {
         GeometryReader { geo in
             let animated: Bool = SceneMotion.animated(reduceMotion: reduceMotion, size: geo.size, still: still)
-            SceneClock(fps: 15, animated: animated, stillT: stillT) { t in
+            ZStack {
                 Canvas { ctx, size in
-                    YohakuScene.draw(ctx, size: size, t: t, compact: compact)
+                    YohakuScene.drawStill(ctx, size: size, compact: compact)
+                }
+                if !compact {
+                    SceneClock(fps: 6, animated: animated, stillT: stillT) { t in
+                        Canvas { ctx, size in
+                            YohakuScene.drawLight(ctx, size: size, t: t)
+                        }
+                    }
                 }
             }
         }
@@ -114,7 +222,7 @@ struct YohakuBackdrop: View {
     }
 }
 
-/// 余白のカード：白い紙を1枚置いたような面。髪の毛ほどの縁と、左上の短い墨の線
+// 余白のカード：白い紙を1枚置いたような面。髪の毛ほどの縁と、左上の短い墨の線
 struct YohakuSheet: View {
     let p: Palette
     var radius: CGFloat? = nil
@@ -165,8 +273,8 @@ extension CritterArt {
             ctx.draw(label, at: D.pt(nowX, lane + 13), anchor: .center)
             // 綿毛（ゆっくり右へ漂う）
             let fx: Double = -20 + k.progress * (w + 40)
-            let fy: Double = lane - 46 + sin(k.t * 0.45) * 10 + sin(k.progress * Double.pi * 2) * 8
-            yohakuFluff(D.local(ctx, at: D.pt(fx, fy), scale: 1, angle: sin(k.t * 0.6) * 0.3))
+            let fy: Double = lane - 46 + sin(k.t * 0.3) * 6 + sin(k.progress * Double.pi * 2) * 6
+            yohakuFluff(D.local(ctx, at: D.pt(fx, fy), scale: 1, angle: sin(k.t * 0.4) * 0.2))
         case .reaction:
             guard let r = k.react else { return }
             let sx: Double = w * 0.62
