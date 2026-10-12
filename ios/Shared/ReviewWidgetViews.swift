@@ -33,7 +33,7 @@ struct ReviewSlotsView: View {
     }
 }
 
-/// 1つの印。ブルータルは四角に黒枠とずらした影、クレイはぷっくり、オーロラは光る
+/// 1つの印。オーロラは光る
 struct ReviewSlotMark: View {
     let p: Palette
     let done: Bool
@@ -44,31 +44,11 @@ struct ReviewSlotMark: View {
         let check: Font = Font.system(size: size * 0.48, weight: .black)
         ZStack {
             switch p.world {
-            case .brutal:
-                let shape = RoundedRectangle(cornerRadius: size * 0.16, style: .continuous)
-                if done { shape.fill(Color.black).offset(x: 2, y: 2) }
-                shape.fill(done ? p.accent : p.card)
-                shape.strokeBorder(Color.black, lineWidth: max(2, line))
-            case .clay:
-                if done {
-                    let puffy = p.accent
-                        .shadow(.inner(color: Color.white.opacity(0.45), radius: 2, x: 1.5, y: 1.5))
-                        .shadow(.inner(color: Color.black.opacity(0.18), radius: 2, x: -1.5, y: -2))
-                    Circle().fill(puffy).shadow(color: p.accent.opacity(0.35), radius: 3, x: 1, y: 2)
-                } else {
-                    Circle().strokeBorder(p.accent.opacity(0.85), lineWidth: line)
-                }
             case .aurora:
                 if done {
                     Circle().fill(p.accent).shadow(color: p.accent.opacity(0.6), radius: 4)
                 } else {
                     Circle().strokeBorder(p.accent, lineWidth: line).shadow(color: p.accent.opacity(0.4), radius: 3)
-                }
-            case .swiss:
-                if done {
-                    Circle().fill(p.accent)
-                } else {
-                    Circle().strokeBorder(p.text, lineWidth: max(1, line * 0.5))
                 }
             default:
                 if done {

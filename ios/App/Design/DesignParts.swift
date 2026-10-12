@@ -85,7 +85,7 @@ struct WorldThumb: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text("あと").font(.system(.caption2, design: p.fontDesign).weight(.bold)).foregroundStyle(p.sub)
-                    Text("3").font(.system(size: p.world == .swiss ? 30 : 22, weight: .heavy, design: p.fontDesign))
+                    Text("3").font(.system(size: 22, weight: .heavy, design: p.fontDesign))
                         .foregroundStyle(num)
                     Spacer(minLength: 0)
                     Circle().fill(p.accent).frame(width: 14, height: 14)

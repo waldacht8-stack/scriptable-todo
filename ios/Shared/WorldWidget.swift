@@ -14,14 +14,11 @@ fileprivate func wwx(_ v: UInt32, _ a: Double = 1) -> Color {
 
 // MARK: 背景（containerBackground に敷く1枚）
 
-/// ウィジェット全体の背景。日なたは右上から日だまり、オーロラは光の丸（ぼかさずグラデーションで）、
-/// ネオブルータルは平らな色に太い黒枠、クレイはパステルのふくらみ、スイスは白地に罫線、ベントはタイルの格子
+/// ウィジェット全体の背景。オーロラは光の丸（ぼかさずグラデーションで）、地層・銀河・空・霧・深海は止まった絵
 struct WidgetWorldBackground: View {
     let p: Palette
     /// いつの絵か（タイムラインの entry.date。住人の位置・雲の流れが決まる）
     var date: Date = .now
-    /// 今日完了した数（ネオブルータルのシール。nil なら TODO を読んで数える）
-    var done: Int? = nil
     /// 見本の画面用：時刻の代わりにこの位相（0〜1）で描く
     var phase: Double? = nil
 
@@ -29,7 +26,7 @@ struct WidgetWorldBackground: View {
         ZStack {
             scenery
             if WorldMotion.hasCritters(p.world) {
-                WidgetWorldCritters(p: p, date: date, done: done, phase: phase)
+                WidgetWorldCritters(p: p, date: date, phase: phase)
             }
         }
     }
@@ -45,12 +42,6 @@ struct WidgetWorldBackground: View {
             WidgetSceneBackground(p: p, stillT: phase.map { 1 + $0 * 2400 } ?? WorldMotion.sceneTime(date))
         case .yohaku, .terminal, .zankou, .breath, .crystal, .ink:
             WidgetSceneBackground(p: p, stillT: phase.map { 1 + $0 * 2400 } ?? WorldMotion.sceneTime(date))
-        case .hinata:
-            ZStack {
-                base
-                RadialGradient(colors: [wwx(0xFFE3A8, 0.95), wwx(0xFFD08A, 0.4), .clear],
-                               center: UnitPoint(x: 0.92, y: 0.0), startRadius: 4, endRadius: 280)
-            }
         case .aurora:
             ZStack {
                 base
@@ -58,21 +49,6 @@ struct WidgetWorldBackground: View {
                 auroraBlob(wwx(0x12C2B5, 0.5), at: UnitPoint(x: 1.0, y: 0.55), radius: 170)
                 auroraBlob(wwx(0xFF5FA2, 0.38), at: UnitPoint(x: 0.3, y: 1.05), radius: 160)
             }
-        case .brutal:
-            ZStack {
-                base
-                ContainerRelativeShape().strokeBorder(Color.black, lineWidth: 4)
-            }
-        case .clay:
-            ZStack {
-                base
-                RadialGradient(colors: [wwx(0xD9CCFF, 0.9), .clear], center: UnitPoint(x: 0.95, y: 0.05), startRadius: 2, endRadius: 150)
-                RadialGradient(colors: [wwx(0xFFD3EC, 0.85), .clear], center: UnitPoint(x: 0.0, y: 1.0), startRadius: 2, endRadius: 150)
-            }
-        case .swiss:
-            SwissRules(p: p, base: base)
-        case .bento:
-            BentoTiles(p: p, base: base)
         }
     }
 
@@ -81,63 +57,10 @@ struct WidgetWorldBackground: View {
     }
 }
 
-/// スイス：白地に細い罫線（4等分）と、左端の赤い帯
-private struct SwissRules: View {
-    let p: Palette
-    let base: LinearGradient
-
-    var body: some View {
-        GeometryReader { geo in
-            let h: CGFloat = geo.size.height
-            ZStack(alignment: .topLeading) {
-                base
-                ForEach(1..<4, id: \.self) { i in
-                    Rectangle().fill(p.text.opacity(0.08)).frame(height: 0.5)
-                        .offset(y: h * CGFloat(i) / 4)
-                }
-                Rectangle().fill(p.accent).frame(width: 5, height: h)
-            }
-        }
-    }
-}
-
-/// ベント：上の帯と下のタイル（中身の下にうっすら敷く）。小さいサイズは下を1枚にして、題名がタイルの境目にかからないようにする
-private struct BentoTiles: View {
-    let p: Palette
-    let base: LinearGradient
-
-    var body: some View {
-        GeometryReader { geo in
-            let gap: CGFloat = 6
-            let w: CGFloat = geo.size.width - gap * 2
-            let h: CGFloat = geo.size.height - gap * 2
-            let topH: CGFloat = (h - gap) * 0.26
-            let bottomH: CGFloat = h - gap - topH
-            let wide: Bool = geo.size.width > 250
-            let mainW: CGFloat = wide ? (w - gap) * 0.74 : w
-            let sideW: CGFloat = w - gap - mainW
-            let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
-            let tile: Color = p.card.opacity(0.55)
-            ZStack {
-                base
-                VStack(spacing: gap) {
-                    shape.fill(tile).frame(width: w, height: topH)
-                    HStack(spacing: gap) {
-                        shape.fill(tile).frame(width: mainW, height: bottomH)
-                        if wide {
-                            shape.fill(p.accent.opacity(0.06)).frame(width: sideW, height: bottomH)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 // MARK: カード・ボタンの面
 
 /// ウィジェットの中の小さなカード（件数の行・日付・かんばんのカードなど）。
-/// ブルータルは太い黒枠とずらした影、クレイはぷっくり、オーロラはすりガラス、スイスは上の罫線
+/// オーロラはすりガラス、地層・銀河・空・霧・深海はそれぞれの面
 struct WidgetCardSurface: View {
     let p: Palette
     var radius: CGFloat = 10
@@ -146,18 +69,12 @@ struct WidgetCardSurface: View {
         let r: CGFloat = min(p.radius, radius)
         let shape = RoundedRectangle(cornerRadius: r, style: .continuous)
         switch p.world {
-        case .none, .bento:
+        case .none:
             shape.fill(p.card)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             WidgetSceneCard(p: p, radius: r)
         case .yohaku, .terminal, .zankou, .breath, .crystal, .ink:
             WidgetSceneCard(p: p, radius: r)
-        case .brutal:
-            ZStack {
-                shape.fill(Color.black).offset(x: 2.5, y: 2.5)
-                shape.fill(p.card)
-                shape.strokeBorder(Color.black, lineWidth: 2)
-            }
         case .aurora:
             let sheen = LinearGradient(colors: [Color.white.opacity(0.14), Color.white.opacity(0.02)],
                                        startPoint: .top, endPoint: .bottom)
@@ -166,20 +83,6 @@ struct WidgetCardSurface: View {
                 shape.fill(sheen)
                 shape.strokeBorder(Color.white.opacity(0.24), lineWidth: 0.8)
             }
-        case .clay:
-            let puffy = p.card
-                .shadow(.inner(color: Color.white.opacity(0.95), radius: 2.5, x: 2, y: 2))
-                .shadow(.inner(color: wwx(0x5A3CA0, 0.16), radius: 3, x: -2, y: -3))
-            shape.fill(puffy)
-                .shadow(color: wwx(0x5A3CA0, 0.2), radius: 4, x: 2, y: 3)
-        case .swiss:
-            ZStack(alignment: .top) {
-                shape.fill(p.card)
-                Rectangle().fill(p.text).frame(height: 1.5)
-            }
-        case .hinata:
-            shape.fill(p.card)
-                .shadow(color: wwx(0x784614, 0.16), radius: 5, y: 3)
         }
     }
 }
@@ -193,26 +96,11 @@ struct WidgetButtonSurface: View {
         let r: CGFloat = min(p.radius, radius)
         let shape = RoundedRectangle(cornerRadius: r, style: .continuous)
         switch p.world {
-        case .brutal:
-            ZStack {
-                shape.fill(Color.black).offset(x: 3, y: 3)
-                shape.fill(p.accent)
-                shape.strokeBorder(Color.black, lineWidth: 2.5)
-            }
-        case .clay:
-            let puffy = p.accent
-                .shadow(.inner(color: Color.white.opacity(0.45), radius: 3, x: 2, y: 2))
-                .shadow(.inner(color: Color.black.opacity(0.18), radius: 3, x: -2, y: -3))
-            shape.fill(puffy)
-                .shadow(color: p.accent.opacity(0.35), radius: 5, x: 2, y: 4)
         case .aurora:
             shape.fill(p.accent)
                 .overlay(shape.strokeBorder(Color.white.opacity(0.45), lineWidth: 0.8))
                 .shadow(color: p.accent.opacity(0.45), radius: 6)
-        case .hinata:
-            shape.fill(p.accent)
-                .shadow(color: wwx(0x784614, 0.25), radius: 5, y: 3)
-        case .none, .bento, .swiss:
+        case .none:
             shape.fill(p.accent)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             WidgetSceneButton(p: p, radius: r)
@@ -254,7 +142,7 @@ private struct WorldWidgetAnimation<V: Equatable>: ViewModifier {
 
 // MARK: 大きな数字（BigCount と同じ考え方の小さい版）
 
-/// ウィジェットの件数・時刻。世界観の大きな数字（スイスは巨大で字詰め・赤、ブルータルは太く大きく）に合わせる
+/// ウィジェットの件数・時刻。世界観の大きな数字に合わせる
 struct WidgetCount: View {
     let p: Palette
     let text: String
@@ -282,30 +170,23 @@ extension Palette {
         return Font.system(size: shown, weight: world.widgetNumberWeight, design: fontDesign)
     }
 
-    /// ウィジェットの数字の字間（スイスは詰める。画面の大きな数字と同じ比）
+    /// ウィジェットの数字の字間（画面の大きな数字と同じ比）
     func widgetNumberTracking(_ size: CGFloat) -> CGFloat {
         let shown: CGFloat = (size * world.widgetNumberScale).rounded()
         return world.bigNumberTracking * shown / max(world.bigNumberSize, 1)
     }
 
-    /// ウィジェットの数字の色（スイスは強調色）
+    /// ウィジェットの数字の色
     var widgetNumberColor: Color { world.bigNumberAccent ? accent : text }
 }
 
 extension World {
     /// ウィジェットの数字の倍率（画面の大きな数字の比を保つ）
-    var widgetNumberScale: CGFloat {
-        switch self {
-        case .swiss: 1.3
-        case .brutal: 1.1
-        default: 1
-        }
-    }
+    var widgetNumberScale: CGFloat { 1 }
 
     /// ウィジェットの数字の太さ
     var widgetNumberWeight: Font.Weight {
         switch self {
-        case .brutal, .swiss: .black
         case .aurora: .bold
         default: .heavy
         }
@@ -314,59 +195,33 @@ extension World {
     /// 描き直しの動き（World.motion の「並びや中身が変わったとき」。WidgetKit は 2 秒まで）
     var widgetAnimation: Animation? { motion?.change }
 
-    /// 丸の印（未完了・完了）。ブルータルは四角
+    /// 丸の印（未完了・完了）
     func widgetCheckSymbol(done: Bool) -> String {
-        switch self {
-        case .brutal: done ? "checkmark.square.fill" : "square"
-        default: done ? "checkmark.circle.fill" : "circle"
-        }
+        done ? "checkmark.circle.fill" : "circle"
     }
 
     /// 丸の印の線の太さ
-    var widgetCheckWeight: Font.Weight {
-        switch self {
-        case .brutal: .black
-        case .swiss: .regular
-        default: .semibold
-        }
-    }
+    var widgetCheckWeight: Font.Weight { .semibold }
 
     /// 印が入れ替わるときの動き（SF Symbols の置き換え）
     var widgetSymbolTransition: ContentTransition {
         switch self {
-        case .clay, .bento: ContentTransition.symbolEffect(ReplaceSymbolEffect.replace.downUp)
-        case .aurora, .hinata: ContentTransition.symbolEffect(ReplaceSymbolEffect.replace.offUp)
+        case .aurora: ContentTransition.symbolEffect(ReplaceSymbolEffect.replace.offUp)
         default: ContentTransition.symbolEffect(ReplaceSymbolEffect.replace)
         }
     }
 
     /// 完了した行が抜ける・新しい行が入るときの動き
-    /// ブルータル：短く押し出す／クレイ：縮んで弾む／オーロラ：ぼけて消える／日なた：暖色に染まって消える／スイス：横へ滑る
+    /// オーロラ：ぼけて消える。地層・銀河・空・霧・深海はそれぞれの動き
     func widgetRowTransition(_ p: Palette) -> AnyTransition {
         switch self {
         case .none:
             return AnyTransition.asymmetric(
                 insertion: AnyTransition.move(edge: .bottom).combined(with: .opacity),
                 removal: AnyTransition.move(edge: .trailing).combined(with: .opacity))
-        case .brutal:
-            return AnyTransition.asymmetric(insertion: AnyTransition.push(from: .bottom),
-                                            removal: AnyTransition.push(from: .leading))
-        case .clay:
-            return AnyTransition.asymmetric(
-                insertion: AnyTransition.scale(scale: 0.7).combined(with: .opacity),
-                removal: AnyTransition.scale(scale: 0.4).combined(with: .opacity))
         case .aurora:
             let blur: BlurReplaceTransition = .blurReplace
             return AnyTransition(blur)
-        case .hinata:
-            let warm = AnyTransition.modifier(active: WarmFade(tint: p.accent, on: true),
-                                              identity: WarmFade(tint: p.accent, on: false))
-            return AnyTransition.asymmetric(insertion: AnyTransition.opacity, removal: warm)
-        case .swiss:
-            return AnyTransition.asymmetric(insertion: AnyTransition.move(edge: .trailing),
-                                            removal: AnyTransition.move(edge: .leading))
-        case .bento:
-            return AnyTransition.scale(scale: 0.88).combined(with: .opacity)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             return sceneRowTransition()
         case .yohaku, .terminal, .zankou, .breath, .crystal, .ink:
@@ -377,32 +232,17 @@ extension World {
     /// 1件を大きく出す表示（フォーカス・起床の前後）で、中身が入れ替わるときの動き
     func widgetSwapTransition(_ p: Palette) -> AnyTransition {
         switch self {
-        case .none, .brutal, .bento:
+        case .none:
             return AnyTransition.push(from: .bottom)
-        case .swiss:
-            return AnyTransition.push(from: .trailing)
         default:
             return widgetRowTransition(p)
         }
     }
 }
 
-/// 日なたの「暖色に染まって消える」（消える側だけ。少し上へ浮かぶ）
-private struct WarmFade: ViewModifier {
-    let tint: Color
-    let on: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .colorMultiply(on ? tint : Color.white)
-            .opacity(on ? 0 : 1)
-            .offset(y: on ? -8 : 0)
-    }
-}
-
 // MARK: 進み具合の輪（習慣）
 
-/// 世界観ごとの輪。ブルータルは黒い太線、スイスは角の線端と細い下地、クレイはぷっくり、オーロラは光る
+/// 世界観ごとの輪。オーロラは光る
 struct WidgetWorldRing: View {
     let p: Palette
     let fraction: Double
@@ -411,26 +251,6 @@ struct WidgetWorldRing: View {
     var body: some View {
         let shown: Double = max(0, min(1, fraction))
         switch p.world {
-        case .brutal:
-            ZStack {
-                Circle().stroke(Color.black, lineWidth: lineWidth + 3)
-                Circle().stroke(p.card, lineWidth: lineWidth - 1)
-                Circle().trim(from: 0, to: shown)
-                    .stroke(p.accent, style: StrokeStyle(lineWidth: lineWidth - 1, lineCap: .butt))
-                    .rotationEffect(.degrees(-90))
-                    .opacity(shown > 0 ? 1 : 0)
-            }
-        case .swiss:
-            ZStack {
-                Circle().stroke(p.text.opacity(0.12), lineWidth: max(1, lineWidth * 0.35))
-                Circle().trim(from: 0, to: shown)
-                    .stroke(p.accent, style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
-                    .rotationEffect(.degrees(-90))
-                    .opacity(shown > 0 ? 1 : 0)
-            }
-        case .clay:
-            HabitRing(fraction: shown, color: p.accent, track: p.card, lineWidth: lineWidth)
-                .shadow(color: wwx(0x5A3CA0, 0.22), radius: 3, x: 1, y: 2)
         case .aurora:
             HabitRing(fraction: shown, color: p.accent, track: Color.white.opacity(0.12), lineWidth: lineWidth)
                 .shadow(color: p.accent.opacity(0.6), radius: 4)
@@ -451,8 +271,7 @@ extension World {
     var accessoryDesign: Font.Design? {
         switch self {
         case .none: nil
-        case .hinata, .clay, .aurora: .rounded
-        case .brutal, .swiss, .bento: .default
+        case .aurora: .rounded
         case .galaxy, .sky, .deepsea: .rounded
         case .strata, .mist: .default
         case .yohaku: .serif
@@ -464,10 +283,9 @@ extension World {
         }
     }
 
-    /// ロック画面の文字の太さ（ブルータルはいちばん太く）
+    /// ロック画面の文字の太さ
     func accessoryWeight(_ w: Font.Weight) -> Font.Weight {
         switch self {
-        case .brutal: (w == .regular || w == .medium) ? .bold : .black
         case .aurora: w == .heavy ? .bold : w
         default: w
         }
@@ -478,18 +296,18 @@ extension World {
         Font.system(style, design: accessoryDesign, weight: accessoryWeight(weight))
     }
 
-    /// ロック画面の大きな数字（スイスは大きく字を詰める）
+    /// ロック画面の大きな数字
     func accessoryNumberFont(_ size: CGFloat) -> Font {
-        let s: CGFloat = self == .swiss ? size * 1.2 : size
-        let w: Font.Weight = self == .swiss || self == .brutal ? .black : (self == .aurora ? .bold : .heavy)
+        let s: CGFloat = size
+        let w: Font.Weight = self == .aurora ? .bold : .heavy
         return Font.system(size: s, weight: w, design: accessoryDesign ?? .default)
     }
 
     /// ロック画面の大きな数字の字間
-    var accessoryTracking: CGFloat { self == .swiss ? -1.2 : 0 }
+    var accessoryTracking: CGFloat { 0 }
 }
 
-/// ロック画面の丸い背景。ブルータルは太い輪、スイスは細い輪、オーロラは二重の輪、クレイは内側にふくらみ
+/// ロック画面の丸い背景。オーロラは二重の輪
 struct AccessoryWorldBackground: View {
     let world: World
 
@@ -497,14 +315,8 @@ struct AccessoryWorldBackground: View {
         ZStack {
             AccessoryWidgetBackground()
             switch world {
-            case .brutal:
-                Circle().strokeBorder(lineWidth: 3.5)
-            case .swiss:
-                Circle().strokeBorder(lineWidth: 1)
             case .aurora:
                 Circle().strokeBorder(lineWidth: 1).opacity(0.5).padding(3)
-            case .clay:
-                Circle().fill(HierarchicalShapeStyle.primary.opacity(0.12)).padding(5)
             default:
                 EmptyView()
             }
@@ -512,25 +324,12 @@ struct AccessoryWorldBackground: View {
     }
 }
 
-/// ロック画面の四角いウィジェットの飾り。スイスは左に細い罫線、ブルータルは太い帯
+/// ロック画面の四角いウィジェットの飾り（いまは飾りなし。世界観ごとに足せるよう残す）
 struct AccessoryWorldFrame: ViewModifier {
     let world: World
 
     func body(content: Content) -> some View {
-        switch world {
-        case .swiss:
-            HStack(spacing: 5) {
-                Rectangle().frame(width: 1.5)
-                content
-            }
-        case .brutal:
-            HStack(spacing: 5) {
-                Rectangle().frame(width: 4)
-                content
-            }
-        default:
-            content
-        }
+        content
     }
 }
 

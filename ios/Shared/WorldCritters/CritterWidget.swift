@@ -2,74 +2,73 @@ import SwiftUI
 
 // MARK: - ウィジェットの住人（止まった絵。entry.date から位置が決まり、WidgetKit が次の絵との間を動かす）
 // 位置は .position / .rotationEffect / .trim で決める（Canvas の中で動かすと、描き直しの間がつながらないため）。
-// 住人はウィジェットの下の余白（中身の外側の 16pt）の中だけを通る。なので文字には決して重ならない。
-// 空の太陽だけは上の余白を進む。オーロラのカーテンは背景の光としてうっすら敷く。ぼかしは使わず、図形は1匹あたり数個。
+// 住人はウィジェットの下の余白（中身の外側）の中の「帯」だけを通る。帯は余白から文字との間を 2.5pt あけた高さで、
+// 住人の絵はこの帯の高さに収まる大きさに縮めて描く（Canvas は枠の外を描かないので、光もはみ出さない）。なので文字には決して重ならない。
+// 空の太陽だけは上の余白の帯を進む。オーロラのカーテンは背景の光としてうっすら敷く。ぼかしは使わない。
+
+/// 住人が通ってよい帯（上端と下端）
+struct CritterBand {
+    let top: CGFloat
+    let bottom: CGFloat
+    var height: CGFloat { max(1, bottom - top) }
+    var mid: CGFloat { (top + bottom) / 2 }
+}
 
 enum CritterWidgetArt {
     typealias D = CritterDraw
     typealias C = Critters
+    typealias F = Fantasy
 
-    /// 下の余白の真ん中（ここを通り道にする）
-    static func laneY(_ h: CGFloat) -> CGFloat { h - 8 }
+    /// 余白（WidgetKit の widgetContentMargins。アプリの中の見本では 0 なので 16 とみなす）
+    @_optimize(none)
+    static func margin(_ m: CGFloat) -> CGFloat { m < 8 ? 16 : m }
+
+    /// 下の余白の帯（文字との間を 2.5pt あける）
+    @_optimize(none)
+    static func bottomBand(_ h: CGFloat, margin m: CGFloat) -> CritterBand {
+        CritterBand(top: h - margin(m) + 2.5, bottom: h - 0.5)
+    }
+
+    /// 上の余白の帯（空の太陽）
+    @_optimize(none)
+    static func topBand(margin m: CGFloat) -> CritterBand {
+        CritterBand(top: 0.5, bottom: margin(m) - 2.5)
+    }
 
     /// 一巡の秒数（15分ごとの絵で、どれだけ進むか）
+    @_optimize(none)
     static func period(_ w: World) -> Double {
         switch w {
         case .galaxy, .sky: 2 * 3600
-        case .mist, .deepsea: 3 * 3600
+        case .mist, .deepsea, .aurora: 3 * 3600
         default: 86400
         }
     }
 
-    static func view(_ p: Palette, size: CGSize, knobs k: CritterKnobs) -> AnyView {
+    @_optimize(none)
+    static func view(_ p: Palette, size: CGSize, knobs k: CritterKnobs, margins: EdgeInsets) -> AnyView {
         let w: CGFloat = size.width
         let h: CGFloat = size.height
         guard w > 1 && h > 1 else { return AnyView(EmptyView()) }
-        let lane: CGFloat = laneY(h)
+        let band: CritterBand = bottomBand(h, margin: margins.bottom)
         switch p.world {
-        case .strata: return AnyView(WidgetMole(size: size, k: k))
-        case .galaxy:
-            let x: CGFloat = w * CGFloat(0.1 + 0.8 * k.progress)
-            let y: CGFloat = lane - 1 + CGFloat(sin(k.progress * 2 * Double.pi)) * 1.5
-            let angle: Double = (k.progress - 0.5) * 1.6
-            return AnyView(sprite(18, 18, x: x, y: y, angle: angle) { c, s in
-                C.astronaut(D.local(c, at: CritterDraw.cpt(s.width / 2, s.height / 2 + 1), scale: 0.5), t: 0)
-            })
-        case .sky: return AnyView(WidgetSky(size: size, k: k))
-        case .mist:
-            let x: CGFloat = w * CGFloat(0.9 - 0.78 * k.progress)
-            return AnyView(ZStack {
-                sprite(24, 24, x: 12, y: lane, angle: 0) { c, s in
-                    D.glow(c, Double(s.width) / 2, Double(s.height) / 2, 11, sceneColor(0xFFC77A), 0.55)
-                    D.circle(c, Double(s.width) / 2, Double(s.height) / 2, 1.8, sceneColor(0xFFD9A0))
-                }
-                sprite(18, 16, x: x, y: h - 9, angle: 0) { c, s in
-                    C.deer(D.local(c, at: CritterDraw.cpt(s.width / 2 + 1, s.height - 1), scale: 0.34),
-                           walk: k.progress * 40, color: sceneColor(0x3E4A55, 0.6))
-                }
-            })
-        case .deepsea:
-            let x: CGFloat = w * CGFloat(0.9 - 0.8 * k.progress)
-            return AnyView(sprite(34, 12, x: x, y: lane, angle: 0) { c, s in
-                C.whale(D.local(c, at: CritterDraw.cpt(s.width / 2, s.height / 2), scale: 0.32), t: k.progress * 30)
-            })
-        case .hinata: return AnyView(WidgetCat(size: size, k: k))
+        case .strata: return AnyView(WidgetMole(size: size, band: band, k: k))
+        case .galaxy: return galaxy(w: w, band: band, k: k)
+        case .sky: return AnyView(WidgetSky(size: size, band: band, top: topBand(margin: margins.top), k: k))
+        case .mist: return mist(w: w, band: band, k: k)
+        case .deepsea: return deepsea(w: w, band: band, k: k)
+        case .aurora: return aurora(w: w, band: band, k: k)
         case .crystal: return crystalLane(size: size, k: k)
         case .ink: return inkLane(size: size, k: k)
-        case .brutal:
-            return AnyView(Canvas { c, s in stickers(c, size: s, count: k.count) })
-        case .aurora:
-            return AnyView(Canvas { c, s in curtains(c, size: s, day: k.day) })
-        case .bento: return AnyView(WidgetBento(size: size, k: k))
-        case .swiss: return AnyView(WidgetSwiss(size: size, k: k))
         case .yohaku: return AnyView(WidgetYohaku(size: size, k: k))
         case .terminal: return AnyView(WidgetTerminal(size: size, k: k))
         case .zankou, .breath: return AnyView(EmptyView())
-        case .none, .clay: return AnyView(EmptyView())
+        case .none: return AnyView(EmptyView())
         }
     }
 
     /// 小さな絵を1枚、決まった位置に置く（位置と向きは WidgetKit が描き直しの間でつなぐ）
+    @_optimize(none)
     static func sprite(_ sw: CGFloat, _ sh: CGFloat, x: CGFloat, y: CGFloat, angle: Double,
                        draw: @escaping (GraphicsContext, CGSize) -> Void) -> some View {
         Canvas { c, s in draw(c, s) }
@@ -78,18 +77,78 @@ enum CritterWidgetArt {
             .position(x: x, y: y)
     }
 
-    /// ネオブルータル：今日完了した数だけシールを貼る（下の余白を右から左へ。10枚まで）
+    /// 帯の高さに収まるように縮めた絵（box は絵の元の大きさ、origin は box の中の原点）
     @_optimize(none)
-    static func stickers(_ ctx: GraphicsContext, size: CGSize, count: Int) {
-        let w: Double = Double(size.width)
-        let y0: Double = Double(laneY(size.height))
-        let n: Int = min(10, max(0, count))
-        for i in 0..<n {
-            let x: Double = w - 14 - Double(i) * 13
-            let y: Double = y0 - (i % 2 == 0 ? 0 : 1.5)
-            let angle: Double = i % 2 == 0 ? -0.22 : 0.18
-            C.sticker(D.local(ctx, at: D.pt(x, y), scale: 0.42, angle: angle), kind: i)
+    static func fitted(box: CGSize, origin: CGPoint, band: CritterBand, x: CGFloat, maxScale: CGFloat,
+                       draw: @escaping (GraphicsContext) -> Void) -> some View {
+        let scale: CGFloat = min(maxScale, band.height / box.height)
+        let sw: CGFloat = box.width * scale
+        let sh: CGFloat = box.height * scale
+        let ox: CGFloat = origin.x * scale
+        let oy: CGFloat = origin.y * scale
+        return sprite(sw, sh, x: x, y: band.bottom - sh / 2, angle: 0) { c, _ in
+            draw(D.local(c, at: D.cpt(ox, oy), scale: Double(scale)))
         }
+    }
+
+    /// 銀河：寝そべるように漂う宇宙飛行士（左から右へ）
+    @_optimize(none)
+    static func galaxy(w: CGFloat, band: CritterBand, k: CritterKnobs) -> AnyView {
+        let x: CGFloat = w * CGFloat(0.14 + 0.72 * k.progress)
+        let tilt: Double = sin(k.progress * 4 * Double.pi) * 0.12
+        let t: Double = k.progress * 600
+        let v = fitted(box: CGSize(width: 64, height: 40), origin: CGPoint(x: 33, y: 23), band: band, x: x, maxScale: 0.5) { c in
+            var a: GraphicsContext = c
+            a.rotate(by: Angle.radians(-1.35 + tilt))
+            Fantasy.astronaut(a, t: t, halo: false)
+        }
+        return AnyView(v)
+    }
+
+    /// 霧：左端の灯りと、草をはみながら右から左へ進む鹿
+    @_optimize(none)
+    static func mist(w: CGFloat, band: CritterBand, k: CritterKnobs) -> AnyView {
+        let x: CGFloat = w * CGFloat(0.86 - 0.66 * k.progress)
+        let walk: Double = k.progress * 40
+        let lampBox = CGSize(width: 26, height: 40)
+        let lampScale: CGFloat = band.height / lampBox.height
+        let lampX: CGFloat = 4 + lampBox.width * lampScale / 2
+        return AnyView(ZStack {
+            fitted(box: lampBox, origin: CGPoint(x: 5, y: 56), band: band, x: lampX, maxScale: 1) { c in
+                D.glow(c, 11.7, -35.5, 11, sceneColor(0xFFC77A), 0.6)
+                Fantasy.lantern(c, height: 46, swing: 0.08, flicker: 0.6, t: 0, halo: false)
+            }
+            fitted(box: CGSize(width: 92, height: 56), origin: CGPoint(x: 62, y: 55), band: band, x: x, maxScale: 0.4) { c in
+                let pose = Fantasy.DeerPose(walk: walk, headDown: 1, ear: 0, tail: 0, breath: nil, lightSide: -1, light: 0.5)
+                Fantasy.deer(c, pose: pose, near: sceneColor(0x4D5964), far: sceneColor(0x7D8891), belly: sceneColor(0x37414A),
+                             rim: sceneColor(0xFFC98A))
+            }
+        })
+    }
+
+    /// 深海：右から左へゆっくり泳ぐクジラ
+    @_optimize(none)
+    static func deepsea(w: CGFloat, band: CritterBand, k: CritterKnobs) -> AnyView {
+        let x: CGFloat = w * CGFloat(0.84 - 0.68 * k.progress)
+        let t: Double = 2.6 + k.progress * 40
+        let v = fitted(box: CGSize(width: 108, height: 38), origin: CGPoint(x: 52, y: 16), band: band, x: x, maxScale: 0.5) { c in
+            Fantasy.whale(c, t: t, length: 100, haze: 0, finSweep: 0.45)
+        }
+        return AnyView(v)
+    }
+
+    /// オーロラ：15分ごとに形の変わるカーテン（上の方にうっすら。背景の光）と、雪の上を駆ける狐
+    @_optimize(none)
+    static func aurora(w: CGFloat, band: CritterBand, k: CritterKnobs) -> AnyView {
+        let x: CGFloat = w * CGFloat(0.14 + 0.72 * k.progress)
+        let run: Double = k.progress * 90
+        let day: Double = k.day
+        return AnyView(ZStack {
+            Canvas { c, s in curtains(c, size: s, day: day) }
+            fitted(box: CGSize(width: 74, height: 35), origin: CGPoint(x: 42, y: 34), band: band, x: x, maxScale: 0.5) { c in
+                Fantasy.foxRun(c, run: run, rim: sceneColor(0x86FBDD))
+            }
+        })
     }
 
     /// オーロラ：15分ごとに形の変わるカーテン（上の方にうっすら。背景の光）
@@ -114,19 +173,22 @@ enum CritterWidgetArt {
 /// 地層：一日かけて下の余白にトンネルが伸び、その先でモグラが掘っている
 private struct WidgetMole: View {
     let size: CGSize
+    let band: CritterBand
     let k: CritterKnobs
 
     var body: some View {
         let w: CGFloat = size.width
-        let y: CGFloat = CritterWidgetArt.laneY(size.height)
+        let y: CGFloat = band.mid
         let reach: Double = max(0.03, min(1, k.day))
         let mx: CGFloat = 8 + (w - 16) * CGFloat(reach)
+        let my: CGFloat = WidgetTunnel.wave(Double(mx), w: Double(w), y: Double(y))
+        let scale: Double = min(0.55, Double(band.height) / 16)
         ZStack {
             WidgetTunnel(y: y)
                 .trim(from: 0, to: reach)
                 .stroke(sceneColor(0x5E4129, 0.45), style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-            CritterWidgetArt.sprite(20, 12, x: mx, y: WidgetTunnel.wave(Double(mx), w: Double(w), y: Double(y)), angle: 0) { c, s in
-                Critters.mole(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2 - 2, s.height / 2), scale: 0.55), t: 0, digging: false)
+            CritterWidgetArt.sprite(20, min(12, band.height), x: mx, y: my, angle: 0) { c, s in
+                Critters.mole(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2 - 2, s.height / 2), scale: scale), t: 0, digging: false)
             }
         }
     }
@@ -136,6 +198,7 @@ private struct WidgetMole: View {
 private struct WidgetTunnel: Shape {
     let y: CGFloat
 
+    @_optimize(none)
     static func wave(_ x: Double, w: Double, y: Double) -> CGFloat {
         CGFloat(y + sin(x / max(w, 1) * Double.pi * 3) * 1.5)
     }
@@ -153,111 +216,34 @@ private struct WidgetTunnel: Shape {
     }
 }
 
-/// 空：太陽が上の余白を東から西へ進み、紙飛行機が下の余白を飛ぶ（雲は背景が時刻で流す）
+/// 空：太陽が上の余白の帯を東から西へ進み、紙飛行機が下の余白を飛ぶ（雲は背景が時刻で流す）
 private struct WidgetSky: View {
     let size: CGSize
+    let band: CritterBand
+    let top: CritterBand
     let k: CritterKnobs
 
     var body: some View {
         let w: CGFloat = size.width
-        let h: CGFloat = size.height
         let sunF: Double = CritterDraw.span(k.day, 0.25, 0.75)
         let showSun: Bool = !SkyPhase.current().isNight && sunF > 0 && sunF < 1
+        let sh: CGFloat = top.height
         let sx: CGFloat = w * CGFloat(0.08 + 0.84 * sunF)
-        let sy: CGFloat = 8 - CGFloat(sin(sunF * Double.pi)) * 2
         let px: CGFloat = w * CGFloat(0.08 + 0.84 * k.progress)
-        let py: CGFloat = CritterWidgetArt.laneY(h) + CGFloat(sin(k.progress * 4 * Double.pi)) * 1.5
-        let tilt: Double = -cos(k.progress * 4 * Double.pi) * 0.2
+        let py: CGFloat = band.mid + CGFloat(sin(k.progress * 4 * Double.pi)) * 0.8
+        let tilt: Double = -cos(k.progress * 4 * Double.pi) * 0.12
+        let planeScale: Double = min(0.65, Double(band.height) / 14)
         ZStack {
             if showSun {
-                CritterWidgetArt.sprite(22, 22, x: sx, y: sy, angle: 0) { c, s in
-                    CritterDraw.glow(c, Double(s.width) / 2, Double(s.height) / 2, 11, sceneColor(0xFFF1B8), 0.8)
-                    CritterDraw.circle(c, Double(s.width) / 2, Double(s.height) / 2, 4, sceneColor(0xFFE9A0))
+                CritterWidgetArt.sprite(sh * 2, sh, x: sx, y: top.mid, angle: 0) { c, s in
+                    let cx: Double = Double(s.width) / 2
+                    let cy: Double = Double(s.height) / 2
+                    Fantasy.softEllipse(c, cx, cy, cx, cy, sceneColor(0xFFF1B8), 0.8)
+                    CritterDraw.circle(c, cx, cy, cy * 0.55, sceneColor(0xFFE9A0))
                 }
             }
-            CritterWidgetArt.sprite(18, 12, x: px, y: py, angle: tilt) { c, s in
-                Critters.paperPlane(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2, s.height / 2), scale: 0.65), dark: k.dark)
-            }
-        }
-    }
-}
-
-/// 日なた：日の当たる場所（朝は左、夕方は右へ移る）に猫が座る
-private struct WidgetCat: View {
-    let size: CGSize
-    let k: CritterKnobs
-
-    var body: some View {
-        let w: CGFloat = size.width
-        let h: CGFloat = size.height
-        let f: Double = CritterDraw.span(k.day, 0.25, 0.75)
-        let x: CGFloat = w * CGFloat(0.12 + 0.76 * f)
-        let ground: CGFloat = h - 2
-        let pool = RadialGradient(colors: [sceneColor(0xFFD08A, 0.8), sceneColor(0xFFD08A, 0)], center: .center,
-                                  startRadius: 0, endRadius: 22)
-        ZStack {
-            Ellipse().fill(pool).frame(width: 44, height: 8).position(x: x, y: ground - 2)
-            CritterWidgetArt.sprite(14, 15, x: x, y: ground - 7.5, angle: 0) { c, s in
-                Critters.catSitting(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2, s.height), scale: 0.6))
-            }
-        }
-    }
-}
-
-/// ベント：右下の余白の小さなタイル。15分ごとに並びが変わる（WidgetKit が入れ替わりを動かす）
-private struct WidgetBento: View {
-    let size: CGSize
-    let k: CritterKnobs
-
-    var body: some View {
-        let cell: CGFloat = 5.5
-        let gap: CGFloat = 1.5
-        let w: CGFloat = size.width
-        let h: CGFloat = size.height
-        let originX: CGFloat = w - 16 - cell * 3 - gap * 2
-        let originY: CGFloat = h - 2.5 - cell * 2 - gap
-        let orders: [[Int]] = Critters.bentoOrders
-        let order: [Int] = orders[Int(k.day * 96) % orders.count]
-        ZStack {
-            ForEach(0..<Critters.bentoColors.count, id: \.self) { i in
-                let slot: CGPoint = Critters.bentoSlot(order[i], cell: Double(cell), gap: Double(gap))
-                RoundedRectangle(cornerRadius: 1.6, style: .continuous)
-                    .fill(sceneColor(Critters.bentoColors[i]))
-                    .overlay(RoundedRectangle(cornerRadius: 1.6, style: .continuous).strokeBorder(sceneColor(0x1E1B16, 0.18), lineWidth: 0.5))
-                    .frame(width: cell, height: cell)
-                    .position(x: originX + slot.x + cell / 2, y: originY + slot.y + cell / 2)
-            }
-        }
-    }
-}
-
-/// スイス：右下の余白の小さな時計と図形。針・四角・三角の角度がいまの時刻になる
-private struct WidgetSwiss: View {
-    let size: CGSize
-    let k: CritterKnobs
-
-    var body: some View {
-        let w: CGFloat = size.width
-        let hour: Double = k.day * 2 * 360
-        let minute: Double = k.day * 24 * 360
-        let r: CGFloat = 6
-        let cx: CGFloat = w - 18 - r
-        let cy: CGFloat = CritterWidgetArt.laneY(size.height)
-        let ink: Color = sceneColor(0x111111)
-        ZStack {
-            Circle().strokeBorder(ink, lineWidth: 0.8).frame(width: r * 2, height: r * 2).position(x: cx, y: cy)
-            Capsule().fill(ink).frame(width: 1.4, height: r * 0.55)
-                .offset(y: -r * 0.27).rotationEffect(Angle.degrees(hour)).position(x: cx, y: cy)
-            Capsule().fill(ink).frame(width: 0.9, height: r * 0.85)
-                .offset(y: -r * 0.42).rotationEffect(Angle.degrees(minute)).position(x: cx, y: cy)
-            Circle().fill(sceneColor(0xD71F16)).frame(width: 2, height: 2).position(x: cx, y: cy)
-            Rectangle().fill(sceneColor(0xD71F16)).frame(width: 5, height: 5)
-                .rotationEffect(Angle.degrees(minute / 2)).position(x: cx - r - 8, y: cy)
-            CritterWidgetArt.sprite(8, 8, x: cx - r - 19, y: cy, angle: -hour * Double.pi / 180) { c, s in
-                let mx: Double = Double(s.width) / 2
-                let my: Double = Double(s.height) / 2
-                CritterDraw.polygon(c, [CritterDraw.pt(mx, my - 3.5), CritterDraw.pt(mx + 3.2, my + 2.5),
-                                        CritterDraw.pt(mx - 3.2, my + 2.5)], sceneColor(0x111111))
+            CritterWidgetArt.sprite(18, min(12, band.height), x: px, y: py, angle: tilt) { c, s in
+                Critters.paperPlane(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2, s.height / 2), scale: planeScale), dark: k.dark)
             }
         }
     }

@@ -5,7 +5,7 @@ import WidgetKit
 // 昼（6時〜18時）は太陽が弧を左から右へ、夜（18時〜翌6時）は月が同じ弧を進む。位置は時刻から計算する。
 // 空の色は時間帯（明け方・昼・夕方・夜）で変わる。弧の上に今日の TODO を時刻の位置に置く（○ これから・● 済み）。
 // タイムラインは 15 分ごとの絵を先に用意しておき、時間が進むと太陽（月）が少しずつ動く。
-// 世界観は、空の上の飾り（ブルータルの黒枠・スイスの帯・オーロラの光・日なたの日だまり・ベントのタイル）と、
+// 世界観は、空の上の飾り（オーロラの光）と、
 // 数字の字・切り替わりの動きで出す（部品は WorldWidget.swift）。
 
 /// 空の時間帯
@@ -300,39 +300,26 @@ struct SunMoonWidgetView: View {
         }
     }
 
-    /// TODO の点：○ これから、● 済み（ブルータルは四角）
+    /// TODO の点：○ これから、● 済み
     @ViewBuilder private func dot(_ d: SunMoonDot, period: SkyPeriod, radius: CGFloat) -> some View {
         let size: CGFloat = radius * 2
-        if p.world == .brutal {
-            let shape = Rectangle()
-            ZStack {
-                shape.fill(d.done ? period.ink.opacity(0.6) : period.hollowFill)
-                shape.strokeBorder(period.ink, lineWidth: 1.5)
-            }
-            .frame(width: size, height: size)
-        } else {
-            ZStack {
-                Circle().fill(d.done ? period.ink.opacity(0.55) : period.hollowFill)
-                if !d.done { Circle().strokeBorder(period.ink, lineWidth: 1.5) }
-            }
-            .frame(width: size, height: size)
+        ZStack {
+            Circle().fill(d.done ? period.ink.opacity(0.55) : period.hollowFill)
+            if !d.done { Circle().strokeBorder(period.ink, lineWidth: 1.5) }
         }
+        .frame(width: size, height: size)
     }
 
     /// 太陽（昼）か月（夜）
     @ViewBuilder private func celestial(_ m: SunMoonModel) -> some View {
         let r: CGFloat = bodyRadius
-        let glowScale: CGFloat = p.world == .hinata ? 2.4 : 1.85
+        let glowScale: CGFloat = 1.85
         if m.isDay {
             let core: Color = m.period == .day ? skyx(0xFFD84A) : (m.period == .dusk ? skyx(0xFFB36B) : skyx(0xFFE07A))
             let glow: Color = m.period == .day ? skyx(0xFFF6C8, 0.5) : skyx(0xFFF1B8, 0.45)
             ZStack {
                 Circle().fill(glow).frame(width: r * 2 * glowScale, height: r * 2 * glowScale)
                 Circle().fill(core).frame(width: r * 2, height: r * 2)
-                    .shadow(color: p.world == .clay ? Color.black.opacity(0.18) : Color.clear, radius: 2, x: 1, y: 2)
-                if p.world == .brutal {
-                    Circle().strokeBorder(Color.black, lineWidth: 2).frame(width: r * 2, height: r * 2)
-                }
             }
         } else {
             ZStack {
@@ -340,9 +327,6 @@ struct SunMoonWidgetView: View {
                 Circle().fill(skyx(0xF4EFD9)).frame(width: r * 2, height: r * 2)
                 Circle().fill(m.period.moonShade).frame(width: r * 1.68, height: r * 1.68)
                     .offset(x: r * 0.47, y: -r * 0.38)
-                if p.world == .brutal {
-                    Circle().strokeBorder(Color.black, lineWidth: 2).frame(width: r * 2, height: r * 2)
-                }
             }
         }
     }
@@ -523,8 +507,7 @@ struct SunMoonWidgetView: View {
     /// 大の下の帯：次の1件、今日の一覧、のこり
     private func panel(_ m: SunMoonModel) -> some View {
         let period: SkyPeriod = m.period
-        let bento: Bool = p.world == .bento
-        let shape = RoundedRectangle(cornerRadius: bento ? 16 : 0, style: .continuous)
+        let shape = Rectangle()
         return VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(nextLine).font(Font.system(size: 16, weight: .heavy, design: p.fontDesign))
@@ -545,16 +528,8 @@ struct SunMoonWidgetView: View {
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
-            ZStack(alignment: .top) {
-                shape.fill(period.panel)
-                switch p.world {
-                case .brutal: Rectangle().fill(Color.black).frame(height: 3)
-                case .swiss: Rectangle().fill(period.panelText).frame(height: 1.5)
-                default: EmptyView()
-                }
-            }
+            shape.fill(period.panel)
         }
-        .padding(bento ? 6 : 0)
     }
 
     private func row(time: String, title: String, done: Bool, period: SkyPeriod, timeColor: Color? = nil) -> some View {
@@ -651,23 +626,10 @@ struct SunMoonSky: View {
         ZStack {
             base
             switch world {
-            case .brutal:
-                ContainerRelativeShape().strokeBorder(Color.black, lineWidth: 4)
-            case .swiss:
-                HStack(spacing: 0) {
-                    Rectangle().fill(accent).frame(width: 5)
-                    Spacer(minLength: 0)
-                }
             case .aurora:
                 RadialGradient(colors: [skyx(0x6D4BFF, 0.35), .clear], center: UnitPoint(x: 0.1, y: 0.05), startRadius: 0, endRadius: 170)
                 RadialGradient(colors: [skyx(0x12C2B5, 0.25), .clear], center: UnitPoint(x: 1.0, y: 0.5), startRadius: 0, endRadius: 150)
-            case .hinata:
-                RadialGradient(colors: [skyx(0xFFE3A8, 0.5), .clear], center: UnitPoint(x: 0.92, y: 0.0), startRadius: 4, endRadius: 220)
-            case .clay:
-                RadialGradient(colors: [Color.white.opacity(0.35), .clear], center: UnitPoint(x: 0.2, y: 0.1), startRadius: 2, endRadius: 140)
-            case .bento, .none:
-                EmptyView()
-            default:   // 地層・銀河・空・霧・深海は空の色そのものを見せる
+            default:   // なし・地層・銀河・空・霧・深海は空の色そのものを見せる
                 EmptyView()
             }
         }

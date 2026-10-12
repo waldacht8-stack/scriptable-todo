@@ -166,7 +166,9 @@ struct AppSettings: Codable {
         fontStyle = try c.decodeIfPresent(String.self, forKey: .fontStyle) ?? d.fontStyle
         density = try c.decodeIfPresent(String.self, forKey: .density) ?? d.density
         showDone = (try? c.decodeIfPresent(Bool.self, forKey: .showDone)) ?? d.showDone
-        world = (try? c.decodeIfPresent(String.self, forKey: .world)) ?? d.world
+        // なくなった世界観（日なた・ネオブルータル・ベント・クレイ・スイス）や知らない値は「なし」に戻す
+        let rawWorld: String = (try? c.decodeIfPresent(String.self, forKey: .world)) ?? d.world
+        world = World.from(rawWorld).rawValue
         gameOrder = (try? c.decodeIfPresent([String].self, forKey: .gameOrder)) ?? d.gameOrder
         hiddenGames = (try? c.decodeIfPresent([String].self, forKey: .hiddenGames)) ?? d.hiddenGames
     }

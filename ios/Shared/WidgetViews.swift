@@ -49,11 +49,9 @@ struct WidgetPaletteBackground: View {
     let p: Palette
     /// タイムラインの entry.date（世界観の住人の位置が決まる）
     var date: Date = .now
-    /// 今日完了した数（ネオブルータルのシール）
-    var done: Int? = nil
     /// 見本の画面用の位相
     var phase: Double? = nil
-    var body: some View { WidgetWorldBackground(p: p, date: date, done: done, phase: phase) }
+    var body: some View { WidgetWorldBackground(p: p, date: date, phase: phase) }
 }
 
 struct TodoWidgetView: View {
@@ -172,7 +170,7 @@ struct TodoWidgetView: View {
             RoundedRectangle(cornerRadius: 2).fill(barColor).frame(width: 4, height: 20)
             Text(g.name).font(.subheadline.weight(.bold)).foregroundStyle(p.text).lineLimit(1)
             Spacer(minLength: 0)
-            WidgetCount(p: p, text: "\(n)", value: Double(n), size: p.world == .swiss ? 18 : 22, color: numberColor)
+            WidgetCount(p: p, text: "\(n)", value: Double(n), size: 22, color: numberColor)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
@@ -222,7 +220,7 @@ struct TodoWidgetView: View {
     // 「なし」は右へ抜けて下から入る。世界観ごとの動きは World.widgetRowTransition（WorldWidget.swift）
 
     /// 丸の印：押すと処理中は薄くなり（invalidatableContent）、描き直しで印が入れ替わる
-    /// 印の形・太さ・入れ替わりの動きは世界観ごと（ブルータルは四角）
+    /// 印の形・太さ・入れ替わりの動きは世界観ごと
     private func checkIcon(size: CGFloat, color: Color) -> some View {
         Image(systemName: p.world.widgetCheckSymbol(done: false))
             .font(.system(size: size, weight: p.world.widgetCheckWeight)).foregroundStyle(color)

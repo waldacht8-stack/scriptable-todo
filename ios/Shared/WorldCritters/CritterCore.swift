@@ -1,7 +1,8 @@
 import SwiftUI
+import WidgetKit
 
-// MARK: - 世界観の小さな住人（地層のモグラ・銀河の宇宙飛行士・空の鳥と紙飛行機・霧の鹿・深海のクジラ・日なたの猫など）
-// どれも図形（Path）だけで描く。画像は使わない。クレイには住人はいない。
+// MARK: - 世界観の小さな住人（地層のモグラ・銀河の宇宙飛行士・空の鳥と紙飛行機・霧の鹿・深海のクジラ・オーロラの狐）
+// どれも図形（Path）だけで描く。画像は使わない。
 // アプリ：背景の上・中身の下に描く（カードや文字を隠さない）。画面の下の方（「完了」の行とタブバーの間あたり）を通り道にする。
 //         TimelineView（15fps）でゆっくり動き、TODO を完了すると小さく反応する（TodoStore.complete が通知を送る）。
 //         「視差効果を減らす」がオンなら止まった絵にして、反応はふわっと出て消えるだけにする。
@@ -48,10 +49,10 @@ enum WorldMotion {
     /// ウィジェットの背景の時刻（雲・砂粒・霧などを15分ごとに少し進める）
     static func sceneTime(_ d: Date) -> Double { 1 + dayFraction(d) * 2400 }
 
-    /// 住人がいる世界観か（「なし」とクレイにはいない）
+    /// 住人がいる世界観か（「なし」にはいない）
     static func hasCritters(_ w: World) -> Bool {
         switch w {
-        case .none, .clay: false
+        case .none: false
         case .zankou, .breath: false   // 住人はいない。背景の光の筋・かたまりが完了に反応する
         default: true
         }
@@ -78,8 +79,6 @@ struct CritterKnobs {
     var day: Double
     /// 0〜1：完了の反応の進み（nil は反応なし）
     var react: Double?
-    /// ブルータルのシールの数
-    var count: Int
     /// 暗い色合いか
     var dark: Bool
 }
@@ -92,8 +91,6 @@ struct WorldCritterLayer: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 最後に完了した時刻（反応の始まり）
     @State private var reactAt: Date? = nil
-    /// この画面を開いてから完了した数（ブルータルのシール）
-    @State private var completed: Int = 0
     /// 「視差効果を減らす」のときの反応の濃さ（ふわっと出て消える）
     @State private var fade: Double = 0
 
@@ -118,12 +115,10 @@ struct WorldCritterLayer: View {
         if still {
             let phase: Double = WorldMotion.fixedPhase ?? 0.5
             let period: Double = CritterArt.period(world)
-            let fixedCount: Int = WorldMotion.fixedReaction ? 3 : 0
-            let count: Int = max(completed, fixedCount)
             // 画面写真の反応つきは、住人も反応の途中の姿で描く（モグラが2匹にならないように）
             let baseReact: Double? = WorldMotion.fixedReaction ? 0.45 : nil
-            let base = CritterKnobs(t: phase * period, progress: phase, day: phase, react: baseReact, count: count, dark: dark)
-            let reactKnobs = CritterKnobs(t: phase * period, progress: phase, day: phase, react: 0.45, count: count, dark: dark)
+            let base = CritterKnobs(t: phase * period, progress: phase, day: phase, react: baseReact, dark: dark)
+            let reactKnobs = CritterKnobs(t: phase * period, progress: phase, day: phase, react: 0.45, dark: dark)
             let showReact: Double = WorldMotion.fixedReaction ? 1 : fade
             ZStack {
                 Canvas { ctx, s in CritterArt.drawApp(world, ctx, size: s, k: base, layer: .idle) }
@@ -137,7 +132,7 @@ struct WorldCritterLayer: View {
                 let period: Double = CritterArt.period(world)
                 let progress: Double = (t / period).truncatingRemainder(dividingBy: 1)
                 let k = CritterKnobs(t: t, progress: progress, day: WorldMotion.dayFraction(now),
-                                     react: reaction(at: now, world: world), count: completed, dark: dark)
+                                     react: reaction(at: now, world: world), dark: dark)
                 Canvas { ctx, s in
                     CritterArt.drawApp(world, ctx, size: s, k: k, layer: .idle)
                     CritterArt.drawApp(world, ctx, size: s, k: k, layer: .reaction)
@@ -154,7 +149,6 @@ struct WorldCritterLayer: View {
     }
 
     private func react() {
-        completed += 1
         if still {
             withAnimation(.easeIn(duration: 0.2)) { fade = 1 }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
@@ -172,12 +166,13 @@ struct WorldCritterLayer: View {
 struct WidgetWorldCritters: View {
     let p: Palette
     let date: Date
-    var done: Int? = nil
     var phase: Double? = nil
+    /// ウィジェットの余白（住人はこの外側の帯だけを通る）
+    @Environment(\.widgetContentMargins) private var margins: EdgeInsets
 
     var body: some View {
         GeometryReader { geo in
-            CritterWidgetArt.view(p, size: geo.size, knobs: knobs())
+            CritterWidgetArt.view(p, size: geo.size, knobs: knobs(), margins: margins)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -192,15 +187,7 @@ struct WidgetWorldCritters: View {
         let period: Double = CritterWidgetArt.period(world)
         let progress: Double = phase ?? WorldMotion.cycle(date, period: period)
         let day: Double = phase ?? WorldMotion.dayFraction(date)
-        let count: Int = world == .brutal ? (done ?? Self.doneToday(date)) : 0
-        return CritterKnobs(t: 0, progress: progress, day: day, react: nil, count: count, dark: p.scheme == .dark)
-    }
-
-    /// 今日完了した数（渡されなかったとき。ブルータルのシールだけが使う）
-    private static func doneToday(_ now: Date) -> Int {
-        let cal: Calendar = Calendar.current
-        let all: [TodoItem] = TodoData.all()
-        return all.filter { item in item.done && (item.doneAt.map { cal.isDate($0, inSameDayAs: now) } ?? false) }.count
+        return CritterKnobs(t: 0, progress: progress, day: day, react: nil, dark: p.scheme == .dark)
     }
 }
 
