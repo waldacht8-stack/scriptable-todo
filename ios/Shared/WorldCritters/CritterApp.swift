@@ -33,7 +33,7 @@ enum CritterArt {
         case .sky: 6
         case .deepsea: 3.2
         case .ink: 3.6
-        case .galaxy: 1.6
+        case .galaxy: 2.6
         case .aurora: 2.6
         case .yohaku: 2.8
         case .terminal: 3.2
@@ -132,7 +132,7 @@ enum CritterArt {
         }
     }
 
-    // MARK: 銀河：宇宙飛行士がふわふわ漂う。完了で流れ星
+    // MARK: 銀河：ロケットがゆっくり斜めに横切る。完了で炎が強まって少し加速し、流れ星も流れる
 
     @_optimize(none)
     static func galaxy(_ ctx: GraphicsContext, size: CGSize, k: CritterKnobs, layer: Layer) {
@@ -148,16 +148,7 @@ enum CritterArt {
                             color: sceneColor(0x9C7BFF), alpha: 0.08)
             Fantasy.fogBank(ctx, width: w, y: lane + 16, height: 34, t: k.t, speed: -1.4, seed: 72, count: 5,
                             color: sceneColor(0xFF86C8), alpha: 0.05)
-            // 宇宙飛行士は左から 7 割までを行き来する（右下の＋ボタンの裏に入らないように）
-            let swing: Double = sin(k.progress * 2 * Double.pi)
-            let ax: Double = w * (0.4 + 0.24 * swing)
-            let ay: Double = lane - 10 + sin(k.t * 0.4) * 4
-            let angle: Double = sin(k.progress * 2 * Double.pi) * 0.22 + sin(k.t * 0.25) * 0.05
-            let scale: Double = 1.25
-            astronautTether(ctx, at: D.pt(ax, ay), angle: angle, scale: scale, t: k.t, w: w, lane: lane)
-            let ac: GraphicsContext = D.local(ctx, at: D.pt(ax, ay), scale: scale, angle: angle)
-            thrusterPuff(ac, t: k.t)
-            Fantasy.astronaut(ac, t: k.t)
+            drawRocket(ctx, w: w, lane: lane, t: k.t, react: k.react)
         case .reaction:
             guard let r = k.react else { return }
             let u: Double = D.ease(D.span(r, 0, 0.85))
@@ -170,6 +161,36 @@ enum CritterArt {
             let alpha: Double = min(1, r * 8) * (1 - D.span(r, 0.75, 1))
             C.shootingStar(ctx, head: head, dirX: (x1 - x0) / len, dirY: (y1 - y0) / len, length: 70, alpha: alpha)
         }
+    }
+
+    /// ロケットの通り道：左下の画面の外から右上の画面の外へ、ゆるい弧で（40秒で1回。外へ出きってから次が始まる）
+    @_optimize(none)
+    static func drawRocket(_ ctx: GraphicsContext, w: Double, lane: Double, t: Double, react: Double?) {
+        let f: Double = (t / 40).truncatingRemainder(dividingBy: 1)
+        let boost: Double = react.map { (r: Double) -> Double in Fantasy.bump(r, 0, 1) } ?? 0
+        // 完了で少し前へ出て、反応の終わりにはなめらかに元の通り道へ戻る（跳ばない）
+        let push: Double = react.map { (r: Double) -> Double in Fantasy.bump(r, 0, 1) * 0.025 } ?? 0
+        let g: Double = min(1.1, f + push)
+        let x0: Double = -70
+        let x1: Double = w + 70
+        let x: Double = x0 + g * (x1 - x0)
+        let y: Double = lane + 22 - g * 120 - sin(g * Double.pi) * 12
+        let dx: Double = x1 - x0
+        let dy: Double = -120 - cos(g * Double.pi) * 12 * Double.pi
+        let angle: Double = atan2(dy, dx)
+        // 加速のうすい尾（完了のとき）
+        if boost > 0.02 {
+            let len: Double = 70 * boost
+            var streak = Path()
+            let tail = D.pt(x - cos(angle) * (30 + len), y - sin(angle) * (30 + len))
+            let head = D.pt(x - cos(angle) * 24, y - sin(angle) * 24)
+            streak.move(to: tail)
+            streak.addLine(to: head)
+            let sg = Gradient(colors: [Color.white.opacity(0), sceneColor(0xFFE4C0, 0.45 * boost)])
+            ctx.stroke(streak, with: .linearGradient(sg, startPoint: tail, endPoint: head), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+        }
+        let rc: GraphicsContext = D.local(ctx, at: D.pt(x, y), scale: 1.2, angle: angle)
+        Fantasy.rocket(rc, t: t, boost: boost)
     }
 
     struct Mote { let x: Double; let y: Double; let r: Double; let speed: Double; let phase: Double }
