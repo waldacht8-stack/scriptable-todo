@@ -344,7 +344,7 @@ struct InfoGameSection: View {
                 }
                 if games.isEmpty { emptyNote }
                 if discordRevealed {
-                    InfoDiscordRow { route = .discord }
+                    InfoDiscordRow { showDiscord = true }
                         .id("discord")
                         .transition(floatUp)
                 }
@@ -437,7 +437,7 @@ enum InfoDiscordReveal {
     static var launchRevealed: Bool { ProcessInfo.processInfo.arguments.contains("-discordreveal") }
 }
 
-/// 隠しの Discord の行（押すと Discord のくわしく画面へ）
+/// 隠しの Discord の行（押すと Web版 Discord へ。ボットの画面はその上の「ボット」から）
 private struct InfoDiscordRow: View {
     let onOpen: () -> Void
 
@@ -448,7 +448,7 @@ private struct InfoDiscordRow: View {
                 DiscordBubbleIcon(size: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Discord").font(.headline.weight(.heavy)).foregroundStyle(DiscordInk.text)
-                    Text("サーバーの様子・お知らせ・募集").font(.caption).foregroundStyle(DiscordInk.sub).lineLimit(1)
+                    Text("Web版で DM・ボイスを開く").font(.caption).foregroundStyle(DiscordInk.sub).lineLimit(1)
                 }
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(DiscordInk.sub)

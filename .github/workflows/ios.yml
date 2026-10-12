@@ -92,7 +92,7 @@ jobs:
           # 起動して撮る。真っ白（小さいファイル）なら、待って撮り直す（遅いシミュレーター対策）
           # 担当の枝では、SHOTS_ON_BRANCH に名前が合う写真だけ撮る（時間短縮）。main ではすべて撮る
           # 各担当は自分の枝でこの値に自分の写真の名前（正規表現）を足す。例："kakeibo|tab-2"
-          SHOTS_ON_BRANCH="^shots/(wake-evening|wake-before|splatoon|info-games|game-|discord|idv.png|tab-|world-brutal-kakeibo|world-bento-consult|widgets-other|widgets-lock|widgets-r4-tabs.png|widgets-r4-wake.png)"
+          SHOTS_ON_BRANCH="^shots/discord-web"
           shot() {
             out=$1; shift
             if [ "$GITHUB_REF_NAME" != "main" ] && ! echo "$out" | grep -qE "$SHOTS_ON_BRANCH"; then
