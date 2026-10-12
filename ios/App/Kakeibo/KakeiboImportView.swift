@@ -488,34 +488,41 @@ struct KakeiboImportView: View {
             var text = KakeiboPDF.text(from: data)
             // Safari で印刷した PDF などは、取り出した文字が化けている。そのときも画像から読む
             if let t = text, KakeiboPDF.isGarbled(t) { text = nil }
-            if text == nil {
-                let pages = await KakeiboPDF.recognizeBoxes(data)
-                let ocrText = KakeiboOCRTable.text(pages: pages)
-                if !ocrText.isEmpty {
-                    text = ocrText
-                    usedOCR = true
-                }
-                if detect, !ocrText.isEmpty, let i = KakeiboDetect.institution(ocrText) { institution = i }
-                // 見出しの位置で列に分ける（ウェブの明細を印刷したもの）
-                if let ocr = KakeiboOCRTable.build(pages: pages) {
-                    table = ocr.table
-                    if ocr.table.headerFound && ocr.mapping.isUsable {
-                        mapping = ocr.mapping
-                        buildDrafts()
-                        if !drafts.isEmpty { return }
-                        errorText = nil
-                    }
+            // 文字で読めたら、まずその行を試す
+            if let t = text {
+                if detect, let i = KakeiboDetect.institution(t) { institution = i }
+                let parsed = KakeiboPDF.drafts(text: t, isCard: institution.isCard)
+                if !parsed.rows.isEmpty {
+                    hasBalance = parsed.hasBalance
+                    drafts = store.prepare(parsed.rows, institution: institution, isCard: institution.isCard, excludeTransfers: excludeTransfers)
+                    return
                 }
             }
-            guard let text else {
-                errorText = "文字が読めない PDF です。明細の画面から PDF を出し直すか、CSV を選んでください"
+            // 文字が無い・化けた・行が見つからない：画像から読む（化けたと見分けられない PDF もあるので、行が無ければ必ず試す）
+            let pages = await KakeiboPDF.recognizeBoxes(data)
+            let ocrText = KakeiboOCRTable.text(pages: pages)
+            guard !ocrText.isEmpty else {
+                errorText = text == nil
+                    ? "文字が読めない PDF です。明細の画面から PDF を出し直すか、CSV を選んでください"
+                    : "日付と金額の行が見つかりませんでした。CSV があれば CSV を選んでください"
                 return
             }
-            if detect, let i = KakeiboDetect.institution(text) { institution = i }
-            let parsed = KakeiboPDF.drafts(text: text, isCard: institution.isCard)
+            usedOCR = true
+            if detect, let i = KakeiboDetect.institution(ocrText) { institution = i }
+            // 見出しの位置で列に分ける（ウェブの明細を印刷したもの）
+            if let ocr = KakeiboOCRTable.build(pages: pages) {
+                table = ocr.table
+                if ocr.table.headerFound && ocr.mapping.isUsable {
+                    mapping = ocr.mapping
+                    buildDrafts()
+                    if !drafts.isEmpty { return }
+                    errorText = nil
+                }
+            }
+            let parsed = KakeiboPDF.drafts(text: ocrText, isCard: institution.isCard)
             hasBalance = parsed.hasBalance
             var rows = parsed.rows
-            if usedOCR { for i in rows.indices { rows[i].suspect = true } }
+            for i in rows.indices { rows[i].suspect = true }
             if rows.isEmpty, let t = table {
                 // 画像から読んだ表：列の対応を選んでもらう
                 mapping = t.headerFound ? mapping : KakeiboColumnMapping()
