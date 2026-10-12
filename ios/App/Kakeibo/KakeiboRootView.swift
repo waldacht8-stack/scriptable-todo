@@ -96,16 +96,19 @@ struct KakeiboRootView: View {
     // MARK: 見出し
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(cycle.longTitle) ・ \(cycle.rangeText)").font(.footnote.weight(.semibold)).foregroundStyle(p.sub)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+        VStack(alignment: .leading, spacing: 2) {
+            // 周期の行は見出しの上に1行で（ボタンの幅を取らないように）
+            Text("\(cycle.longTitle) ・ \(cycle.rangeText)").font(.footnote.weight(.semibold)).foregroundStyle(p.sub)
+                .lineLimit(1).minimumScaleFactor(0.8)
+            HStack(alignment: .center, spacing: 8) {
                 Text("家計簿").font(.largeTitle.weight(.heavy)).foregroundStyle(p.text)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 4)
+                Button { sheet = .importer(.fresh) } label: { importLabel }
+                    .buttonStyle(.plain)
+                    .fixedSize()
+                SettingsButton()
             }
-            Spacer(minLength: 4)
-            Button { sheet = .importer(.fresh) } label: { importLabel }
-                .buttonStyle(.plain)
-            SettingsButton()
         }
         .padding(.horizontal, 4)
         .padding(.top, 8)

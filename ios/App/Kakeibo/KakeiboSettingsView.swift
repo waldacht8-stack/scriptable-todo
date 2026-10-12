@@ -95,9 +95,11 @@ struct KakeiboSettingsView: View {
             .onChange(of: goalFocused) { _, f in if !f { saveGoal() } }
             if let goal {
                 DatePicker("期限（この月分まで）", selection: goalBinding(\.deadline, goal), in: Date.now..., displayedComponents: .date)
+                    .environment(\.locale, Locale(identifier: "ja_JP"))
                     .foregroundStyle(p.text)
                     .listRowBackground(p.card)
                 DatePicker("数えはじめ", selection: goalBinding(\.start, goal), in: ...Date.now, displayedComponents: .date)
+                    .environment(\.locale, Locale(identifier: "ja_JP"))
                     .foregroundStyle(p.text)
                     .listRowBackground(p.card)
                 Button("目標をやめる", role: .destructive) {
@@ -154,6 +156,7 @@ struct KakeiboSettingsView: View {
             .listRowBackground(p.card)
             if r.enabled {
                 DatePicker("お知らせの時刻", selection: reminderTime, displayedComponents: .hourAndMinute)
+                    .environment(\.locale, Locale(identifier: "ja_JP"))
                     .foregroundStyle(p.text)
                     .listRowBackground(p.card)
                 ForEach(cards) { i in
