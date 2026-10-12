@@ -34,23 +34,28 @@ extension CritterArt {
         let tx: Double = (Double(c.x) + Double(a.x) + Double(b.x)) / 3
         let ty: Double = (Double(c.y) + Double(a.y) + Double(b.y)) / 3
         let w: Double = Double(size.width)
-        let sx: Double = w * 0.22
-        let sy: Double = laneY(size)
+        let h: Double = Double(size.height)
+        // 「完了 →」のあたりから、弧を描いて結晶へ飛ぶ
+        let sx: Double = w * 0.84
+        let sy: Double = h * 0.735
+        let mx: Double = (sx + tx) / 2
+        let my: Double = min(sy, ty) - 36   // 低い弧（カードの裏に隠れないように）
         // 飛ぶ（0〜0.55）
         let u: Double = D.ease(D.span(r, 0, 0.55))
-        if u < 1 {
-            let mx: Double = (sx + tx) / 2 - 40
-            let my: Double = min(sy, ty) - 60
-            let x: Double = (1 - u) * (1 - u) * sx + 2 * (1 - u) * u * mx + u * u * tx
-            let y: Double = (1 - u) * (1 - u) * sy + 2 * (1 - u) * u * my + u * u * ty
-            for j in 1...4 {
-                let v: Double = max(0, u - Double(j) * 0.05)
-                let px: Double = (1 - v) * (1 - v) * sx + 2 * (1 - v) * v * mx + v * v * tx
-                let py: Double = (1 - v) * (1 - v) * sy + 2 * (1 - v) * v * my + v * v * ty
-                D.glow(ctx, px, py, 8 - Double(j), sceneColor(0xBFE6FF), 0.5 - Double(j) * 0.1)
+        if r < 0.56 {
+            for j in stride(from: 7, through: 1, by: -1) {
+                let v: Double = max(0, u - Double(j) * 0.035)
+                let px: Double = bez(sx, mx, tx, v)
+                let py: Double = bez(sy, my, ty, v)
+                let fade: Double = 1 - Double(j) / 8
+                D.glow(ctx, px, py, 10 * fade + 3, sceneColor(0xBFE6FF), 0.55 * fade)
+                brightShard(ctx, px, py, 7 * fade + 2, v * 7, alpha: 0.35 * fade)
             }
-            D.glow(ctx, x, y, 18, sceneColor(0xBFE6FF), 0.7)
-            CrystalScene.shard(ctx, x, y, 9 - u * 3, u * 6, alpha: 1)
+            let x: Double = bez(sx, mx, tx, u)
+            let y: Double = bez(sy, my, ty, u)
+            D.glow(ctx, x, y, 30, sceneColor(0xE9F7FF), 0.85)
+            brightShard(ctx, x, y, 13 - u * 4, u * 7, alpha: 1)
+            CrystalScene.star(ctx, x + 9, y - 9, 6, Color.white.opacity(0.9))
         }
         // はまって光る（0.5〜1）
         let fl: Double = D.span(r, 0.5, 1)
@@ -81,7 +86,7 @@ extension CritterArt {
         let fx: Double = (n * 0.618 + 0.31).truncatingRemainder(dividingBy: 1)
         let fy: Double = (n * 0.382 + 0.17).truncatingRemainder(dividingBy: 1)
         let cx: Double = w * (0.22 + 0.56 * fx)
-        let cy: Double = h * (0.16 + 0.5 * fy)
+        let cy: Double = h * (0.46 + 0.3 * fy)   // 見出しのボタンより下に落とす
         let indigo: UInt32 = InkScene.indigo
         let red: UInt32 = InkScene.vermilion
         // 落ちる（0〜0.18）
@@ -241,5 +246,36 @@ extension InkWakeRing {
         let path: Path = InkScene.ringPath(cx: cx, cy: cy, r: max(4, rr), twist: shown * 3, t: shown * 40, amp: 0.8)
         let color: Color = sceneColor(InkScene.vermilion, 0.35 + 0.5 * shown)
         c.stroke(path, with: .color(color), lineWidth: max(1, lineWidth * 0.22))
+    }
+}
+
+extension CritterArt {
+    /// 2次ベジェ曲線の1軸
+    @_optimize(none)
+    static func bez(_ a: Double, _ m: Double, _ b: Double, _ u: Double) -> Double {
+        let v: Double = 1 - u
+        let p: Double = v * v * a
+        let q: Double = 2 * v * u * m
+        let s: Double = u * u * b
+        return p + q + s
+    }
+
+    /// 飛んでいくかけら（明るい氷の色に金の縁。完了の反応で目立つように）
+    @_optimize(none)
+    static func brightShard(_ ctx: GraphicsContext, _ cx: Double, _ cy: Double, _ r: Double, _ rot: Double, alpha: Double) {
+        let pts: [(Double, Double)] = [(-0.9, 0.4), (-0.1, -1.0), (0.9, -0.3), (0.4, 1.0)]
+        var path = Path()
+        for (i, p) in pts.enumerated() {
+            let x: Double = p.0 * cos(rot) - p.1 * sin(rot)
+            let y: Double = p.0 * sin(rot) + p.1 * cos(rot)
+            let q = CGPoint(x: cx + x * r, y: cy + y * r)
+            if i == 0 { path.move(to: q) } else { path.addLine(to: q) }
+        }
+        path.closeSubpath()
+        let g = Gradient(colors: [sceneColor(0xFFFFFF, alpha), sceneColor(0x9FD8FF, alpha)])
+        let top = CGPoint(x: cx - r, y: cy - r)
+        let bottom = CGPoint(x: cx + r, y: cy + r)
+        ctx.fill(path, with: .linearGradient(g, startPoint: top, endPoint: bottom))
+        ctx.stroke(path, with: .color(sceneColor(0xFFD27A, alpha)), lineWidth: 1.4)
     }
 }

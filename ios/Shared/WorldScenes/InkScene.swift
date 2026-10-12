@@ -21,7 +21,7 @@ enum InkScene {
         var out: [Ring] = []
         let widths: [Double] = [5, 2, 2.5, 4, 1.5, 1.5, 3, 1.2, 2.5]
         for i in 0..<count {
-            let r: Double = 0.11 + Double(i) * 0.12
+            let r: Double = 0.035 + Double(i) * 0.032
             let isRed: Bool = (i % 3 == 2) != red
             out.append(Ring(dx: rnd.range(-0.04, 0.04), dy: rnd.range(-0.04, 0.04), r: r,
                             width: widths[i % widths.count], red: isRed))
@@ -31,16 +31,16 @@ enum InkScene {
 
     /// 画面の模様（下絵の3つと、今日片付けた数だけ増える小さなしずく）
     static let base: [Drop] = [
-        Drop(x: 0.33, y: 0.25, scale: 1.0, reverse: false, delay: 0, rings: rings(11, count: 8, red: false)),
-        Drop(x: 0.72, y: 0.37, scale: 0.85, reverse: true, delay: 3, rings: rings(23, count: 7, red: true)),
-        Drop(x: 0.73, y: 0.15, scale: 0.55, reverse: false, delay: 6, rings: rings(37, count: 5, red: false)),
+        Drop(x: 0.3, y: 0.5, scale: 1.0, reverse: false, delay: 0, rings: rings(11, count: 8, red: false)),
+        Drop(x: 0.72, y: 0.66, scale: 0.85, reverse: true, delay: 3, rings: rings(23, count: 7, red: true)),
+        Drop(x: 0.76, y: 0.44, scale: 0.55, reverse: false, delay: 6, rings: rings(37, count: 5, red: false)),
     ]
 
     static let extra: [Drop] = {
         var rnd = SceneRandom(905)
         var out: [Drop] = []
         for i in 0..<6 {
-            out.append(Drop(x: rnd.range(0.12, 0.88), y: rnd.range(0.08, 0.9), scale: rnd.range(0.32, 0.5),
+            out.append(Drop(x: rnd.range(0.12, 0.88), y: rnd.range(0.5, 0.86), scale: rnd.range(0.32, 0.5),
                             reverse: i % 2 == 0, delay: rnd.range(0, 9), rings: rings(UInt64(41 + i), count: 4, red: i % 2 == 1)))
         }
         return out
@@ -76,7 +76,7 @@ enum InkScene {
     static func drawDrop(_ ctx: GraphicsContext, _ d: Drop, size: CGSize, t: Double, alpha: Double, compact: Bool) {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
-        let unit: Double = min(w, h * 0.62) * d.scale
+        let unit: Double = min(w, h * 0.62) * d.scale * (compact ? 2.2 : 1)
         let cx: Double = d.x * w
         let cy: Double = d.y * h
         let spinPeriod: Double = d.reverse ? -110 : 80
@@ -96,7 +96,7 @@ enum InkScene {
     /// 画面の模様（count.done だけ小さなしずくを足す）
     @_optimize(none)
     static func drawPattern(_ ctx: GraphicsContext, size: CGSize, t: Double, compact: Bool, done: Int) {
-        let alpha: Double = compact ? 0.42 : 0.55
+        let alpha: Double = compact ? 0.3 : 0.36   // 文字が読みやすいよう淡く
         for d in base {
             drawDrop(ctx, d, size: size, t: t, alpha: alpha, compact: compact)
         }

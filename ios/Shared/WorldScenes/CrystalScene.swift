@@ -76,7 +76,7 @@ enum CrystalScene {
         var rnd = SceneRandom(511)
         var out: [Shard] = []
         for _ in 0..<6 {
-            out.append(Shard(x: rnd.range(-1.5, 1.5), y: rnd.range(-1.0, 1.25), r: rnd.range(0.07, 0.12),
+            out.append(Shard(x: rnd.range(-1.5, 1.5), y: rnd.range(-0.85, 0.85), r: rnd.range(0.12, 0.2),
                              spin: rnd.range(-0.3, 0.3), phase: rnd.range(0, 6.28)))
         }
         return out
@@ -91,8 +91,9 @@ enum CrystalScene {
             let s: Double = min(w * 0.2, h * 0.36)
             return (CGPoint(x: w - s * 0.9, y: h * 0.42), s)
         }
-        let s: Double = min(w * 0.3, h * 0.17)
-        return (CGPoint(x: w * 0.62, y: h * 0.3), s)
+        // 見出しのボタンとフォーカスのカードを避けて、「完了」の行とタブバーの間（左寄り）に置く
+        let s: Double = min(w * 0.13, h * 0.072)
+        return (CGPoint(x: w * 0.42, y: h * 0.785), s)
     }
 
     @_optimize(none)
@@ -140,8 +141,8 @@ enum CrystalScene {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
         for (i, st) in stars.enumerated() where !compact || i % 2 == 0 {
-            let a: Double = twinkle(t, st.phase) * (0.55 + 0.45 * boost)
-            let r: Double = (compact ? 3.2 : 5) * st.s
+            let a: Double = twinkle(t, st.phase) * (0.55 + 0.45 * boost) * (compact ? 0.5 : 1)
+            let r: Double = (compact ? 2.2 : 5) * st.s
             let x: Double = st.x * w
             let y: Double = st.y * h
             CritterDraw.glow(ctx, x, y, r * 2.2, sceneColor(0xBFE6FF), 0.35 * a)
@@ -355,7 +356,8 @@ struct CrystalBackdrop: View {
                             CrystalScene.drawPrism(ctx, size: s, t: t, morning: m)
                         } else {
                             CrystalScene.drawStars(ctx, size: s, t: t, compact: compact, boost: 0.6)
-                            CrystalScene.drawCrystal(ctx, size: s, t: t, compact: compact, count: shown)
+                            // ウィジェットは結晶を描かない（文字に重ならないように。星だけ）
+                            if !compact { CrystalScene.drawCrystal(ctx, size: s, t: t, compact: false, count: shown) }
                         }
                     }
                 }
