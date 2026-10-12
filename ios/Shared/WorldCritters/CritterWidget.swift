@@ -232,7 +232,8 @@ private struct WidgetSky: View {
 
     var body: some View {
         let w: CGFloat = size.width
-        let slot: SkySlot = SkySlot.at(day: k.day)
+        // 背景の空（SkyBackdrop）と同じ時計で選ぶ（見本の画面の位相では選ばない）
+        let slot: SkySlot = SkySlot.at(minutes: SkyPhase.minuteOfDay())
         let sunF: Double = CritterDraw.span(k.day, 0.21, 0.79)
         let moonRaw: Double = k.day >= 0.79 ? k.day - 0.79 : k.day + 0.21
         let moonF: Double = min(1, moonRaw / 0.42)
