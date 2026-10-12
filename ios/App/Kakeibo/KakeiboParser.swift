@@ -57,8 +57,10 @@ enum KakeiboRegex {
 /// 日付：2026/09/28・2026-09-28・2026年9月28日・20260928・R8.9.28・令和8年9月28日・26/09/28・9/28
 enum KakeiboDateParser {
     static func parse(_ raw: String, defaultYear: Int? = nil, now: Date = .now) -> Date? {
-        let s = raw.precomposedStringWithCompatibilityMapping.trimmingCharacters(in: .whitespacesAndNewlines)
+        var s = raw.precomposedStringWithCompatibilityMapping.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }
+        // 「8/ 7/ 1」（カードの明細の、桁をそろえた日付）
+        s = s.replacingOccurrences(of: #"\s*/\s*"#, with: "/", options: .regularExpression)
         let cal = Calendar.current
         func make(_ y: Int, _ m: Int, _ d: Int) -> Date? {
             guard (1...12).contains(m), (1...31).contains(d), (1990...2100).contains(y) else { return nil }
@@ -78,8 +80,8 @@ enum KakeiboDateParser {
         if let g = KakeiboRegex.groups(#"^(\d{4})(\d{2})(\d{2})(?!\d)"#, in: s) {
             return make(Int(g[1]) ?? 0, Int(g[2]) ?? 0, Int(g[3]) ?? 0)
         }
-        // 2けたの年：西暦の下2けたとして近ければそれ、遠ければ令和
-        if let g = KakeiboRegex.groups(#"^(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})(?!\d)"#, in: s) {
+        // 1〜2けたの年：西暦の下2けたとして近ければそれ、遠ければ令和（「8/7/1」は令和8年7月1日）
+        if let g = KakeiboRegex.groups(#"^(\d{1,2})[./\-](\d{1,2})[./\-](\d{1,2})(?!\d)"#, in: s) {
             let yy = Int(g[1]) ?? 0
             let thisYear = cal.component(.year, from: now)
             let western = 2000 + yy
@@ -303,10 +305,12 @@ enum KakeiboBalanceCheck {
 
 enum KakeiboPDF {
     /// PDFKit で文字を取り出す（画像だけの PDF は空）
-    static func text(from data: Data) -> String? {
+    /// skipFirstPage：1ページ目（宛名・ご請求額の表紙）を読まない。2ページ以上あるときだけ
+    static func text(from data: Data, skipFirstPage: Bool = false) -> String? {
         guard let doc = PDFDocument(data: data) else { return nil }
         var pages: [String] = []
-        for i in 0..<doc.pageCount {
+        let start: Int = skipFirstPage && doc.pageCount > 1 ? 1 : 0
+        for i in start..<doc.pageCount {
             if let s = doc.page(at: i)?.string { pages.append(s) }
         }
         let s = pages.joined(separator: "\n")
@@ -343,10 +347,11 @@ enum KakeiboPDF {
     }
 
     /// 文字が無い・化けた PDF：ページを2倍で描いて文字認識（Vision）。ページごとの認識結果を返す
-    static func recognizeBoxes(_ data: Data) async -> [[KakeiboOCRBox]] {
+    static func recognizeBoxes(_ data: Data, skipFirstPage: Bool = false) async -> [[KakeiboOCRBox]] {
         guard let doc = PDFDocument(data: data) else { return [] }
         var pages: [[KakeiboOCRBox]] = []
-        for i in 0..<min(doc.pageCount, 20) {
+        let start: Int = skipFirstPage && doc.pageCount > 1 ? 1 : 0
+        for i in start..<min(doc.pageCount, 20) {
             guard let page = doc.page(at: i) else { continue }
             let box = page.bounds(for: .mediaBox)
             let scale: CGFloat = 2
@@ -374,7 +379,7 @@ enum KakeiboPDF {
         return out
     }
 
-    private static let dateHead = #"^\s*((令和|平成|R|H)\s*\d{1,2}[./\-年]\d{1,2}[./\-月]\d{1,2}日?|\d{4}[./\-年]\s*\d{1,2}[./\-月]\s*\d{1,2}日?|\d{2}[./\-]\d{1,2}[./\-]\d{1,2}|\d{1,2}[/月]\d{1,2}日?)(?=\s|$)"#
+    private static let dateHead = #"^\s*((令和|平成|R|H)\s*\d{1,2}[./\-年]\d{1,2}[./\-月]\d{1,2}日?|\d{4}[./\-年]\s*\d{1,2}[./\-月]\s*\d{1,2}日?|\d{2}[./\-]\d{1,2}[./\-]\d{1,2}|\d{1,2}\s*/\s*\d{1,2}\s*/\s*\d{1,2}|\d{1,2}[/月]\d{1,2}日?)(?=\s|$)"#
 
     /// 取り出した文字から行を作る。見出しに「残高」があれば、最後の数字を残高として検算に使う
     static func drafts(text: String, isCard: Bool, now: Date = .now) -> (rows: [KakeiboDraft], hasBalance: Bool) {
@@ -387,6 +392,11 @@ enum KakeiboPDF {
                 && (l.contains("残高") || l.contains("出金") || l.contains("引出") || l.contains("金額") || l.contains("摘要"))
         }
         var headerHasBalance = header?.contains("残高") ?? false
+        // 見出しが「ご利用日・ご利用金額」ならカードの明細（口座を選んでいても、店名のあとの金額を使う）
+        let isCard: Bool = isCard || (header.map { h in
+            let n = h.replacingOccurrences(of: " ", with: "")
+            return n.contains("利用日") && n.contains("利用金額")
+        } ?? false)
         let withdrawalFirst: Bool = {
             guard let h = header else { return true }
             let w = h.range(of: "出金") ?? h.range(of: "引出") ?? h.range(of: "支払")
@@ -414,8 +424,14 @@ enum KakeiboPDF {
             var tokens = rest.split(separator: " ").map(String.init)
             var nums: [Int] = []
             if isCard {
-                // カード：店名のあとの最初の金額が利用金額
-                if let i = tokens.firstIndex(where: { KakeiboAmountParser.isAmountToken($0) }), i > 0,
+                // カード：店名のあとの最初の金額が利用金額（金額の前の「1」などの支払回数は飛ばす）
+                let first: Int? = tokens.indices.first { k in
+                    guard k > 0, KakeiboAmountParser.isAmountToken(tokens[k]) else { return false }
+                    let isCount: Bool = KakeiboRegex.matches(#"^\d{1,2}$"#, tokens[k])
+                        && k + 1 < tokens.count && KakeiboAmountParser.isAmountToken(tokens[k + 1])
+                    return !isCount
+                }
+                if let i = first,
                    let v = KakeiboAmountParser.parse(tokens[i]) {
                     nums = [v]
                     tokens = Array(tokens[..<i])

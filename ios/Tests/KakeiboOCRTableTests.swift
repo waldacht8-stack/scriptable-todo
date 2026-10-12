@@ -174,6 +174,56 @@ final class KakeiboOCRTableTests: TokyoTestCase {
         XCTAssertEqual(rows.first?.text, "ミホンストア")
     }
 
+    /// 三菱UFJ（MUFG カード）の形：3段の見出し、1文字ずつ空けた「ご 利 用 店 名」、支払回数・摘要の列、宛名の行
+    func testCardStatementWithStackedHeader() throws {
+        let page: [KakeiboOCRBox] = [
+            box("ご利用明細", 0.07, 0.935, 0.10, 0.011),
+            // 見出し（3段）
+            box("ご 利 用 店 名", 0.20, 0.912, 0.15, 0.007),
+            box("支払", 0.455, 0.912, 0.025, 0.007),
+            box("何", 0.49, 0.912, 0.012, 0.007),
+            box("摘 要", 0.75, 0.912, 0.06, 0.007),
+            box("ご利用日", 0.04, 0.905, 0.05, 0.007),
+            box("回", 0.49, 0.905, 0.012, 0.007),
+            box("ご利用金額(円)", 0.51, 0.905, 0.08, 0.007),
+            box("海外ご利用店名／海外都市名", 0.20, 0.898, 0.15, 0.007),
+            box("回数", 0.455, 0.898, 0.025, 0.007),
+            box("目", 0.49, 0.898, 0.012, 0.007),
+            box("現地通貨額", 0.63, 0.898, 0.06, 0.007),
+            box("通貨名称", 0.76, 0.898, 0.05, 0.007),
+            box("換算レート", 0.87, 0.898, 0.06, 0.007),
+            // 宛名の行（取り込まない）
+            box("【ミホン 様】", 0.10, 0.881, 0.08, 0.007),
+            // 明細：店名が日付の列まで左に広がっている
+            box("8/ 7/ 1", 0.04, 0.869, 0.055, 0.007),
+            box("ETC ミホン出口", 0.10, 0.869, 0.15, 0.007),
+            box("1", 0.468, 0.869, 0.006, 0.007),
+            box("700", 0.565, 0.869, 0.025, 0.007),
+            box("車種：普通車", 0.595, 0.869, 0.07, 0.007),
+            box("8/ 8/12", 0.04, 0.857, 0.055, 0.007),
+            box("WL *SAMPLE PURCHASE", 0.10, 0.857, 0.20, 0.007),
+            box("1", 0.468, 0.857, 0.006, 0.007),
+            box("3,400", 0.555, 0.857, 0.035, 0.007),
+            box("3400.00 エン", 0.63, 0.857, 0.10, 0.007),
+            box("1.000", 0.87, 0.857, 0.04, 0.007),
+        ]
+        let ocr = try XCTUnwrap(KakeiboOCRTable.build(pages: [page]))
+        XCTAssertTrue(ocr.table.headerFound)
+        XCTAssertEqual(ocr.mapping.date, "ご利用日")
+        XCTAssertEqual(ocr.mapping.text, "ご利用店名")
+        XCTAssertEqual(ocr.mapping.amount, "ご利用金額(円)")
+        XCTAssertNil(ocr.mapping.withdrawal, "支払回数はお支払いの金額ではない")
+        XCTAssertTrue(ocr.mapping.isUsable)
+        let all: String = ocr.table.rows.flatMap { $0 }.joined(separator: " ")
+        XCTAssertFalse(all.contains("ミホン 様"), "宛名は行にならない")
+
+        let rows = KakeiboCSV.drafts(ocr.table, mapping: ocr.mapping, isCard: false, now: T.now)
+        XCTAssertEqual(rows.map { ymd($0.date) }, ["2026-7-1", "2026-8-12"])
+        XCTAssertEqual(rows.map(\.amount), [700, 3_400])
+        XCTAssertEqual(rows.map(\.kind), [.expense, .expense])
+        XCTAssertEqual(rows.map(\.text), ["ETC ミホン出口", "WL *SAMPLE PURCHASE"])
+    }
+
     func testNoHeaderFallsBackToNumberedColumns() throws {
         let page: [KakeiboOCRBox] = [
             box("2026/09/20", 0.05, 0.80, 0.12),

@@ -13,7 +13,8 @@ struct KakeiboOCRBox: Hashable {
 
 enum KakeiboOCRTable {
     enum Role: Hashable {
-        case date, withdrawal, deposit, amount, text, balance
+        /// skip：取り込まない列（支払回数・摘要の2つめなど）。列の境目を正しく決めるためだけに置く
+        case date, withdrawal, deposit, amount, text, balance, skip
 
         var isMoney: Bool { self == .withdrawal || self == .deposit || self == .amount || self == .balance }
     }
@@ -109,6 +110,10 @@ enum KakeiboOCRTable {
         }
         let avoid = ["区分", "回数", "方法", "日", "予定"]
         if avoid.contains(where: { s.contains($0) }) { return nil }
+        // 2段の見出し「支払／回数」の上の段だけ（カードの支払回数。お支払いの金額ではない）
+        if s == "支払" { return nil }
+        // 表の題（「ご利用明細」「入出金明細」）は列ではない
+        if s.hasSuffix("明細") && s != "明細" { return nil }
         if s.contains("支払") || s.contains("出金") || s.contains("引出") { return .withdrawal }
         if s.contains("預") || s.contains("入金") { return .deposit }
         let textWords = ["取引内容", "内容", "摘要", "利用先", "店名", "利用店", "取引先", "明細", "お取引"]
@@ -116,21 +121,70 @@ enum KakeiboOCRTable {
         return nil
     }
 
+    /// 1文字ずつ空けた見出し（「ご　利　用　店　名」）を1語にまとめる
+    static func joinSpaced(_ ts: [Token]) -> [Token] {
+        var out: [Token] = []
+        var run: [Token] = []
+        func flush() {
+            if run.count >= 2, let a = run.first, let b = run.last {
+                out.append(Token(text: run.map(\.text).joined(), minX: a.minX, maxX: b.maxX))
+            } else {
+                out.append(contentsOf: run)
+            }
+            run = []
+        }
+        for t in ts {
+            let single: Bool = t.text.count == 1 && !t.text.unicodeScalars.allSatisfy(\.isASCII)
+            guard single else { flush(); out.append(t); continue }
+            // 離れた1文字（「何」と「摘」）はつながない。字間はおおむね字の幅の数倍まで
+            if let last = run.last {
+                let width: CGFloat = max(last.maxX - last.minX, t.maxX - t.minX)
+                if t.minX - last.maxX > 5 * width { flush() }
+            }
+            run.append(t)
+        }
+        flush()
+        return out
+    }
+
     /// 見出しの行なら列を返す（日付ともう2つ以上の役割が並んでいること）
     static func headerColumns(_ line: [KakeiboOCRBox]) -> [Column]? {
+        headerColumns(tokens: joinSpaced(tokens(line)))
+    }
+
+    /// 2〜3段に分かれた見出し：段ごとに語にしてから、まとめて列を決める
+    static func headerColumns(lines: [[KakeiboOCRBox]]) -> [Column]? {
+        var ts: [Token] = []
+        for l in lines { ts.append(contentsOf: joinSpaced(tokens(l))) }
+        return headerColumns(tokens: ts.sorted { $0.midX < $1.midX })
+    }
+
+    private static func headerColumns(tokens ts: [Token]) -> [Column]? {
         var cols: [Column] = []
         var used = Set<Role>()
-        for t in tokens(line) {
-            guard let r = role(of: t.text), !used.contains(r) else { continue }
-            used.insert(r)
-            cols.append(Column(role: r, title: t.text, center: t.midX))
+        var others: [Token] = []
+        for t in ts {
+            if let r = role(of: t.text), !used.contains(r) {
+                used.insert(r)
+                cols.append(Column(role: r, title: t.text, center: t.midX))
+            } else {
+                others.append(t)
+            }
         }
         guard used.contains(.date), cols.count >= 3,
               used.contains(.withdrawal) || used.contains(.deposit) || used.contains(.amount) else { return nil }
-        // 「ご利用金額」と「お支払い金額」が両方あるカードは、ご利用金額を使う
+        // 「ご利用金額」と「お支払い金額」が両方あるカードは、ご利用金額を使う（もう一方は取り込まない列）
         if used.contains(.amount), let i = cols.firstIndex(where: { $0.role == .withdrawal }),
            cols[i].title.contains("金額") {
-            cols.remove(at: i)
+            cols[i].role = .skip
+        }
+        // ほかの見出しの言葉（支払回数・摘要・現地通貨額…）も、取り込まない列として境目に使う。
+        // すでにある列と同じ位置のもの（2段めの「海外ご利用店名」など）は足さない
+        for t in others {
+            let s: String = t.text.precomposedStringWithCompatibilityMapping
+            guard s.count <= 12, s.rangeOfCharacter(from: .decimalDigits) == nil, !s.contains("明細") else { continue }
+            let near: Bool = cols.contains { abs($0.center - t.midX) < 0.05 }
+            if !near { cols.append(Column(role: .skip, title: t.text, center: t.midX)) }
         }
         cols.sort { $0.center < $1.center }
         for i in cols.indices {
@@ -200,11 +254,14 @@ enum KakeiboOCRTable {
 
         for page in pages {
             let ls = lines(page)
-            for line in ls {
+            var skipUntil = -1
+            for (li, line) in ls.enumerated() {
+                if li <= skipUntil { continue }
                 let joined: String = line.map(\.text).joined(separator: " ")
-                if let h = headerColumns(line) {
+                if let h = headerBlock(ls, at: li) {
                     commit()
-                    columns = h
+                    columns = h.columns
+                    skipUntil = li + h.lineCount - 1
                     continue
                 }
                 if isFooter(joined) { commit(); continue }
@@ -223,6 +280,16 @@ enum KakeiboOCRTable {
                     cells[i] = cells[i].isEmpty ? t.text : cells[i] + " " + t.text
                 }
                 guard let di = cols.firstIndex(where: { $0.role == .date }) else { continue }
+                // 日付の列に入り込んだ店名（見出しが列の真ん中にあり、境目が右に寄るとき）は内容の列へ戻す
+                let parts: [String] = cells[di].split(separator: " ").map(String.init)
+                let isDatePart: (String) -> Bool = { KakeiboRegex.matches(#"^[0-9０-９/／.\-年月日令和R]+$"#, $0) }
+                let datePart: [String] = Array(parts.prefix(while: isDatePart))
+                let spill: [String] = Array(parts.dropFirst(datePart.count))
+                if !spill.isEmpty, let ti = cols.firstIndex(where: { $0.role == .text }) {
+                    let moved: String = spill.joined(separator: " ")
+                    cells[ti] = cells[ti].isEmpty ? moved : moved + " " + cells[ti]
+                    cells[di] = datePart.joined(separator: " ")
+                }
                 let dateCell = cells[di].precomposedStringWithCompatibilityMapping.replacingOccurrences(of: " ", with: "")
                 cells[di] = dateCell
 
@@ -281,10 +348,38 @@ enum KakeiboOCRTable {
             case .amount: m.amount = headers[i]
             case .text: m.text = headers[i]
             case .balance: m.balance = headers[i]
+            case .skip: break
             }
         }
         let t = KakeiboTable(headers: headers, rows: rows, preamble: preamble.joined(separator: "\n"), headerFound: true)
         return (t, m)
+    }
+
+    /// i 行目から始まる見出し（1段、またはすぐ下に続く数字の無い段と合わせて2〜3段）
+    static func headerBlock(_ ls: [[KakeiboOCRBox]], at i: Int) -> (columns: [Column], lineCount: Int)? {
+        var best: (columns: [Column], lineCount: Int)? = nil
+        if let h = headerColumns(ls[i]) { best = (columns: h, lineCount: 1) }
+        var block: [[KakeiboOCRBox]] = [ls[i]]
+        // 下の段（「海外ご利用店名」「現地通貨額」など）も、見出しであるうちは合わせる。宛名の行（〜様）は入れない
+        for k in 1...2 {
+            guard i + k < ls.count else { break }
+            let prev: [KakeiboOCRBox] = block[block.count - 1]
+            let next: [KakeiboOCRBox] = ls[i + k]
+            let text: String = next.map(\.text).joined()
+            guard text.rangeOfCharacter(from: .decimalDigits) == nil, !text.contains("様") else { break }
+            let prevBottom: CGFloat = prev.map(\.rect.minY).min() ?? 0
+            let nextTop: CGFloat = next.map(\.rect.maxY).max() ?? 0
+            let height: CGFloat = prev.map(\.rect.height).max() ?? 0
+            // 見出しの段どうしはほぼ接している（上の「ご利用明細」のような表の題は、少し離れているので入れない）
+            guard prevBottom - nextTop < 0.6 * height else { break }
+            block.append(next)
+            if let h = headerColumns(lines: block) {
+                best = (columns: h, lineCount: block.count)
+            } else if best != nil {
+                break
+            }
+        }
+        return best
     }
 
     /// 行にまとめた文字（見出しで読めなかったときに、文字の明細と同じ読み方を試す）
