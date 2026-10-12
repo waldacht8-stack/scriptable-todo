@@ -32,9 +32,9 @@ struct KakeiboWidgetView: View {
     private var family: WidgetFamily { familyOverride ?? envFamily }
     private var p: Palette { entry.palette }
     private var k: KakeiboFeed { entry.kakeibo }
-    private var spent: Int { k.spentThisMonth(entry.date) }
-    private var remaining: Int? { k.remainingThisMonth(entry.date) }
-    private var used: Double? { k.usedFraction(entry.date) }
+    private var spent: Int { k.spentNow(entry.date) }
+    private var income: Int { k.incomeNow(entry.date) }
+    private var left: Int { k.leftNow(entry.date) }
 
     init(entry: DayWidgetEntry, familyOverride: WidgetFamily? = nil) {
         self.entry = entry
@@ -56,12 +56,12 @@ struct KakeiboWidgetView: View {
         .widgetURL(WidgetLinks.kakeibo)
     }
 
-    private var monthTitle: String { "\(Calendar.current.component(.month, from: entry.date))月の支出" }
+    private var title: String { k.title(entry.date) }
 
     private var spendBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                Text(monthTitle).font(.caption.weight(.bold)).foregroundStyle(p.sub)
+                Text(title).font(.caption.weight(.bold)).foregroundStyle(p.sub)
                 if k.isSample { WidgetSampleBadge(color: p.sub) }
                 Spacer(minLength: 0)
             }
@@ -69,29 +69,21 @@ struct KakeiboWidgetView: View {
             WidgetCount(p: p, text: WidgetFeedDay.yenText(spent), value: Double(spent), size: 28)
                 .lineLimit(1).minimumScaleFactor(0.5)
             Spacer(minLength: 0)
-            budgetBar
-        }
-    }
-
-    @ViewBuilder private var budgetBar: some View {
-        if let used, let remaining, let budget = k.budget {
-            let over: Bool = remaining < 0
-            VStack(alignment: .leading, spacing: 4) {
-                GeometryReader { g in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(p.sub.opacity(0.18))
-                        Capsule().fill(over ? p.overdue : p.accent).frame(width: g.size.width * used)
-                    }
-                }
-                .frame(height: 6)
-                Text(over ? "予算を \(WidgetFeedDay.yenText(-remaining)) 超え" : "残り \(WidgetFeedDay.yenText(remaining))")
-                    .font(.caption.weight(.bold)).foregroundStyle(over ? p.overdue : p.text).lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("収入 \(WidgetFeedDay.yenText(income))").font(.caption2).foregroundStyle(p.sub).lineLimit(1)
+                Text("残り \(WidgetFeedDay.yenText(left))")
+                    .font(.caption.weight(.bold)).foregroundStyle(left < 0 ? p.overdue : p.text).lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .contentTransition(.numericText())
-                Text("予算 \(WidgetFeedDay.yenText(budget))").font(.caption2).foregroundStyle(p.sub).lineLimit(1)
+                if k.importOverdue(entry.date) {
+                    // 期限を過ぎた明細があるとき（取り込み忘れの注意）
+                    Label("明細の取り込みがまだです", systemImage: "exclamationmark.circle.fill")
+                        .font(.caption2.weight(.bold)).foregroundStyle(p.overdue).lineLimit(1).minimumScaleFactor(0.6)
+                } else {
+                    Text(k.paydayText(entry.date)).font(.caption2.weight(.bold)).foregroundStyle(p.accent).lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
             }
-        } else {
-            Text("予算は未設定").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
         }
     }
 
@@ -135,21 +127,20 @@ struct KakeiboWidgetView: View {
     // ロック画面
 
     private var inline: some View {
-        let rest: String = remaining.map { "・残り \(WidgetFeedDay.yenText($0))" } ?? ""
-        return Text("今月 \(WidgetFeedDay.yenText(spent))\(rest)")
+        Text("支出 \(WidgetFeedDay.yenText(spent))・\(k.paydayText(entry.date))")
     }
 
     private var circular: some View {
         let w: World = p.world
-        let left: Double = used.map { max(0, 1 - $0) } ?? 0
         let numberFont: Font = w == .none ? Font.system(size: 15, weight: .heavy) : w.accessoryNumberFont(14)
         let labelFont: Font = Font.system(size: 8, weight: w.accessoryWeight(.semibold), design: w.accessoryDesign ?? .default)
+        let days: Int? = k.daysToPayday(entry.date)
         return ZStack {
             AccessoryWorldBackground(world: w)
-            LockRing(world: w, fraction: left).padding(3)
+            LockRing(world: w, fraction: k.elapsedFraction(entry.date)).padding(3)
             VStack(spacing: -1) {
-                Text("残り").font(labelFont)
-                Text(remaining.map { compactYen($0) } ?? compactYen(spent)).font(numberFont)
+                Text(days == nil ? "支出" : "給料日").font(labelFont)
+                Text(days.map { $0 == 0 ? "今日" : "\($0)日" } ?? compactYen(spent)).font(numberFont)
                     .tracking(w.accessoryTracking).minimumScaleFactor(0.5).lineLimit(1)
                     .contentTransition(.numericText())
             }
@@ -161,18 +152,14 @@ struct KakeiboWidgetView: View {
     private var rectangular: some View {
         let w: World = p.world
         return VStack(alignment: .leading, spacing: 1) {
-            Text(monthTitle).font(lockFont(w, .caption2, .semibold))
+            Text(title).font(lockFont(w, .caption2, .semibold))
             Text(WidgetFeedDay.yenText(spent)).font(lockFont(w, .headline, .heavy)).monospacedDigit()
                 .tracking(w.accessoryTracking).lineLimit(1)
                 .contentTransition(.numericText(value: Double(spent)))
-            if let remaining, let used {
-                HStack(spacing: 6) {
-                    Text("残り \(WidgetFeedDay.yenText(remaining))").font(lockFont(w, .caption, .semibold)).lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    LockBar(fraction: max(0, 1 - used)).frame(height: 4)
-                }
-            } else {
-                Text("予算は未設定").font(lockFont(w, .caption, .regular))
+            HStack(spacing: 6) {
+                Text(k.importOverdue(entry.date) ? "明細の取り込みがまだです" : k.paydayText(entry.date)).font(lockFont(w, .caption, .semibold)).lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                LockBar(fraction: k.elapsedFraction(entry.date)).frame(height: 4)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -36,11 +36,14 @@ import Foundation
 //
 // kakeibo-summary.json（家計簿。家計簿の担当が書く）
 // {
-//   "month": "2026-10",               // 集計した月（yyyy-MM）。今月でなければ支出 0 として扱う
-//   "spent": 32400,                   // 今月の支出（円・整数）
-//   "budget": 50000,                  // 今月の予算（円。未設定なら省略）
-//   "remaining": 17600,               // 予算の残り（円。省略なら budget - spent）
-//   "topCategories": [                // 今月の支出の多い分類（多い順。中サイズに上位3つ。任意）
+//   "month": "2026-10",               // 周期の呼び名の月（給料日 25 日なら 9/25〜10/24 が「10月分」）
+//   "spent": 32400,                   // 周期の支出（円・整数）
+//   "income": 210000,                 // 周期の収入（円・整数）
+//   "cycleStart": "2026-09-25",       // 周期の最初の日（給料日。土日・祝日なら前の営業日）
+//   "cycleEnd": "2026-10-22",         // 周期の最後の日（含む）。今日がこの外なら支出・収入 0 として扱う
+//   "payday": 25,                     // 給料日（1〜31。なしは null で暦の月）。「給料日まであと◯日」に使う
+//   "importDue": "2026-10-24",        // 明細の取り込みの期限（この日から「明細の取り込みがまだです」。なしは null）
+//   "topCategories": [                // 周期の支出の多い分類（多い順。中サイズに上位3つ。任意）
 //     { "name": "食費", "amount": 12800 }
 //   ]
 // }
@@ -176,12 +179,15 @@ struct WakeWatchFeed: Codable, Equatable {
     var fraction: Double { min(1, Double(stepCount) / Double(stepGoal)) }
 }
 
-/// 家計簿の今月の合計
+/// 家計簿の周期（給料日から次の給料日の前の日まで）の合計
 struct KakeiboFeed: Codable, Equatable {
-    var month: String? = nil
+    var month: String? = nil            // 周期の呼び名の月（「10月分」の 2026-10）
     var spent: Int? = nil
-    var budget: Int? = nil
-    var remaining: Int? = nil
+    var income: Int? = nil
+    var cycleStart: String? = nil       // yyyy-MM-dd
+    var cycleEnd: String? = nil         // yyyy-MM-dd（最後の日を含む）
+    var payday: Int? = nil              // 給料日（なしは暦の月）
+    var importDue: String? = nil        // 明細の取り込みの期限（yyyy-MM-dd）
     var topCategories: [Category]? = nil
     var isSample: Bool = false
 
@@ -193,12 +199,27 @@ struct KakeiboFeed: Codable, Equatable {
     static let file = "kakeibo-summary.json"
 
     private enum CodingKeys: String, CodingKey {
-        case month, spent, budget, remaining, topCategories
+        case month, spent, income, cycleStart, cycleEnd, payday, topCategories, importDue
     }
 
-    /// 今月の分類の上位（違う月なら空）
+    /// ファイルの周期が、いまの周期か（前の版のファイル＝周期の日付なし、は暦の月で比べる）
+    func isCurrent(_ now: Date) -> Bool {
+        if let a = cycleStart, let b = cycleEnd {
+            let today: String = WidgetFeedDay.key(now)
+            return a <= today && today <= b
+        }
+        return month == nil || month == WidgetFeedDay.monthKey(now)
+    }
+
+    /// いまの周期（ファイルが古くても、給料日から決める）
+    func cycle(_ now: Date) -> KakeiboCycle.Period { KakeiboCycle.period(containing: now, payday: payday) }
+
+    /// 「10月分の支出」
+    func title(_ now: Date) -> String { cycle(now).title + "の支出" }
+
+    /// いまの周期の分類の上位（違う周期なら空）
     func categories(_ now: Date) -> [Category] {
-        guard month == nil || month == WidgetFeedDay.monthKey(now) else { return [] }
+        guard isCurrent(now) else { return [] }
         return (topCategories ?? []).sorted { $0.amount > $1.amount }
     }
 
@@ -212,28 +233,45 @@ struct KakeiboFeed: Codable, Equatable {
     }
 
     static func demo(now: Date = .now) -> KakeiboFeed {
-        KakeiboFeed(month: WidgetFeedDay.monthKey(now), spent: 32400, budget: 50000, remaining: 17600,
-                    topCategories: [Category(name: "食費", amount: 12800), Category(name: "日用品", amount: 6400),
-                                    Category(name: "交通", amount: 4200), Category(name: "趣味", amount: 3900)])
+        let c = KakeiboCycle.period(containing: now, payday: 25)
+        return KakeiboFeed(month: WidgetFeedDay.monthKey(c.label), spent: 32400, income: 210000,
+                           cycleStart: WidgetFeedDay.key(c.start), cycleEnd: WidgetFeedDay.key(c.lastDay), payday: 25,
+                           topCategories: [Category(name: "食費", amount: 12800), Category(name: "日用品", amount: 6400),
+                                           Category(name: "交通", amount: 4200), Category(name: "サブスク", amount: 3900)])
     }
 
-    /// 今月の支出（違う月のファイルなら 0）
-    func spentThisMonth(_ now: Date) -> Int {
-        guard month == nil || month == WidgetFeedDay.monthKey(now) else { return 0 }
-        return max(0, spent ?? 0)
+    /// いまの周期の支出（違う周期のファイルなら 0）
+    func spentNow(_ now: Date) -> Int { isCurrent(now) ? max(0, spent ?? 0) : 0 }
+
+    /// いまの周期の収入（違う周期のファイルなら 0）
+    func incomeNow(_ now: Date) -> Int { isCurrent(now) ? max(0, income ?? 0) : 0 }
+
+    /// 残り（収入 − 支出）
+    func leftNow(_ now: Date) -> Int { incomeNow(now) - spentNow(now) }
+
+    /// 次の給料日まであと何日（給料日なしは nil、今日なら 0）
+    func daysToPayday(_ now: Date) -> Int? { KakeiboCycle.daysToPayday(now: now, payday: payday) }
+
+    /// 周期の進み（0〜1。ロック画面の輪）
+    func elapsedFraction(_ now: Date) -> Double {
+        let c = cycle(now)
+        let total: Double = c.end.timeIntervalSince(c.start)
+        guard total > 0 else { return 0 }
+        return min(1, max(0, now.timeIntervalSince(c.start) / total))
     }
 
-    /// 予算の残り（予算が無ければ nil）
-    func remainingThisMonth(_ now: Date) -> Int? {
-        guard let b = budget, b > 0 else { return nil }
-        if month == nil || month == WidgetFeedDay.monthKey(now), let r = remaining { return r }
-        return b - spentThisMonth(now)
+    /// 明細の取り込みが期限を過ぎたか（期限の日を含む）
+    func importOverdue(_ now: Date) -> Bool {
+        guard let d = importDue, !isSample else { return false }
+        return d <= WidgetFeedDay.key(now)
     }
 
-    /// 予算に対する支出の割合（0〜1。予算が無ければ nil）
-    func usedFraction(_ now: Date) -> Double? {
-        guard let b = budget, b > 0 else { return nil }
-        return min(1, Double(spentThisMonth(now)) / Double(b))
+    /// 「給料日まであと3日」「今日は給料日」（給料日なしは「月末まであと◯日」）
+    func paydayText(_ now: Date) -> String {
+        if let d = daysToPayday(now) { return d == 0 ? "今日は給料日" : "給料日まであと\(d)日" }
+        let c = cycle(now)
+        let left: Int = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: now), to: c.end).day ?? 0
+        return "月末まであと\(max(0, left))日"
     }
 }
 

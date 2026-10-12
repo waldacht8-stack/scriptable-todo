@@ -108,7 +108,7 @@ struct SummaryWidget: Widget {
                 .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, variant: .day) }
         }
         .configurationDisplayName("今日のまとめ")
-        .description("次のアラームか見張りの歩数、今日の TODO の上位3件（丸で完了）、見返し、今月の支出。")
+        .description("次のアラームか見張りの歩数、今日の TODO の上位3件（丸で完了）、見返し、家計簿の支出。")
         .supportedFamilies([.systemLarge])
     }
 }
@@ -128,7 +128,7 @@ struct DayLockWidget: Widget {
 
 // MARK: - タブごと：家計簿・相談・情報
 
-/// 家計簿（今月の支出と予算の残り）
+/// 家計簿（給料日から次の給料日の前の日までの支出・収入と、給料日まであと何日）
 struct KakeiboWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "KakeiboWidget", provider: DayProvider(step: 60 * 60, span: 6 * 3600)) { entry in
@@ -136,7 +136,7 @@ struct KakeiboWidget: Widget {
                 .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, variant: .kakeibo) }
         }
         .configurationDisplayName("家計簿")
-        .description("今月の支出と予算の残り。中サイズは支出の多い分類も出します。")
+        .description("給料日からの支出・収入・残りと、次の給料日まであと何日。中サイズは支出の多い分類も出します。")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryCircular, .accessoryInline])
     }
 }

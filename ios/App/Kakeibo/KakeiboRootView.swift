@@ -1,56 +1,63 @@
 import SwiftUI
-import Charts
 
-/// 「家計簿」タブ：今月の支出（大きく）・予算の残り・分類の円グラフ・最近の記録・取り込みと手入力
+/// 「家計簿」タブ：いまの周期（給料日から次の給料日の前の日まで）の支出・収入・残り、目標貯金、使い道。
+/// ホームは大事な数字だけ。カードをタップすると、くわしく（分類の全部・記録の一覧・目標の中身）を開く。
+/// 記録はおもに「明細を取り込む」から。現金の支払いは記録の一覧の「手で足す」から
 struct KakeiboRootView: View {
     @StateObject private var store = KakeiboStore()
     @ObservedObject private var inbox = KakeiboInbox.shared
+    @ObservedObject private var importLink = KakeiboImportLink.shared
     @Environment(\.palette) private var p
     @Environment(\.motion) private var motion
     @Environment(\.scenePhase) private var scene
-    @State private var monthOffset = 0
+    @State private var cycleOffset = 0
     @State private var sheet: KakeiboSheet?
     @State private var path: [KakeiboRoute] = []
-    @State private var showAddChoices = false
 
-    private var month: Date { KakeiboMonth.start(.now, offset: monthOffset) }
+    private var cycle: KakeiboCycle.Period { store.cycle(offset: cycleOffset) }
 
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 12) {
                     header
-                    KakeiboSpendCard(summary: store.summary(month), monthOffset: $monthOffset)
+                    let summary: KakeiboSummary = store.summary(cycle)
+                    KakeiboSummaryCard(summary: summary, offset: $cycleOffset,
+                                       onOpen: { open(.records) }, onSettings: { path.append(.settings) })
+                    KakeiboImportStatus(dues: store.importDues) { sheet = .importer(.preset($0)) }
                     goalCard
-                    pendingCard
-                    KakeiboCategoryCard(entries: store.entries(in: month))
-                    recentSection
-                    KakeiboLinkRow(icon: "wave.3.right.circle.fill", title: "Apple Pay を自動で記録",
-                                   detail: applePayDetail) {
-                        sheet = .applePay
+                    KakeiboCategoryCard(summary: summary) { open(.categories) }
+                    KakeiboLinkRow(icon: "list.bullet.rectangle", title: "記録を見る", detail: recordsDetail(summary)) {
+                        open(.records)
                     }
                     KakeiboLinkRow(icon: "slider.horizontal.3", title: "家計簿の設定", detail: settingsDetail) {
                         path.append(.settings)
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 96)
+                .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
-            // 左右にスライドで月を切り替える（左へ＝次の月、右へ＝前の月。今月より先には行かない）
-            .simultaneousGesture(monthSwipe)
+            // 左右にスライドで周期を切り替える（左へ＝次、右へ＝前。いまの周期より先には行かない）
+            .simultaneousGesture(cycleSwipe)
             .paletteBackground(p)
-            .overlay(alignment: .bottomTrailing) { addButton }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: KakeiboRoute.self) { route in
                 switch route {
-                case .all: KakeiboAllView(store: store, month: month) { sheet = .entry($0) }
+                case .detail(let offset, let focus):
+                    KakeiboDetailView(store: store, offset: offset, focus: focus,
+                                      onEdit: { sheet = .entry($0) }, onAdd: { sheet = .entry(nil) },
+                                      onSettings: { path.append(.settings) })
                 case .settings: KakeiboSettingsView(store: store)
                 }
             }
         }
         .sheet(item: $sheet) { s in sheetContent(s) }
-        .onAppear { store.reload() }
+        .onAppear {
+            store.reload()
+            openPendingImport()
+        }
+        .onChange(of: importLink.pending) { _, _ in openPendingImport() }
         .onChange(of: scene) { _, s in if s == .active { store.reload() } }
         .onReceive(NotificationCenter.default.publisher(for: .kakeiboDataChanged)) { _ in store.reload() }
         .onOpenURL { url in inbox.receive(url) }
@@ -62,59 +69,79 @@ struct KakeiboRootView: View {
         .task { await openForScreenshot() }
     }
 
-    private var applePayDetail: String {
-        store.settings.applePayTested ? "テストの1件が届いています" : "払うたびにショートカットが日和へ送ります"
+    /// 取り込みのお知らせ・hiyori://kakeibo?import=… で来たら、その銀行・カードの取り込みを開く
+    private func openPendingImport() {
+        guard let i = importLink.pending else { return }
+        importLink.pending = nil
+        path = []
+        sheet = .importer(.preset(i))
+    }
+
+    private func open(_ focus: KakeiboDetailFocus) {
+        path.append(.detail(cycleOffset, focus))
+    }
+
+    private func recordsDetail(_ s: KakeiboSummary) -> String {
+        let n: Int = store.entries(in: s.cycle).count
+        return "\(s.cycle.title) \(n)件 ・ 現金の支払いは一覧の「手で足す」から"
     }
 
     private var settingsDetail: String {
         let s = store.settings
-        return "予算 \(KakeiboFormat.yen(s.budget)) 円 ・ 分類 \(s.categories.count) ・ 決まり \(s.rules.count)"
+        let pay: String = s.payday.map { $0 >= 31 ? "給料日 月末" : "給料日 \($0)日" } ?? "給料日 未設定"
+        let from: String = s.employer.isEmpty ? "振り込み元 未設定" : "振り込み元 \(s.employer)"
+        return "\(pay) ・ \(from)"
     }
 
     // MARK: 見出し
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(KakeiboStyle.monthTitle(month)).font(.footnote.weight(.semibold)).foregroundStyle(p.sub)
+        VStack(alignment: .leading, spacing: 2) {
+            // 周期の行は見出しの上に1行で（ボタンの幅を取らないように）
+            Text("\(cycle.longTitle) ・ \(cycle.rangeText)").font(.footnote.weight(.semibold)).foregroundStyle(p.sub)
+                .lineLimit(1).minimumScaleFactor(0.8)
+            HStack(alignment: .center, spacing: 8) {
                 Text("家計簿").font(.largeTitle.weight(.heavy)).foregroundStyle(p.text)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 4)
+                Button { sheet = .importer(.fresh) } label: { importLabel }
+                    .buttonStyle(.plain)
+                    .fixedSize()
+                SettingsButton()
             }
-            Spacer(minLength: 4)
-            Button { sheet = .importer(.fresh) } label: { importLabel }
-                .buttonStyle(.plain)
-            SettingsButton()
         }
         .padding(.horizontal, 4)
         .padding(.top, 8)
     }
 
+    /// いちばんの入口：明細を取り込む
     private var importLabel: some View {
         HStack(spacing: 5) {
             Image(systemName: "square.and.arrow.down")
             Text("明細を取り込む")
         }
         .font(.subheadline.weight(.heavy))
-        .foregroundStyle(p.accent)
+        .foregroundStyle(p.onAccent)
         .lineLimit(1)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .frame(height: 44)
-        .overlay(Capsule().strokeBorder(p.accent, lineWidth: 1.5))
+        .background(p.accent, in: Capsule())
         .contentShape(Capsule())
     }
 
-    // MARK: 月の切り替え（スライド）
+    // MARK: 周期の切り替え（スライド）
 
-    private var monthSwipe: some Gesture {
+    private var cycleSwipe: some Gesture {
         DragGesture(minimumDistance: 24)
             .onEnded { v in
                 let dx: CGFloat = v.translation.width
                 let dy: CGFloat = v.translation.height
                 guard abs(dx) > 60, abs(dx) > abs(dy) * 1.5 else { return }
                 if dx < 0 {
-                    guard monthOffset < 0 else { return }
-                    withAnimation(motion.change) { monthOffset += 1 }
+                    guard cycleOffset < 0 else { return }
+                    withAnimation(motion.change) { cycleOffset += 1 }
                 } else {
-                    withAnimation(motion.change) { monthOffset -= 1 }
+                    withAnimation(motion.change) { cycleOffset -= 1 }
                 }
             }
     }
@@ -123,69 +150,12 @@ struct KakeiboRootView: View {
 
     @ViewBuilder private var goalCard: some View {
         if let goal = store.settings.savingsGoal, let g = store.savingsProgress {
-            Button { path.append(.settings) } label: { KakeiboGoalCard(goal: goal, progress: g) }
-                .buttonStyle(.plain)
+            KakeiboGoalCard(goal: goal, progress: g, cycle: store.cycle(offset: 0)) { path.append(.detail(0, .goal)) }
         } else {
             KakeiboLinkRow(icon: "flag.checkered", title: "目標貯金を決める",
-                           detail: "「来年3月までに50万円」のように、総額と期限で決めます") {
+                           detail: "「来年3月までに50万円」のように決めると、月にいくら残せばよいか出します") {
                 path.append(.settings)
             }
-        }
-    }
-
-    // MARK: 金額の入力待ち（Apple Pay で金額が届かなかった）
-
-    @ViewBuilder private var pendingCard: some View {
-        let pending: [KakeiboEntry] = store.entries.filter(\.isPending)
-        if !pending.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Label("金額の入力待ち \(pending.count)件", systemImage: "exclamationmark.circle.fill")
-                    .font(.subheadline.weight(.heavy)).foregroundStyle(p.overdue)
-                ForEach(pending.prefix(3)) { e in
-                    // 右下の ＋ ボタンに「金額を入力」が隠れないよう、右を空ける
-                    Button { sheet = .entry(e) } label: { KakeiboEntryRow(entry: e).padding(.trailing, 52) }.buttonStyle(.plain)
-                }
-            }
-            .paletteCard(p, padding: 14)
-        }
-    }
-
-    // MARK: 最近の記録
-
-    private var recentSection: some View {
-        let recent: [KakeiboEntry] = Array(store.entries(in: month).filter { !$0.isPending }.prefix(5))
-        let title: String = monthOffset == 0 ? "最近の記録" : "\(Calendar.current.component(.month, from: month))月の記録"
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.headline.weight(.heavy)).foregroundStyle(p.text)
-                Spacer()
-                Button("すべて見る ›") { path.append(.all) }
-                    .font(.footnote.weight(.bold)).foregroundStyle(p.accent)
-            }
-            .padding(.horizontal, 4)
-            .padding(.top, 4)
-            KakeiboRecentList(entries: recent) { sheet = .entry($0) }
-                .paletteCard(p, padding: 14)
-                .animation(motion.change, value: recent.map(\.id))
-        }
-    }
-
-    private var addButton: some View {
-        Button { showAddChoices = true } label: {
-            Image(systemName: "plus").font(.title2.weight(.heavy)).foregroundStyle(p.onAccent)
-                .frame(width: 60, height: 60)
-                .background(p.accent, in: Circle())
-                .shadow(color: p.accent.opacity(0.35), radius: 12, y: 8)
-        }
-        .buttonStyle(.plain)
-        .padding(.trailing, 20)
-        .padding(.bottom, 20)
-        .accessibilityLabel("記録する・明細を取り込む")
-        .confirmationDialog("記録のしかた", isPresented: $showAddChoices, titleVisibility: .visible) {
-            Button("手入力で記録") { sheet = .entry(nil) }
-            Button("明細を取り込む") { sheet = .importer(.fresh) }
-            Button("Apple Pay の自動記録") { sheet = .applePay }
-            Button("やめる", role: .cancel) {}
         }
     }
 
@@ -201,10 +171,6 @@ struct KakeiboRootView: View {
             KakeiboImportView(store: store, start: start, onManual: openManualAfterImport)
                 .environment(\.palette, p)
                 .environment(\.motion, motion)
-        case .applePay:
-            KakeiboApplePayGuide(store: store, startPage: KakeiboLaunch.applePayPage)
-                .environment(\.palette, p)
-                .environment(\.motion, motion)
         }
     }
 
@@ -213,42 +179,45 @@ struct KakeiboRootView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { sheet = .entry(nil) }
     }
 
-    /// 画面写真用の起動引数：-kakeiboentry / -kakeiboimport [source|pick|mapping|preview|done|help] / -kakeiboapplepay [1|2|3] / -kakeiboall / -kakeibosettings
+    /// 画面写真用の起動引数：-kakeiboentry / -kakeiboimport [source|pick|mapping|preview|done|help|jcb|mufg] /
+    /// -kakeiboall / -kakeibodetail [categories|goal|records] / -kakeibosettings
     private func openForScreenshot() async {
         guard let target = KakeiboLaunch.target else { return }
         try? await Task.sleep(nanoseconds: 700_000_000)
         switch target {
         case .entry: sheet = .entry(nil)
-        case .addMenu: showAddChoices = true
         case .importer(let step): sheet = .importer(.demo(step))
-        case .applePay: sheet = .applePay
-        case .all: path = [.all]
+        case .detail(let focus): path = [.detail(0, focus)]
         case .settings: path = [.settings]
         }
     }
 }
 
+/// くわしくの画面で最初に見せるところ
+enum KakeiboDetailFocus: String, Hashable {
+    case summary, categories, goal, records
+}
+
 enum KakeiboRoute: Hashable {
-    case all, settings
+    case detail(Int, KakeiboDetailFocus)
+    case settings
 }
 
 enum KakeiboSheet: Identifiable {
     case entry(KakeiboEntry?)
     case importer(KakeiboImportStart)
-    case applePay
 
     var id: String {
         switch self {
         case .entry(let e): return "entry-\(e?.id ?? "new")"
         case .importer: return "import"
-        case .applePay: return "applepay"
         }
     }
 }
 
 /// 起動引数（画面写真用）
 enum KakeiboLaunch {
-    enum Target { case entry, addMenu, importer(String), applePay, all, settings }
+    enum Target { case entry, importer(String), detail(KakeiboDetailFocus), settings }
 
     private static var args: [String] { ProcessInfo.processInfo.arguments }
 
@@ -259,157 +228,13 @@ enum KakeiboLaunch {
 
     static var target: Target? {
         if args.contains("-kakeiboentry") { return .entry }
-        if args.contains("-kakeiboadd") { return .addMenu }
         if args.contains("-kakeiboimport") { return .importer(value(after: "-kakeiboimport") ?? "source") }
-        if args.contains("-kakeiboapplepay") { return .applePay }
-        if args.contains("-kakeiboall") { return .all }
+        if args.contains("-kakeiboall") { return .detail(.records) }
+        if args.contains("-kakeibodetail") {
+            return .detail(value(after: "-kakeibodetail").flatMap(KakeiboDetailFocus.init(rawValue:)) ?? .summary)
+        }
         if args.contains("-kakeibosettings") { return .settings }
         return nil
-    }
-
-    static var applePayPage: Int {
-        guard let v = value(after: "-kakeiboapplepay"), let n = Int(v) else { return 0 }
-        return max(0, min(2, n - 1))
-    }
-}
-
-// MARK: - 今月の支出
-
-struct KakeiboSpendCard: View {
-    let summary: KakeiboSummary
-    @Binding var monthOffset: Int
-    @Environment(\.palette) private var p
-    @Environment(\.motion) private var motion
-
-    var body: some View {
-        let month: Int = Calendar.current.component(.month, from: summary.month)
-        let title: String = monthOffset == 0 ? "今月の支出" : "\(month)月の支出"
-        let atLatest: Bool = monthOffset >= 0
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 4) {
-                Text(title).font(.subheadline.weight(.bold)).foregroundStyle(p.sub)
-                Spacer()
-                monthButton("chevron.left", label: "前の月") { monthOffset -= 1 }
-                Text("\(month)月").font(.subheadline.weight(.bold)).foregroundStyle(p.text).frame(minWidth: 40)
-                monthButton("chevron.right", label: "次の月") { monthOffset += 1 }
-                    .disabled(atLatest)
-                    .opacity(atLatest ? 0.35 : 1)
-            }
-            KakeiboBigYen(value: summary.spent)
-                .animation(motion.change, value: summary.spent)
-            KakeiboBudgetBar(summary: summary)
-            if summary.income > 0 {
-                Text("収入 \(KakeiboFormat.yen(summary.income)) 円").font(.caption.weight(.semibold)).foregroundStyle(p.sub)
-            }
-        }
-        .paletteCard(p, padding: 16)
-    }
-
-    private func monthButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
-        Button { withAnimation(motion.change) { action() } } label: {
-            Image(systemName: icon).font(.footnote.weight(.heavy)).foregroundStyle(p.text)
-                .frame(width: 36, height: 36)
-                .background(p.sub.opacity(0.12), in: Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-}
-
-// MARK: - 分類別（円グラフ）
-
-struct KakeiboCategoryCard: View {
-    let entries: [KakeiboEntry]
-    @Environment(\.palette) private var p
-
-    struct Slice: Identifiable {
-        var id: String { category }
-        let category: String
-        let amount: Int
-        let color: Color
-    }
-
-    private var slices: [Slice] {
-        var by: [String: Int] = [:]
-        for e in entries where e.counts && e.kind == .expense && e.isTest != true {
-            by[e.category, default: 0] += e.amount
-        }
-        let sorted = by.sorted { $0.value > $1.value }
-        var out: [Slice] = sorted.prefix(4).map { Slice(category: $0.key, amount: $0.value, color: KakeiboStyle.color($0.key)) }
-        let rest: Int = sorted.dropFirst(4).reduce(0) { $0 + $1.value }
-        if rest > 0 { out.append(Slice(category: "ほか", amount: rest, color: p.sub.opacity(0.45))) }
-        return out
-    }
-
-    var body: some View {
-        let list = slices
-        let total: Int = list.reduce(0) { $0 + $1.amount }
-        HStack(spacing: 16) {
-            donut(list)
-                .frame(width: 96, height: 96)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(accessibilityText(list, total))
-            VStack(alignment: .leading, spacing: 6) {
-                if list.isEmpty {
-                    Text("この月の支出はまだありません").font(.subheadline).foregroundStyle(p.sub)
-                }
-                ForEach(list) { s in legendRow(s) }
-                    .padding(.trailing, 44)   // 右下の＋ボタンに金額が隠れないように
-            }
-        }
-        .paletteCard(p, padding: 14)
-    }
-
-    @ViewBuilder private func donut(_ list: [Slice]) -> some View {
-        if list.isEmpty {
-            Circle().stroke(p.accent.opacity(0.15), lineWidth: 16).padding(8)
-        } else {
-            Chart(list) { s in
-                SectorMark(angle: .value("金額", s.amount), innerRadius: .ratio(0.6), angularInset: 1.5)
-                    .foregroundStyle(s.color)
-                    .cornerRadius(3)
-            }
-            .chartLegend(.hidden)
-        }
-    }
-
-    private func legendRow(_ s: Slice) -> some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 3).fill(s.color).frame(width: 10, height: 10)
-            Text(s.category).font(.subheadline.weight(.bold)).foregroundStyle(p.text)
-            Spacer(minLength: 4)
-            Text("\(KakeiboFormat.yen(s.amount)) 円").font(.subheadline.weight(.heavy)).foregroundStyle(p.text)
-                .monospacedDigit()
-        }
-    }
-
-    private func accessibilityText(_ list: [Slice], _ total: Int) -> String {
-        guard total > 0 else { return "分類別の支出：なし" }
-        let parts: [String] = list.map { "\($0.category) \($0.amount * 100 / total)％" }
-        return "分類別の支出：" + parts.joined(separator: "、")
-    }
-}
-
-// MARK: - 最近の記録の一覧
-
-struct KakeiboRecentList: View {
-    let entries: [KakeiboEntry]
-    let onTap: (KakeiboEntry) -> Void
-    @Environment(\.palette) private var p
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if entries.isEmpty {
-                Text("まだ記録がありません。右下の ＋ か「明細を取り込む」から始めましょう")
-                    .font(.subheadline).foregroundStyle(p.sub)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 12)
-            }
-            ForEach(Array(entries.enumerated()), id: \.element.id) { i, e in
-                Button { onTap(e) } label: { KakeiboEntryRow(entry: e) }.buttonStyle(.plain)
-                if i < entries.count - 1 { Divider().overlay(p.sub.opacity(0.2)) }
-            }
-        }
     }
 }
 
@@ -421,13 +246,15 @@ struct KakeiboEntryRow: View {
 
     var body: some View {
         let title: String = entry.memo.isEmpty ? entry.category : entry.memo
-        let meta: String = "\(entry.category) ・ \(KakeiboStyle.dayLabel(entry.date))"
+        let what: String = entry.excludeLabel ?? entry.category
+        let meta: String = "\(what) ・ \(KakeiboStyle.dayLabel(entry.date))"
         HStack(spacing: 10) {
+            Circle().fill(KakeiboStyle.color(entry.category).opacity(entry.isExcluded ? 0.35 : 1)).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.subheadline.weight(.bold)).foregroundStyle(p.text).lineLimit(1)
                 HStack(spacing: 6) {
                     KakeiboSourceTag(entry: entry)
-                    if entry.isTest == true { testTag }
+                    if entry.isSalary { salaryTag }
                     Text(meta).font(.caption).foregroundStyle(p.sub).lineLimit(1)
                 }
             }
@@ -436,13 +263,13 @@ struct KakeiboEntryRow: View {
         }
         .frame(minHeight: 54)
         .contentShape(Rectangle())
-        .opacity(entry.isExcluded ? 0.5 : 1)
+        .opacity(entry.isExcluded || entry.isTest == true ? 0.5 : 1)
     }
 
-    private var testTag: some View {
-        Text("テスト").font(.caption2.weight(.bold)).foregroundStyle(p.onAccent)
+    private var salaryTag: some View {
+        Text("給料").font(.caption2.weight(.bold)).foregroundStyle(p.onAccent)
             .padding(.horizontal, 6).padding(.vertical, 1)
-            .background(p.accent, in: Capsule())
+            .background(KakeiboStyle.color(KakeiboCategories.salary), in: Capsule())
     }
 
     @ViewBuilder private var amountText: some View {
@@ -460,7 +287,7 @@ struct KakeiboEntryRow: View {
     }
 }
 
-/// 下の方の入口の行（Apple Pay・設定）
+/// 下の方の入口の行（記録・目標・設定）
 struct KakeiboLinkRow: View {
     let icon: String
     let title: String
@@ -483,60 +310,5 @@ struct KakeiboLinkRow: View {
             .paletteCard(p, padding: 14)
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - すべての記録（月ごと）
-
-struct KakeiboAllView: View {
-    @ObservedObject var store: KakeiboStore
-    let month: Date
-    let onEdit: (KakeiboEntry) -> Void
-    @Environment(\.palette) private var p
-
-    private struct Day: Identifiable {
-        var id: Date { day }
-        let day: Date
-        let items: [KakeiboEntry]
-    }
-
-    private var days: [Day] {
-        let cal = Calendar.current
-        let groups: [Date: [KakeiboEntry]] = Dictionary(grouping: store.entries(in: month)) { cal.startOfDay(for: $0.date) }
-        return groups.keys.sorted(by: >).map { Day(day: $0, items: groups[$0] ?? []) }
-    }
-
-    var body: some View {
-        List {
-            if days.isEmpty {
-                Text("この月の記録はありません").foregroundStyle(p.sub).listRowBackground(p.card)
-            }
-            ForEach(days) { d in
-                Section {
-                    ForEach(d.items) { e in row(e) }
-                } header: {
-                    Text(JP.date(d.day)).font(.footnote.weight(.bold)).foregroundStyle(p.sub)
-                }
-            }
-            Section {
-                Text("左へ払うと消せます。うすい行は、カードの明細と重なるので合計に入れていない記録です")
-                    .font(.caption).foregroundStyle(p.sub)
-                    .listRowBackground(Color.clear)
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .paletteBackground(p)
-        .navigationTitle(KakeiboStyle.monthTitle(month) + "の記録")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
-    }
-
-    private func row(_ e: KakeiboEntry) -> some View {
-        Button { onEdit(e) } label: { KakeiboEntryRow(entry: e) }
-            .buttonStyle(.plain)
-            .listRowBackground(p.card)
-            .swipeActions(edge: .trailing) {
-                Button(role: .destructive) { store.delete([e.id]) } label: { Label("消す", systemImage: "trash") }
-            }
     }
 }

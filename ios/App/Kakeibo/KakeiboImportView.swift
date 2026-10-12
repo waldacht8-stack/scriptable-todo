@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 enum KakeiboImportStart {
     case fresh                          // ① から
     case file(name: String, data: Data) // 共有で受け取った（③ から）
+    case preset(KakeiboInstitution)     // 銀行・カードを決めて ① から（取り込みのお知らせ・ホームの「取り込む」）
     case demo(String)                   // 画面写真用（source / pick / mapping / preview / done / help / jcb / mufg）
 }
 
@@ -302,8 +303,9 @@ struct KakeiboImportView: View {
 
     private var previewHeader: some View {
         let dupes = drafts.filter { $0.flag == .duplicate }.count
-        let transfers = drafts.filter { $0.flag == .transfer }.count
-        let overlaps = drafts.filter { $0.flag == .cardOverlap }.count
+        let settlements = drafts.filter { $0.flag == .cardSettlement }.count
+        let transfers = drafts.filter { $0.flag == .ownTransfer }.count
+        let salaries = drafts.filter { $0.salary && $0.include }.count
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text("\(isPDF ? "PDF" : "CSV") から \(drafts.count)件 読みました")
@@ -313,20 +315,25 @@ struct KakeiboImportView: View {
             }
             sourceMenu
             if dupes > 0 {
-                Text("すでにある \(dupes)件は飛ばします").font(.footnote.weight(.semibold)).foregroundStyle(p.sub)
+                Text("すでに記録してある \(dupes)件は飛ばします（ほかの明細と同じ取引を含む）").font(.footnote.weight(.semibold)).foregroundStyle(p.sub)
             }
-            if overlaps > 0 {
-                Text("JCB の明細と重なる引落 \(overlaps)件は入れません").font(.footnote.weight(.semibold)).foregroundStyle(p.sub)
+            if salaries > 0 {
+                Label("給料 \(salaries)件を見つけました", systemImage: "yensign.circle.fill")
+                    .font(.footnote.weight(.bold)).foregroundStyle(KakeiboStyle.color(KakeiboCategories.salary))
             }
-            if transfers > 0 {
+            if settlements + transfers > 0 {
                 Toggle(isOn: $excludeTransfers) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("カード引落・振替を入れない").font(.subheadline.weight(.bold)).foregroundStyle(p.text)
-                        Text("2回数えないため ・ \(transfers)件").font(.caption).foregroundStyle(p.sub)
+                        Text("カードの引き落とし・振替を合計に入れない").font(.subheadline.weight(.bold)).foregroundStyle(p.text)
+                        Text("2回数えないため ・ \(settlements + transfers)件（行をタップすると入れられます）").font(.caption).foregroundStyle(p.sub)
                     }
                 }
                 .tint(p.accent)
                 .onChange(of: excludeTransfers) { _, v in applyTransferToggle(v) }
+            }
+            if store.missingCardStatement(drafts) {
+                Label("カードの明細がまだ取り込まれていません。引き落としは合計に入れないので、カードの明細も取り込むと使い道がわかります", systemImage: "creditcard")
+                    .font(.footnote).foregroundStyle(p.sub).fixedSize(horizontal: false, vertical: true)
             }
             if usedOCR {
                 Label("文字として読めない PDF（Safari で印刷した明細など）だったので、画像から文字を読み取りました。まちがいが出やすいので、よく見てください", systemImage: "text.viewfinder")
@@ -361,7 +368,7 @@ struct KakeiboImportView: View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(spacing: 0) {
                 ForEach(Array(drafts.enumerated()), id: \.element.id) { i, d in
-                    KakeiboDraftRow(draft: d, categories: store.settings.categories,
+                    KakeiboDraftRow(draft: d, categories: store.categoryChoices(for: d.kind),
                                     onToggle: { toggleDraft(d.id) },
                                     onCategory: { setCategory(d.id, $0) },
                                     onEdit: { editingDraft = d })
@@ -369,7 +376,7 @@ struct KakeiboImportView: View {
                 }
             }
             .paletteCard(p, padding: 12)
-            Text("読み違いがあれば、行をタップして直せます。分類を直すと、次から同じお店はその分類にします")
+            Text("読み違いがあれば、行をタップして直せます。分類は取引先から自動で決めます。直すと、次から同じお店はその分類にします。外した行は左の丸をタップすると入れられます")
                 .font(.caption).foregroundStyle(p.sub).fixedSize(horizontal: false, vertical: true)
             if hasBalance {
                 Label("残高の数字で、読み取りが合っているか確かめています", systemImage: "checkmark.seal")
@@ -394,7 +401,7 @@ struct KakeiboImportView: View {
                     Divider().overlay(p.sub.opacity(0.2))
                     countRow("すでにあったので飛ばした", r.duplicates)
                     Divider().overlay(p.sub.opacity(0.2))
-                    countRow("カード引落・振替で入れなかった", r.excluded)
+                    countRow("合計に入れない記録（カードの引き落とし・振替）", r.excluded)
                     if r.overlapsHidden > 0 {
                         Divider().overlay(p.sub.opacity(0.2))
                         countRow("JCB と重なるので合計から外した銀行の引落", r.overlapsHidden)
@@ -430,6 +437,8 @@ struct KakeiboImportView: View {
         switch start {
         case .fresh:
             break
+        case .preset(let i):
+            institution = i
         case .file(let name, let data):
             step = 2
             await load(name: name, data: data, detect: true)
@@ -596,13 +605,16 @@ struct KakeiboImportView: View {
     private func setCategory(_ id: UUID, _ c: String) {
         guard let i = drafts.firstIndex(where: { $0.id == id }) else { return }
         drafts[i].category = c
+        drafts[i].salary = c == KakeiboCategories.salary
         touched.insert(id)
         let text = drafts[i].text
         if !text.isEmpty {
             store.learn(text, category: c)
-            // 覚えた決まりで、まだ直していない行の候補を選び直す
+            // 覚えた決まりで、まだ直していない行の分類を選び直す
             for j in drafts.indices where !touched.contains(drafts[j].id) {
-                drafts[j].category = store.suggest(drafts[j].text, kind: drafts[j].kind)
+                let r = store.classify(drafts[j].text, kind: drafts[j].kind)
+                drafts[j].category = r.category
+                drafts[j].salary = r.salary
             }
         }
     }
@@ -611,13 +623,19 @@ struct KakeiboImportView: View {
         guard let i = drafts.firstIndex(where: { $0.id == d.id }) else { return }
         var x = d
         x.suspect = false
+        // 支出か収入か・内容を直したら、分類も選び直す（手で直した分類はそのまま）
+        if (x.kind != drafts[i].kind || x.text != drafts[i].text) && !touched.contains(x.id) {
+            let r = store.classify(x.text, kind: x.kind)
+            x.category = r.category
+            x.salary = r.salary
+        }
         drafts[i] = x
     }
 
     private func applyTransferToggle(_ exclude: Bool) {
         store.updateSettings { $0.excludeTransfers = exclude }
         withAnimation(motion.change) {
-            for i in drafts.indices where drafts[i].flag == .transfer { drafts[i].include = !exclude }
+            for i in drafts.indices where drafts[i].flag == .cardSettlement || drafts[i].flag == .ownTransfer { drafts[i].include = !exclude }
         }
     }
 
@@ -677,11 +695,22 @@ struct KakeiboDraftRow: View {
                 .buttonStyle(.plain)
                 HStack(spacing: 8) {
                     if let flag = draft.flag, !draft.include {
-                        Text(flag.label).font(.caption2.weight(.heavy)).foregroundStyle(p.sub)
-                            .padding(.horizontal, 7).padding(.vertical, 2)
-                            .background(p.sub.opacity(0.14), in: Capsule())
+                        // 外した理由。タップで入れ直す
+                        Button(action: onToggle) {
+                            Text(flag.label + " ・ 入れる").font(.caption2.weight(.heavy)).foregroundStyle(p.sub)
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                                .padding(.horizontal, 7).padding(.vertical, 2)
+                                .background(p.sub.opacity(0.14), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(flag.label)。タップで取り込む")
                     } else {
-                        Text("分類の候補").font(.caption).foregroundStyle(p.sub)
+                        if draft.salary {
+                            Text("給料").font(.caption2.weight(.heavy)).foregroundStyle(p.onAccent)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(KakeiboStyle.color(KakeiboCategories.salary), in: Capsule())
+                        }
+                        Text("分類").font(.caption).foregroundStyle(p.sub)
                         categoryMenu
                     }
                     if draft.suspect {
@@ -890,7 +919,7 @@ struct KakeiboImportHelp: View {
             Item(q: "CSV の文字化け・列がずれる",
                  a: "UTF-8 と Shift_JIS のどちらでも読めます。列の対応がずれたときは「家計簿の設定」の「列の対応」で忘れさせると、次の取り込みで選び直せます"),
             Item(q: "同じ明細を2回取り込んだ",
-                 a: "日付・金額・内容が同じ行は自動で飛ばします。Apple Pay で記録した支払いとも重ならないようにしています"),
+                 a: "金額が同じで内容が似ている行は、日付が1日ずれていても自動で飛ばします。銀行の明細にあるカードの引き落としは、カードの明細で1件ずつ数えるので合計に入れません"),
         ]
     }
 

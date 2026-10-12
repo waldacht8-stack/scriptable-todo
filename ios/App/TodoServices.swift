@@ -103,6 +103,11 @@ final class TodoNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     // 通知のボタン（アプリは前に出ない）
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        // 明細の取り込みのお知らせを押した：家計簿の取り込みを開く
+        if let link = response.notification.request.content.userInfo["kakeiboURL"] as? String, let url = URL(string: link) {
+            await MainActor.run { KakeiboImportLink.shared.open(url) }
+            return
+        }
         // 1日1枚の通知を押した：相談タブを開く
         if ConsultDeepLink.opensConsult(response.notification.request.identifier) { await MainActor.run { ConsultDeepLink.request() }; return }
         // 見返しの通知を押した：アプリで見返しを開く

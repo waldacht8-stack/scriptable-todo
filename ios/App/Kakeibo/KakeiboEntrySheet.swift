@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// 手入力のシート：支出／収入・大きなキーパッド・分類・日付・メモ・最近の記録をもう一度。
-/// editing があればその1件を直す（Apple Pay で金額が届かなかった1件もここで金額を入れる）
+/// 手で足すシート（現金の支払いなど）：支出／収入・大きなキーパッド・日付・メモ・最近の記録をもう一度。
+/// 分類はメモ（お店の名前）から自動で決め、違うときだけ小さなメニューで直す。
+/// editing があればその1件を直す（分類の直しもここ。直すと次から同じお店はその分類になる）
 struct KakeiboEntrySheet: View {
     @ObservedObject var store: KakeiboStore
     let editing: KakeiboEntry?
@@ -11,22 +12,15 @@ struct KakeiboEntrySheet: View {
 
     @State private var kind: KakeiboKind = .expense
     @State private var digits = ""
-    @State private var category = "食費"
+    @State private var category = KakeiboCategories.other
+    @State private var categoryTouched = false   // 分類を手で選んだ（自動で選び直さない）
     @State private var date = Date()
     @State private var memo = ""
     @State private var saved = 0
     @FocusState private var memoFocused: Bool
 
     private var amount: Int { Int(digits) ?? 0 }
-    private var categories: [String] {
-        let all: [String] = store.settings.categories
-        if kind == .income {
-            let first: [String] = all.filter { $0 == "収入" || $0 == "その他" }
-            let rest: [String] = all.filter { $0 != "収入" && $0 != "その他" }
-            return first + rest
-        }
-        return all.filter { $0 != "収入" }
-    }
+    private var categories: [String] { store.categoryChoices(for: kind) }
 
     var body: some View {
         ScrollView {
@@ -34,8 +28,8 @@ struct KakeiboEntrySheet: View {
                 topBar
                 amountDisplay
                 if editing == nil && kind == .expense && !store.recentTemplates.isEmpty { recents }
-                categoryChips
                 dateAndMemo
+                categoryRow
                 keypad
                 KakeiboPrimaryButton(title: editing == nil ? "記録する" : "保存する", enabled: amount > 0) { save() }
                 if let editing {
@@ -58,18 +52,30 @@ struct KakeiboEntrySheet: View {
         .presentationDragIndicator(.visible)
         .sensoryFeedback(.success, trigger: saved)
         .onAppear(perform: load)
+        .onChange(of: memo) { _, _ in autoCategory() }
+        .onChange(of: kind) { _, _ in autoCategory() }
     }
 
     private func load() {
         guard let e = editing else {
-            category = categories.first ?? "食費"
+            autoCategory()
             return
         }
         kind = e.kind
         digits = e.amount > 0 ? String(e.amount) : ""
         category = e.category
+        categoryTouched = true      // 前からある記録の分類は、メモを直しても変えない
         date = e.date
         memo = e.memo
+    }
+
+    /// メモと支出・収入から分類を選び直す（手で選んでいなければ）
+    private func autoCategory() {
+        guard !categoryTouched else {
+            if !categories.contains(category) { category = categories.first ?? category }
+            return
+        }
+        category = store.suggest(memo, kind: kind)
     }
 
     // MARK: 上の切り替え
@@ -79,10 +85,7 @@ struct KakeiboEntrySheet: View {
             HStack(spacing: 2) {
                 ForEach(KakeiboKind.allCases) { k in
                     Button {
-                        withAnimation(motion.tap) {
-                            kind = k
-                            if !categories.contains(category) { category = categories.first ?? category }
-                        }
+                        withAnimation(motion.tap) { kind = k }
                     } label: {
                         Text(k.name)
                             .font(.subheadline.weight(kind == k ? .heavy : .medium))
@@ -158,34 +161,37 @@ struct KakeiboEntrySheet: View {
             kind = .expense
             digits = String(t.amount)
             memo = t.memo
-            if store.settings.categories.contains(t.category) { category = t.category }
+            category = t.category
         }
     }
 
-    // MARK: 分類
+    // MARK: 分類（自動。違うときだけ直す）
 
-    private var categoryChips: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private var categoryRow: some View {
+        HStack(spacing: 8) {
             Text("分類").font(.caption.weight(.bold)).foregroundStyle(p.sub)
-            KakeiboFlowLayout(spacing: 6) {
+            Menu {
                 ForEach(categories, id: \.self) { c in
-                    Button { withAnimation(motion.tap) { category = c } } label: { chip(c) }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(category == c ? .isSelected : [])
+                    Button(c) {
+                        withAnimation(motion.tap) {
+                            category = c
+                            categoryTouched = true
+                        }
+                    }
                 }
+            } label: {
+                HStack(spacing: 4) {
+                    Circle().fill(KakeiboStyle.color(category)).frame(width: 8, height: 8)
+                    Text(category).font(.footnote.weight(.heavy)).foregroundStyle(p.text)
+                    if !categoryTouched { Text("（自動）").font(.caption2).foregroundStyle(p.sub) }
+                    Image(systemName: "chevron.down").font(.caption2.weight(.heavy)).foregroundStyle(p.sub)
+                }
+                .padding(.horizontal, 10).frame(height: 32)
+                .background(p.sub.opacity(0.12), in: Capsule())
             }
+            .accessibilityLabel("分類 \(category)。タップで直す")
+            Spacer(minLength: 0)
         }
-    }
-
-    private func chip(_ c: String) -> some View {
-        let on = category == c
-        return Text(c)
-            .font(.subheadline.weight(on ? .heavy : .bold))
-            .foregroundStyle(on ? p.onAccent : p.text)
-            .padding(.horizontal, 14)
-            .frame(height: 40)
-            .background(on ? p.accent : Color.clear, in: Capsule())
-            .overlay(Capsule().strokeBorder(on ? Color.clear : p.sub.opacity(0.3), lineWidth: 1.5))
     }
 
     // MARK: 日付・メモ
@@ -262,8 +268,14 @@ struct KakeiboEntrySheet: View {
             e.memo = text
             store.save(e, learnFrom: old)
         } else {
-            let e = KakeiboEntry(date: date, amount: amount, kind: kind, category: category, memo: text, source: .manual,
+            var e = KakeiboEntry(date: date, amount: amount, kind: kind, category: category, memo: text, source: .manual,
                                  dedupeKey: KakeiboDedupe.key(date: date, amount: amount, kind: kind, text: text))
+            if category == KakeiboCategories.salary { e.salary = true }
+            // 自動の分類を直したら、次から同じお店はその分類にする
+            if categoryTouched && category != store.suggest(text, kind: kind) {
+                e.categoryFixed = true
+                if !text.isEmpty { store.learn(text, category: category) }
+            }
             store.add(e)
         }
         saved += 1
