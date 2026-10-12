@@ -8,7 +8,8 @@ import UserNotifications
 //   PR TIMES は会社のすべてのゲームが入るので、題名に「第五人格」「Identity」があるものだけ残す
 // - いまの公式サイト（identityvgame.com/jp）のアップデート情報の一覧も読む（予定・シーズン。IdvSchedule.swift）
 // 期限：自分で足したもの（題名と終わる日）と、お知らせの題名・説明文・本文にある「開催期間」や日付の範囲から見つけたもの
-// 通知：終わる日の前日 19:00、メンテナンスの1時間前、シーズン終了の3日前と前日の 19:00（どれも idv- で始まる）
+// 通知：設定でオンにしたときだけ（既定はオフ）。メンテナンスの前の日の 19:00、期限の残り1日、シーズン終了の3日前（どれも idv- で始まる）
+// ランクマッチ・対戦情報・アプリの版・第五録の新着は IdvPlay.swift
 // 戦績は扱わない（決定済み）。起動引数 -demo では通信せず、架空のお知らせを出す
 
 struct IdvNews: Codable, Identifiable, Equatable {
@@ -78,9 +79,10 @@ enum IdvFeed {
         return c.queryItems?.first { $0.name == "v" }?.value
     }
 
-    static func fetchAll() async -> (news: [IdvNews], failed: Int) {
+    /// 読めなかった元は failed に名前（"video"・"press"）を入れる
+    static func fetchAll() async -> (news: [IdvNews], failed: [String]) {
         var out: [IdvNews] = []
-        var failed = 0
+        var failed: [String] = []
         let sources: [(URL?, IdvNews.Kind)] = [(youtubeURL, .video), (pressURL, .press)]
         for (u, kind) in sources {
             guard let u else { continue }
@@ -88,7 +90,7 @@ enum IdvFeed {
                 let data = try await InfoFetcher.get(u)
                 out += parse(data, kind: kind)
             } catch {
-                failed += 1
+                failed.append(kind.rawValue)
             }
         }
         return (out.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }, failed)
@@ -211,9 +213,15 @@ enum IdvDates {
     }
 }
 
-// MARK: - 通知（idv-）：期限の前日・メンテナンスの1時間前・シーズン終了の3日前と前日
+// MARK: - 通知（idv-。設定でオンにしたときだけ。既定はオフ）
+// - メンテナンスの前の日の 19:00
+// - ガチャ・コラボ・登録した期限の「残り1日」（終わる日の前日 19:00）
+// - ランクマッチのシーズン終了の3日前 19:00
 
 enum IdvReminder {
+    /// 通知を使うか（設定のスイッチ。既定はオフ）
+    static let enabledKey = "idvNotify"
+
     /// 終わる日の前日 19:00（過ぎていれば出さない）
     static func fireDate(_ end: Date, now: Date = .now) -> Date? {
         fireDate(end, daysBefore: 1, now: now)
@@ -227,11 +235,10 @@ enum IdvReminder {
         return at
     }
 
-    /// メンテナンスの始まる1時間前（時刻が分かるメンテナンスだけ）
+    /// メンテナンスの前の日の 19:00
     static func maintenanceFireDate(_ s: IdvScheduleItem, now: Date = .now) -> Date? {
-        guard s.kind == .maintenance, s.hasTime else { return nil }
-        let at = s.start.addingTimeInterval(-3600)
-        return at > now ? at : nil
+        guard s.kind == .maintenance, !s.isPast(now: now) else { return nil }
+        return fireDate(s.start, daysBefore: 1, now: now)
     }
 
     struct Planned: Equatable {
@@ -242,35 +249,41 @@ enum IdvReminder {
     }
 
     /// 出す通知の一覧（テストしやすいように、組み立てだけ分ける）
-    static func plan(events: [IdvEvent], schedule: [IdvScheduleItem], season: IdvSeason?, now: Date = .now) -> [Planned] {
+    /// events：登録した期限、periods：公式の本文から見つけた期間（ガチャ・コラボだけ使う）
+    static func plan(events: [IdvEvent], periods: [IdvPeriod] = [], schedule: [IdvScheduleItem], season: IdvSeason?,
+                     now: Date = .now) -> [Planned] {
         var out: [Planned] = []
-        for e in events.sorted(by: { $0.end < $1.end }).prefix(10) {
-            guard let at = fireDate(e.end, now: now) else { continue }
-            out.append(Planned(id: "idv-\(e.id)", title: "明日まで：\(e.title)", body: "第五人格のイベント・シーズンが明日で終わります", at: at))
+        var titles = Set<String>()
+        let fromOfficial: [IdvEvent] = periods.filter { $0.kind == .gacha || $0.kind == .collab }.map(\.asEvent)
+        let deadlines: [IdvEvent] = (events + fromOfficial).filter { titles.insert($0.title).inserted }
+        for e in deadlines.sorted(by: { $0.end < $1.end }) {
+            guard out.count < 10, let at = fireDate(e.end, now: now) else { continue }
+            out.append(Planned(id: "idv-\(e.id)", title: "残り1日：\(e.title)", body: "第五人格：\(JP.date(e.end))で終わります", at: at))
         }
         var maintenance = 0
-        for s in schedule {
-            guard maintenance < 5, let at = maintenanceFireDate(s, now: now) else { continue }
+        for s in schedule.sorted(by: { $0.start < $1.start }) {
+            guard maintenance < 3, let at = maintenanceFireDate(s, now: now) else { continue }
             maintenance += 1
-            out.append(Planned(id: "idv-mnt-\(Int(s.start.timeIntervalSince1970))", title: "1時間後にメンテナンス",
-                               body: "第五人格：\(JP.time(s.start))から \(s.title)", at: at))
+            let time: String = s.hasTime ? " \(JP.time(s.start))から" : ""
+            out.append(Planned(id: "idv-mnt-\(Int(s.start.timeIntervalSince1970))", title: "明日はメンテナンス",
+                               body: "第五人格：\(JP.date(s.start))\(time)（\(s.title)）", at: at))
         }
-        if let season, let end = season.end {
-            for days in [3, 1] {
-                guard let at = fireDate(end, daysBefore: days, now: now) else { continue }
-                out.append(Planned(id: "idv-season-\(days)", title: "ランクマ \(season.title) 終了まであと\(days)日",
-                                   body: "\(JP.date(end))でランクマッチのシーズンが終わります", at: at))
-            }
+        if let season, let end = season.end, let at = fireDate(end, daysBefore: 3, now: now) {
+            out.append(Planned(id: "idv-season-3", title: "ランクマ \(season.title) 終了まであと3日",
+                               body: "\(JP.date(end))でランクマッチのシーズンが終わります", at: at))
         }
         return out
     }
 
-    static func reschedule(events: [IdvEvent], schedule: [IdvScheduleItem], season: IdvSeason?) async {
+    /// idv- の通知を消してから、オンのときだけ組み直す
+    static func reschedule(enabled: Bool, events: [IdvEvent], periods: [IdvPeriod], schedule: [IdvScheduleItem],
+                           season: IdvSeason?) async {
         guard !LaunchArguments.isScripted else { return }
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests()
         center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix("idv-") })
-        for p in plan(events: events, schedule: schedule, season: season) {
+        guard enabled else { return }
+        for p in plan(events: events, periods: periods, schedule: schedule, season: season) {
             let c = UNMutableNotificationContent()
             c.title = p.title
             c.body = p.body
@@ -284,28 +297,55 @@ enum IdvReminder {
 
 // MARK: - 状態
 
+/// App Store・第五録の結果と、元ごとの取得時刻（idv-play.json）
+struct IdvPlayCache: Codable, Equatable {
+    var app: IdvAppVersion? = nil
+    var headlines: [IdvHeadline] = []
+    /// 元（IdvSource）→ 最後に読めた時刻
+    var fetchedAt: [String: Date] = [:]
+    /// 元 → 最後に読みに行った時刻（読めなくても。第五録・App Store を何度も読みに行かないため）
+    var triedAt: [String: Date] = [:]
+    /// 最後に読みに行って、読めなかった元
+    var failed: [String] = []
+}
+
+enum IdvSource {
+    static let official = "official"
+    static let video = "video"
+    static let press = "press"
+    static let app = "app"
+    static let daigoroku = "daigoroku"
+}
+
 @MainActor
 final class IdvStore: ObservableObject {
     static let shared = IdvStore()
     private static let eventsFile = "idv-events.json"
     private static let newsFile = "idv-news.json"
     private static let officialFile = "idv-official.json"
-    private static let articlesFile = "idv-articles.json"
+    /// 見出しの行も読むようにしたので、前の版（idv-articles.json）は読み直す
+    private static let articlesFile = "idv-articles-v2.json"
+    private static let periodsFile = "idv-periods.json"
     private static let seasonFile = "idv-season.json"
+    private static let playFile = "idv-play.json"
 
     @Published private(set) var news: [IdvNews] = []
     /// 公式サイトのアップデート情報（一覧）
     @Published private(set) var official: [IdvNews] = []
     /// 読んだ記事の本文（リンク → 日付のある行だけ）
     @Published private(set) var articles: [String: String] = [:]
+    /// 公式の本文から見つけた期間（リンク → 期間）
+    @Published private(set) var periods: [String: [IdvPeriod]] = [:]
     @Published private(set) var events: [IdvEvent] = []
     @Published private(set) var schedule: [IdvScheduleItem] = []
     @Published private(set) var detectedSeason: IdvSeason? = nil
     @Published private(set) var seasonOverride = IdvSeasonOverride()
+    @Published private(set) var rank = IdvRankInfo()
+    @Published private(set) var play = IdvPlayCache()
+    @Published private(set) var notifyEnabled: Bool = false
     @Published private(set) var loading = false
     @Published private(set) var error: String? = nil
     @Published private(set) var updatedAt: Date? = nil
-    private var officialAt: Date? = nil
 
     let isDemo = InfoLaunch.isDemo
 
@@ -315,19 +355,51 @@ final class IdvStore: ObservableObject {
             events = IdvDemo.events()
             schedule = IdvDemo.schedule()
             detectedSeason = IdvDemo.season()
+            periods = ["demo": IdvDemo.periods()]
+            rank = IdvDemo.rank()
+            play = IdvDemo.play()
             updatedAt = .now
         } else {
             news = SplatFiles.load([IdvNews].self, Self.newsFile) ?? []
             official = SplatFiles.load([IdvNews].self, Self.officialFile) ?? []
             articles = SplatFiles.load([String: String].self, Self.articlesFile) ?? [:]
+            periods = SplatFiles.load([String: [IdvPeriod]].self, Self.periodsFile) ?? [:]
             events = SplatFiles.load([IdvEvent].self, Self.eventsFile) ?? []
             seasonOverride = SplatFiles.load(IdvSeasonOverride.self, Self.seasonFile) ?? IdvSeasonOverride()
+            play = SplatFiles.load(IdvPlayCache.self, Self.playFile) ?? IdvPlayCache()
+            notifyEnabled = UserDefaults.standard.bool(forKey: IdvReminder.enabledKey)
             recompute()
         }
     }
 
     /// 今のシーズン（手動の上書きがあればそれ）
     var season: IdvSeason? { seasonOverride.season ?? detectedSeason }
+
+    /// まだ終わっていない公式の期間
+    var currentPeriods: [IdvPeriod] { IdvArticle.current(periods.values.flatMap { $0 }) }
+    var modes: [IdvPeriod] { currentPeriods.filter { $0.kind == .mode } }
+    /// 大会は終わって7日までのものも出す
+    var tournaments: [IdvPeriod] {
+        let all: [IdvPeriod] = periods.values.flatMap { $0 }.filter { $0.kind == .tournament && IdvDates.daysLeft($0.end) >= -7 }
+        var seen = Set<String>()
+        return all.sorted { $0.end > $1.end }.filter { seen.insert($0.title).inserted }
+    }
+    var broadcasts: [IdvNews] { IdvMatches.broadcasts(news) }
+    var nextMaintenance: IdvScheduleItem? { IdvSchedule.nextMaintenanceItem(schedule) }
+    /// いちばん新しい公式のアップデートのお知らせ
+    var latestOfficial: IdvNews? { official.max { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) } }
+
+    /// 「公式・3時間前」（読めなかったら「・更新できませんでした」）
+    func fresh(_ source: String) -> String {
+        let name: String
+        switch source {
+        case IdvSource.app: name = "App Store"
+        case IdvSource.daigoroku: name = IdvDaigoroku.name
+        case IdvSource.video: name = "公式YouTube"
+        default: name = "公式"
+        }
+        return IdvFresh.label(name, play.fetchedAt[source], failed: play.failed.contains(source))
+    }
 
     /// 期限の近い順（終わったものは後ろ）
     var sortedEvents: [IdvEvent] {
@@ -338,10 +410,15 @@ final class IdvStore: ObservableObject {
         }
     }
 
-    /// ニュースから見つけたもの（まだ足していないもの）
+    /// ニュースと公式の本文から見つけたもの（まだ足していないもの）
     var suggestions: [IdvEvent] {
-        let have = Set(events.compactMap(\.link))
-        return IdvDates.candidates(news, articles: articles).filter { !have.contains($0.link ?? "") }
+        let haveLinks = Set(events.compactMap(\.link))
+        var haveTitles = Set(events.map(\.title))
+        let fromNews: [IdvEvent] = IdvDates.candidates(news, articles: articles).filter { !haveLinks.contains($0.link ?? "") }
+        for e in fromNews { haveTitles.insert(e.title) }
+        let fromOfficial: [IdvEvent] = currentPeriods.filter { $0.kind == .gacha || $0.kind == .collab }.map(\.asEvent)
+            .filter { haveTitles.insert($0.title).inserted }
+        return (fromNews + fromOfficial).sorted { $0.end < $1.end }
     }
 
     var nextEvent: IdvEvent? { sortedEvents.first { IdvDates.daysLeft($0.end) >= 0 } }
@@ -352,56 +429,99 @@ final class IdvStore: ObservableObject {
         await refresh()
     }
 
+    private func due(_ source: String, every interval: TimeInterval) -> Bool {
+        guard let t = play.triedAt[source] else { return true }
+        return Date.now.timeIntervalSince(t) >= interval
+    }
+
     func refresh() async {
         guard !isDemo, !loading else { return }
         loading = true
         defer { loading = false }
+        var tried = Set<String>()
+        var failed = Set<String>()
+        func mark(_ source: String, ok: Bool) {
+            tried.insert(source)
+            play.triedAt[source] = .now
+            if ok { play.fetchedAt[source] = .now } else { failed.insert(source) }
+        }
+
         let r = await IdvFeed.fetchAll()
-        var failed = r.failed
+        mark(IdvSource.video, ok: !r.failed.contains(IdvSource.video))
+        mark(IdvSource.press, ok: !r.failed.contains(IdvSource.press))
         if !r.news.isEmpty {
             news = Array(r.news.prefix(40))
             SplatFiles.save(news, Self.newsFile)
         }
         // 公式サイトの一覧は1時間に1回まで
-        let officialDue: Bool = officialAt.map { Date.now.timeIntervalSince($0) > 3600 } ?? true
-        if officialDue {
+        if due(IdvSource.official, every: 3600) {
             if let u = IdvOfficial.updateListURL, let data = try? await InfoFetcher.get(u) {
                 let list = IdvOfficial.parseList(String(decoding: data, as: UTF8.self))
                 if !list.isEmpty {
                     official = Array(list.prefix(20))
                     SplatFiles.save(official, Self.officialFile)
                 }
-                officialAt = .now
+                mark(IdvSource.official, ok: !list.isEmpty)
             } else {
-                failed += 1
+                mark(IdvSource.official, ok: false)
             }
         }
         await fetchArticles()
-        error = failed >= 3 ? "お知らせを読み込めませんでした。通信を確認してください。"
-            : (failed > 0 ? "一部のお知らせを読み込めませんでした。" : nil)
+        // App Store は6時間に1回まで
+        if due(IdvSource.app, every: 6 * 3600), let u = IdvAppStore.lookupURL {
+            let data: Data? = try? await InfoFetcher.get(u)
+            let v: IdvAppVersion? = data.flatMap { IdvAppStore.parse($0) }
+            if let v { play.app = v }
+            mark(IdvSource.app, ok: v != nil)
+        }
+        // 第五録は6時間に1回まで（見出しと日付だけ）
+        if due(IdvSource.daigoroku, every: IdvDaigoroku.minInterval), let u = IdvDaigoroku.listURL {
+            let data: Data? = try? await InfoFetcher.get(u, userAgent: IdvDaigoroku.userAgent)
+            let list: [IdvHeadline] = data.map { IdvDaigoroku.parseListing(String(decoding: $0, as: UTF8.self), base: u) } ?? []
+            if !list.isEmpty { play.headlines = list }
+            mark(IdvSource.daigoroku, ok: !list.isEmpty)
+        }
+        // 今回読みに行かなかった元は、前の結果のまま
+        play.failed = Array(Set(play.failed).subtracting(tried).union(failed)).sorted()
+        SplatFiles.save(play, Self.playFile)
+
+        let feedFailed: Int = [IdvSource.video, IdvSource.press, IdvSource.official].filter { failed.contains($0) }.count
+        error = feedFailed >= 3 ? "お知らせを更新できませんでした。前に読んだものを表示しています。"
+            : (feedFailed > 0 ? "一部のお知らせを更新できませんでした。" : nil)
         updatedAt = .now
         recompute()
-        await IdvReminder.reschedule(events: events, schedule: schedule, season: season)
+        await reschedule()
     }
 
     /// 本文が要るものだけ記事を読む（1回の更新で最大5件。読んだものは残す）
+    /// 公式のお知らせは、見出しと期間の組（periods）も作る
     private func fetchArticles() async {
         let all: [IdvNews] = official + news
-        let todo = IdvOfficial.articlesToFetch(news: all, cached: Set(articles.keys))
+        let cached = Set(articles.keys.filter { link in
+            all.first { $0.link == link }?.kind != .official || periods[link] != nil
+        })
+        let todo = IdvOfficial.articlesToFetch(news: all, cached: cached)
         guard !todo.isEmpty else { return }
         for n in todo {
             guard let u = n.url, let data = try? await InfoFetcher.get(u) else { continue }
-            articles[n.link] = IdvOfficial.text(fromHTML: String(decoding: data, as: UTF8.self))
+            let lines: [String] = IdvArticle.lines(fromHTML: String(decoding: data, as: UTF8.self))
+            articles[n.link] = IdvOfficial.text(lines: lines)
+            if n.kind == .official {
+                periods[n.link] = IdvArticle.periods(lines: lines, link: n.link, reference: n.date ?? .now)
+            }
         }
         // 今の一覧にないものは捨てる
         let keep = Set(all.map(\.link))
         articles = articles.filter { keep.contains($0.key) }
+        periods = periods.filter { keep.contains($0.key) }
         SplatFiles.save(articles, Self.articlesFile)
+        SplatFiles.save(periods, Self.periodsFile)
     }
 
     private func recompute() {
         schedule = IdvSchedule.items(news: official + news, articles: articles)
         detectedSeason = IdvSeasonParser.resolve(updates: official, articles: articles, news: news)
+        rank = IdvRank.info(updates: official, articles: articles)
     }
 
     func setOverride(_ o: IdvSeasonOverride) {
@@ -422,11 +542,28 @@ final class IdvStore: ObservableObject {
         persist()
     }
 
-    /// 画面を開いたとき：通知の許可を聞いて（初回だけ出る）、通知を組み直す
+    /// 設定のスイッチ。オンにしたときだけ通知の許可を聞く
+    func setNotify(_ on: Bool) {
+        notifyEnabled = on
+        guard !isDemo else { return }
+        UserDefaults.standard.set(on, forKey: IdvReminder.enabledKey)
+        Task {
+            if on, !LaunchArguments.isScripted {
+                _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+            }
+            await reschedule()
+        }
+    }
+
+    /// 画面を開いたとき：通知を組み直す（オフなら idv- を消すだけ。許可はスイッチを入れたときに聞く）
     func prepareNotifications() async {
         guard !isDemo, !LaunchArguments.isScripted else { return }
-        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
-        await IdvReminder.reschedule(events: events, schedule: schedule, season: season)
+        await reschedule()
+    }
+
+    private func reschedule() async {
+        guard !isDemo else { return }
+        await IdvReminder.reschedule(enabled: notifyEnabled, events: events, periods: currentPeriods, schedule: schedule, season: season)
     }
 
     private func persist() {
@@ -437,11 +574,7 @@ final class IdvStore: ObservableObject {
 
     private func rescheduleAll() {
         guard !isDemo else { return }
-        let list = events, sched = schedule, s = season
-        Task {
-            if !LaunchArguments.isScripted { _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }
-            await IdvReminder.reschedule(events: list, schedule: sched, season: s)
-        }
+        Task { await reschedule() }
     }
 }
 
@@ -502,5 +635,45 @@ enum IdvDemo {
         let start = cal.date(byAdding: .day, value: -44, to: cal.startOfDay(for: now)) ?? now
         let end = cal.date(byAdding: .day, value: 19, to: cal.startOfDay(for: now)) ?? now
         return IdvSeason(number: 12, name: "シーズン12", start: start, end: end, source: "見本", link: nil)
+    }
+
+    static func periods(now: Date = .now) -> [IdvPeriod] {
+        let cal = Calendar.current
+        func day(_ n: Int) -> Date { cal.date(byAdding: .day, value: n, to: cal.startOfDay(for: now)) ?? now }
+        let link = "https://www.identityvgame.com/jp/news/update/"
+        return [
+            IdvPeriod(kind: .mode, section: "娯楽モード", title: "（見本）期間限定モード 2V8", start: day(-4), end: day(10), link: link),
+            IdvPeriod(kind: .mode, section: "娯楽モード", title: "（見本）闘争の部屋", start: day(-1), end: day(1), link: link),
+            IdvPeriod(kind: .tournament, section: "大会", title: "（見本）秋季大会 決勝戦", start: day(5), end: day(6), link: link),
+            IdvPeriod(kind: .gacha, section: "シーズン真髄", title: "（見本）シーズン真髄2", start: day(-13), end: day(1), link: link),
+            IdvPeriod(kind: .collab, section: "ショップ", title: "（見本）架空の物語コラボ衣装", start: day(-6), end: day(17), link: link),
+        ]
+    }
+
+    static func rank() -> IdvRankInfo {
+        IdvRankInfo(windows: [IdvRankWindow(label: "ランク戦", start: 12 * 60, end: 14 * 60),
+                              IdvRankWindow(label: "ランク戦", start: 19 * 60, end: 24 * 60)],
+                    closedDuringMaintenance: true,
+                    notes: ["（見本）新しいシーズンが始まると、前のシーズンの最終段位をもとに段位が継承されます。"],
+                    link: nil)
+    }
+
+    static func play(now: Date = .now) -> IdvPlayCache {
+        let cal = Calendar.current
+        func ago(_ h: Double) -> Date { now.addingTimeInterval(-h * 3600) }
+        let listing = "https://daigoroku.com/"
+        let days: [Date] = [0, 7, 14].map { cal.date(byAdding: .day, value: -($0 + 2), to: cal.startOfDay(for: now)) ?? now }
+        let heads: [IdvHeadline] = [
+            IdvHeadline(title: "（見本）新しいサバイバーが登場", date: days[0], link: listing),
+            IdvHeadline(title: "（見本）シーズン真髄の新衣装まとめ", date: days[0], link: listing),
+            IdvHeadline(title: "（見本）秋のバージョンイベント開催", date: days[1], link: listing),
+            IdvHeadline(title: "（見本）キャラ調整の内容", date: days[2], link: listing),
+        ]
+        let app = IdvAppVersion(version: "1.0.0（見本）", released: cal.date(byAdding: .day, value: -5, to: now),
+                                notes: "（見本）一部の不具合を修正しました", url: IdvAppStore.pageURL)
+        return IdvPlayCache(app: app, headlines: heads,
+                            fetchedAt: [IdvSource.official: ago(3), IdvSource.video: ago(3), IdvSource.press: ago(3),
+                                        IdvSource.app: ago(2), IdvSource.daigoroku: ago(26)],
+                            triedAt: [:], failed: [])
     }
 }
