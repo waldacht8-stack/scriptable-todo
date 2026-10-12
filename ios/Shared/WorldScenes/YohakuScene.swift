@@ -169,15 +169,15 @@ extension CritterArt {
             yohakuFluff(D.local(ctx, at: D.pt(fx, fy), scale: 1, angle: sin(k.t * 0.6) * 0.3))
         case .reaction:
             guard let r = k.react else { return }
-            let sx: Double = w * 0.78
-            let sy: Double = lane - 36
+            let sx: Double = w * 0.62
+            let sy: Double = lane + 2
             let press: Double = D.ease(D.span(r, 0, 0.16))
             let scale: Double = 1.5 - 0.5 * press
             let alpha: Double = min(1, r * 7) * (1 - D.span(r, 0.72, 1))
             // にじむ輪
             let u: Double = D.span(r, 0.12, 0.7)
             if u > 0 && u < 1 {
-                let rr: Double = 18 + u * 30
+                let rr: Double = 18 + u * 18
                 let ring = CGRect(x: sx - rr, y: sy - rr, width: rr * 2, height: rr * 2)
                 ctx.stroke(Path(ellipseIn: ring), with: .color(sceneColor(YohakuScene.shu, 0.35 * (1 - u))), lineWidth: 0.8)
             }
