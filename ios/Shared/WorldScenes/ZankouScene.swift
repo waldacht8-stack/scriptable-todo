@@ -17,14 +17,16 @@ enum ZankouScene {
 
     /// i 本目の筋の形（毎回同じ）
     @_optimize(none)
-    static func streakPath(_ i: Int, day: Double, size: CGSize) -> Path {
+    static func streakPath(_ i: Int, day: Double, size: CGSize, lane: Bool = false) -> Path {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
         var rnd = SceneRandom(UInt64(400 + i * 13))
-        let y0: Double = streakY(day) * h
+        // lane（ウィジェット）：下の余白（中身の外側の 16pt）の中だけ。高さは時刻で h-9.5〜h-5.5、うねりは小さく
+        let laneY: Double = h - 9.5 + 4 * max(0, min(1, (day * 24 - 5) / 19))
+        let y0: Double = lane ? laneY : streakY(day) * h
         let endX: Double = w * rnd.range(0.55, 0.96)
-        let rise: Double = h * rnd.range(-0.05, 0.03)
-        let bend: Double = h * rnd.range(0.025, 0.05)
+        let rise: Double = lane ? rnd.range(-1, 1) : h * rnd.range(-0.05, 0.03)
+        let bend: Double = lane ? rnd.range(0.8, 1.6) : h * rnd.range(0.025, 0.05)
         var path = Path()
         path.move(to: CGPoint(x: -20, y: y0))
         let c1 = CGPoint(x: endX * 0.3, y: y0 - bend)
@@ -49,7 +51,13 @@ enum ZankouScene {
 
     /// 1本の筋を光らせて描く。reveal は伸びる途中（0〜1）、shine は光がなぞる位置（nil なら無し）
     @_optimize(none)
-    static func drawStreak(_ ctx: GraphicsContext, path full: Path, tint: (UInt32, UInt32), reveal: Double, shine: Double?, bright: Double) {
+    static func drawStreak(_ ctx: GraphicsContext, path full: Path, tint: (UInt32, UInt32), reveal: Double, shine: Double?, bright: Double, thin: Bool = false) {
+        // thin（ウィジェットの下の余白）：光の幅と頭の光を小さくして、余白からはみ出さない
+        let wideW: CGFloat = thin ? 6 : 16
+        let midW: CGFloat = thin ? 3 : 6
+        let coreW: CGFloat = thin ? 1.2 : 1.8
+        let headR: Double = thin ? 4.5 : 22
+        let dotR: Double = thin ? 1.4 : 2.2
         let path: Path = reveal >= 1 ? full : full.trimmedPath(from: 0, to: max(0.001, reveal))
         let box: CGRect = full.boundingRect
         let a = CGPoint(x: box.minX, y: box.midY)
@@ -59,26 +67,26 @@ enum ZankouScene {
         let wide = GraphicsContext.Shading.linearGradient(Gradient(colors: [c0.opacity(0), c1.opacity(0.16 * bright)]), startPoint: a, endPoint: b)
         let mid = GraphicsContext.Shading.linearGradient(Gradient(colors: [c0.opacity(0), c1.opacity(0.4 * bright)]), startPoint: a, endPoint: b)
         let core = GraphicsContext.Shading.linearGradient(Gradient(colors: [c0.opacity(0), c1.opacity(0.95 * bright)]), startPoint: a, endPoint: b)
-        ctx.stroke(path, with: wide, style: StrokeStyle(lineWidth: 16, lineCap: .round))
-        ctx.stroke(path, with: mid, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-        ctx.stroke(path, with: core, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+        ctx.stroke(path, with: wide, style: StrokeStyle(lineWidth: wideW, lineCap: .round))
+        ctx.stroke(path, with: mid, style: StrokeStyle(lineWidth: midW, lineCap: .round))
+        ctx.stroke(path, with: core, style: StrokeStyle(lineWidth: coreW, lineCap: .round))
         // 光の頭
         if let head = path.currentPoint {
-            CritterDraw.glow(ctx, Double(head.x), Double(head.y), 22, c1, 0.55 * bright)
-            CritterDraw.circle(ctx, Double(head.x), Double(head.y), 2.2, Color.white.opacity(0.9 * bright))
+            CritterDraw.glow(ctx, Double(head.x), Double(head.y), headR, c1, 0.55 * bright)
+            CritterDraw.circle(ctx, Double(head.x), Double(head.y), dotR, Color.white.opacity(0.9 * bright))
         }
         // 光がなぞる
         if let s = shine, reveal >= 1 {
             let from: Double = max(0, s - 0.12)
             let seg: Path = full.trimmedPath(from: from, to: max(from + 0.001, s))
-            ctx.stroke(seg, with: .color(Color.white.opacity(0.55 * bright)), style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
-            ctx.stroke(seg, with: .color(c1.opacity(0.25 * bright)), style: StrokeStyle(lineWidth: 9, lineCap: .round))
+            ctx.stroke(seg, with: .color(Color.white.opacity(0.55 * bright)), style: StrokeStyle(lineWidth: thin ? 1.6 : 2.4, lineCap: .round))
+            ctx.stroke(seg, with: .color(c1.opacity(0.25 * bright)), style: StrokeStyle(lineWidth: thin ? 4 : 9, lineCap: .round))
         }
     }
 
     /// 全体を描く。days は完了した時刻（一日の中の位置）。reveal は最後の筋の伸び（反応。1 なら伸びきり）
     @_optimize(none)
-    static func draw(_ ctx: GraphicsContext, size: CGSize, t: Double, days: [Double], reveal: Double, compact: Bool) {
+    static func draw(_ ctx: GraphicsContext, size: CGSize, t: Double, days: [Double], reveal: Double, compact: Bool, lane: Bool = false) {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
         let base = GraphicsContext.Shading.linearGradient(
@@ -103,7 +111,7 @@ enum ZankouScene {
         // 光の筋（古い順。最後の1本がいちばん新しい）
         let n: Int = days.count
         for (i, d) in days.enumerated() {
-            let path: Path = streakPath(i, day: d, size: size)
+            let path: Path = streakPath(i, day: d, size: size, lane: lane)
             let tint: (UInt32, UInt32) = tints[i % tints.count]
             let last: Bool = i == n - 1
             let r: Double = last ? reveal : 1
@@ -111,7 +119,7 @@ enum ZankouScene {
             let shine: Double? = t == 0 ? nil : ((t / period + Double(i) * 0.37).truncatingRemainder(dividingBy: 1)) * 1.3
             let age: Double = Double(n - 1 - i)
             let bright: Double = max(0.55, 1 - age * 0.06)
-            drawStreak(ctx, path: path, tint: tint, reveal: r, shine: shine.map { min(1, $0) }, bright: bright)
+            drawStreak(ctx, path: path, tint: tint, reveal: r, shine: shine.map { min(1, $0) }, bright: bright, thin: lane)
         }
     }
 
@@ -205,7 +213,7 @@ struct ZankouWidgetBackdrop: View {
         let now: Date = ZankouWidgetBackdrop.date(stillT)
         let days: [Double] = ZankouScene.doneDays(now)
         Canvas { ctx, size in
-            ZankouScene.draw(ctx, size: size, t: stillT, days: days, reveal: 1, compact: true)
+            ZankouScene.draw(ctx, size: size, t: stillT, days: days, reveal: 1, compact: true, lane: true)
         }
         .allowsHitTesting(false)
     }

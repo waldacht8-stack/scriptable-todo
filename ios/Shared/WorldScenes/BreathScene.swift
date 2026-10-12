@@ -168,26 +168,18 @@ struct BreathBackdrop: View {
     }
 }
 
-/// 呼吸のカード：やわらかな白い面。大きなカードのまわりには、息に合わせて輪が広がる
+/// 呼吸のカード：やわらかな白い面（不透明。後ろのカードの文字が透けないように）
 struct BreathCard: View {
     let p: Palette
     var radius: CGFloat? = nil
     var light: Bool = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let r: CGFloat = radius ?? p.radius
         let shape = RoundedRectangle(cornerRadius: r, style: .continuous)
-        let fill = LinearGradient(colors: [Color.white.opacity(0.96), p.card, sceneColor(0xFBF1F2)],
+        let fill = LinearGradient(colors: [Color.white, p.card, sceneColor(0xFBF1F2)],
                                   startPoint: .topLeading, endPoint: .bottomTrailing)
         ZStack {
-            if !light {
-                GeometryReader { geo in
-                    if geo.size.height >= 110 && geo.size.width > 220 {
-                        BreathRings(radius: r, animated: !reduceMotion && WorldMotion.fixedPhase == nil)
-                    }
-                }
-            }
             shape.fill(fill)
             shape.strokeBorder(Color.white.opacity(0.9), lineWidth: light ? 0.8 : 1)
         }
@@ -195,10 +187,12 @@ struct BreathCard: View {
     }
 }
 
-/// 大きなカードのまわりの輪（カードの外側へ広がって消える）
-private struct BreathRings: View {
+/// いちばん前のカードのまわりの輪（カードの外側へ広がって消える。Homes の FocusCard が先頭の1枚にだけ敷く）
+struct BreathRings: View {
     let radius: CGFloat
-    let animated: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var animated: Bool { !reduceMotion && WorldMotion.fixedPhase == nil }
 
     var body: some View {
         SceneClock(fps: 15, animated: animated, stillT: 0) { t in
