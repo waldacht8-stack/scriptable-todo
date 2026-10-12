@@ -24,6 +24,9 @@ enum CritterWidgetArt {
     static func margin(_ m: CGFloat) -> CGFloat { m < 8 ? 16 : m }
 
     /// 下の余白の帯（文字との間を 2.5pt あける）
+    /// 下の余白の通り道（余白・ターミナル・結晶・墨流しの絵が使う。下から 8pt）
+    static func laneY(_ h: CGFloat) -> CGFloat { h - 8 }
+
     @_optimize(none)
     static func bottomBand(_ h: CGFloat, margin m: CGFloat) -> CritterBand {
         CritterBand(top: h - margin(m) + 2.5, bottom: h - 0.5)

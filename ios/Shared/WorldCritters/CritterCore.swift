@@ -79,6 +79,8 @@ struct CritterKnobs {
     var day: Double
     /// 0〜1：完了の反応の進み（nil は反応なし）
     var react: Double?
+    /// 今日の完了の数（結晶の面の位置などに使う。なければ 0）
+    var count: Int = 0
     /// 暗い色合いか
     var dark: Bool
 }
