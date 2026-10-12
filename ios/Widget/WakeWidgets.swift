@@ -49,7 +49,18 @@ struct WakeProvider: TimelineProvider {
         for i in 0..<48 { times.append(firstSlot.addingTimeInterval(Double(i) * quarter)) }
         let limit = now.addingTimeInterval(12 * 3600)
         let sorted = Array(Set(times.filter { $0 >= now && $0 <= limit })).sorted()
-        let entries: [WakeEntry] = sorted.prefix(72).map { entry(at: $0, watch: watch, todos: todos) }
+        let real: [WakeEntry] = sorted.prefix(72).map { entry(at: $0, watch: watch, todos: todos) }
+        // 世界観があれば、はじめの 2 時間を 1 分ごとの絵で埋める（読み直さず、直前の中身を時刻だけ変えて使う）
+        let world: World = real.first?.palette.world ?? World.none
+        let minutes: [Date] = WorldMotion.minuteTimes(from: now, span: 2 * 3600, world: world)
+        let known: Set<Date> = Set(sorted)
+        var entries: [WakeEntry] = real
+        for d in minutes where !known.contains(d) {
+            guard let prev = real.last(where: { $0.date <= d }) else { continue }
+            let filler = WakeEntry(date: d, snap: prev.snap, palette: prev.palette, watch: prev.watch, tomorrowTodos: prev.tomorrowTodos)
+            entries.append(filler)
+        }
+        entries.sort { $0.date < $1.date }
         let refresh: Date = watch.isWatching(now) ? now.addingTimeInterval(5 * 60) : now.addingTimeInterval(60 * 60)
         completion(Timeline(entries: entries, policy: .after(refresh)))
     }

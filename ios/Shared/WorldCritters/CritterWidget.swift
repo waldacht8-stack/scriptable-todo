@@ -147,7 +147,10 @@ enum CritterWidgetArt {
         let run: Double = k.progress * 90
         let day: Double = k.day
         return AnyView(ZStack {
+            // カーテンは 1 分ごとに少しずつ形を変え、絵の間はふわっと重ねて入れ替える
             Canvas { c, s in curtains(c, size: s, day: day) }
+                .id(Int(day * 1440))
+                .transition(.opacity)
             fitted(box: CGSize(width: 74, height: 35), origin: CGPoint(x: 42, y: 34), band: band, x: x, maxScale: 0.5) { c in
                 Fantasy.foxRun(c, run: run, rim: sceneColor(0x86FBDD))
             }
@@ -166,7 +169,7 @@ enum CritterWidgetArt {
             let top: Double = h * rnd.range(0.02, 0.16) + Double(i) * h * 0.08
             let amp: Double = rnd.range(6, 14)
             let wave: Double = rnd.range(0.7, 1.8)
-            let phase: Double = rnd.range(0, 6.28)
+            let phase: Double = rnd.range(0, 6.28) + day * 1440 * 0.05
             C.auroraCurtain(ctx, width: w, top: top, amp: amp, thick: h * 0.22, wave: wave,
                             phase: phase, color: sceneColor(colors[i]), alpha: 0.2)
         }
@@ -219,7 +222,8 @@ private struct WidgetTunnel: Shape {
     }
 }
 
-/// 空：太陽が上の余白の帯を東から西へ進み、紙飛行機が下の余白を飛ぶ（雲は背景が時刻で流す）
+/// 空：上の余白の帯を太陽（夜は月）が進み、下の余白を時間帯ごとの飛ぶものが通る（雲は背景が時刻で流す）
+/// 朝はスズメ、昼は紙飛行機、夕方はカラスの V の字、夜は灯りの点滅する飛行機
 private struct WidgetSky: View {
     let size: CGSize
     let band: CritterBand
@@ -228,25 +232,58 @@ private struct WidgetSky: View {
 
     var body: some View {
         let w: CGFloat = size.width
-        let sunF: Double = CritterDraw.span(k.day, 0.25, 0.75)
-        let showSun: Bool = !SkyPhase.current().isNight && sunF > 0 && sunF < 1
+        let slot: SkySlot = SkySlot.at(day: k.day)
+        let sunF: Double = CritterDraw.span(k.day, 0.21, 0.79)
+        let moonRaw: Double = k.day >= 0.79 ? k.day - 0.79 : k.day + 0.21
+        let moonF: Double = min(1, moonRaw / 0.42)
         let sh: CGFloat = top.height
-        let sx: CGFloat = w * CGFloat(0.08 + 0.84 * sunF)
-        let px: CGFloat = w * CGFloat(0.08 + 0.84 * k.progress)
-        let py: CGFloat = band.mid + CGFloat(sin(k.progress * 4 * Double.pi)) * 0.8
-        let tilt: Double = -cos(k.progress * 4 * Double.pi) * 0.12
-        let planeScale: Double = min(0.65, Double(band.height) / 14)
+        let lightF: Double = slot == .night ? moonF : sunF
+        let sx: CGFloat = w * CGFloat(0.08 + 0.84 * lightF)
         ZStack {
-            if showSun {
-                CritterWidgetArt.sprite(sh * 2, sh, x: sx, y: top.mid, angle: 0) { c, s in
-                    let cx: Double = Double(s.width) / 2
-                    let cy: Double = Double(s.height) / 2
+            CritterWidgetArt.sprite(sh * 2, sh, x: sx, y: top.mid, angle: 0) { c, s in
+                let cx: Double = Double(s.width) / 2
+                let cy: Double = Double(s.height) / 2
+                // 夜の月は背景（止まった空）が描くので、ここでは昼の太陽だけ
+                if slot != .night {
                     Fantasy.softEllipse(c, cx, cy, cx, cy, sceneColor(0xFFF1B8), 0.8)
                     CritterDraw.circle(c, cx, cy, cy * 0.55, sceneColor(0xFFE9A0))
                 }
             }
+            flyer(slot, w: w)
+        }
+    }
+
+    @ViewBuilder
+    private func flyer(_ slot: SkySlot, w: CGFloat) -> some View {
+        let p: Double = k.progress
+        switch slot {
+        case .morning:
+            let x: CGFloat = w * CGFloat(0.1 + 0.8 * p)
+            let flapA: Double = sin(p * 400)
+            CritterWidgetArt.fitted(box: CGSize(width: 50, height: 22), origin: CGPoint(x: 25, y: 12), band: band, x: x, maxScale: 0.7) { c in
+                Critters.sparrow(CritterDraw.local(c, at: CritterDraw.pt(10, 1), scale: 1), flap: flapA)
+                Critters.sparrow(CritterDraw.local(c, at: CritterDraw.pt(-12, -2), scale: 0.9), flap: -flapA)
+            }
+        case .day:
+            let px: CGFloat = w * CGFloat(0.08 + 0.84 * p)
+            let py: CGFloat = band.mid + CGFloat(sin(p * 4 * Double.pi)) * 0.8
+            let tilt: Double = -cos(p * 4 * Double.pi) * 0.12
+            let planeScale: Double = min(0.65, Double(band.height) / 14)
             CritterWidgetArt.sprite(18, min(12, band.height), x: px, y: py, angle: tilt) { c, s in
                 Critters.paperPlane(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2, s.height / 2), scale: planeScale), dark: k.dark)
+            }
+        case .evening:
+            let x: CGFloat = w * CGFloat(0.9 - 0.8 * p)
+            let crowColor: Color = sceneColor(0x2A2030, 0.85)
+            CritterWidgetArt.fitted(box: CGSize(width: 70, height: 40), origin: CGPoint(x: 30, y: 20), band: band, x: x, maxScale: 0.5) { c in
+                Critters.crow(CritterDraw.local(c, at: CritterDraw.pt(-14, 0), scale: 1, flip: true), flap: 0.8, color: crowColor)
+                Critters.crow(CritterDraw.local(c, at: CritterDraw.pt(6, -10), scale: 0.9, flip: true), flap: -0.4, color: crowColor)
+                Critters.crow(CritterDraw.local(c, at: CritterDraw.pt(8, 11), scale: 0.9, flip: true), flap: 0.2, color: crowColor)
+            }
+        case .night:
+            let x: CGFloat = w * CGFloat(0.1 + 0.8 * p)
+            CritterWidgetArt.fitted(box: CGSize(width: 40, height: 26), origin: CGPoint(x: 20, y: 14), band: band, x: x, maxScale: 0.6) { c in
+                Critters.nightPlane(c, t: 0)
             }
         }
     }

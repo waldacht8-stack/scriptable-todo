@@ -49,6 +49,29 @@ enum WorldMotion {
     /// ウィジェットの背景の時刻（雲・砂粒・霧などを15分ごとに少し進める）
     static func sceneTime(_ d: Date) -> Double { 1 + dayFraction(d) * 2400 }
 
+    /// 世界観のウィジェットで、住人と背景がなめらかに進むよう足す 1 分ごとの時刻（now の次の分から span 秒ぶん）。
+    /// 世界観が「なし」なら足さない（いままでどおり 15 分ごと）。データの読み直しは増やさず、絵の枚数だけ増える
+    static func minuteTimes(from now: Date, span: TimeInterval, world: World) -> [Date] {
+        guard world.isOn else { return [] }
+        let minute: TimeInterval = 60
+        let first: Double = (now.timeIntervalSinceReferenceDate / minute).rounded(.up) * minute
+        let count: Int = max(0, Int(span / minute))
+        var out: [Date] = []
+        out.reserveCapacity(count)
+        for i in 0..<count {
+            out.append(Date(timeIntervalSinceReferenceDate: first + Double(i) * minute))
+        }
+        return out
+    }
+
+    /// 1周目・2周目…の番号（一巡して左端に戻るときは、すべらせずにふっと入れ替える）
+    static func lap(_ d: Date, period: Double) -> Int {
+        if fixedPhase != nil { return 0 }
+        let start: Date = Calendar.current.startOfDay(for: d)
+        let s: Double = d.timeIntervalSince(start)
+        return Int(s / max(period, 1))
+    }
+
     /// 住人がいる世界観か（「なし」にはいない）
     static func hasCritters(_ w: World) -> Bool {
         switch w {
@@ -176,13 +199,19 @@ struct WidgetWorldCritters: View {
         GeometryReader { geo in
             CritterWidgetArt.view(p, size: geo.size, knobs: knobs(), margins: margins)
         }
+        // 一巡して戻るときは、すべらせずにふっと入れ替える
+        .id(lapKey)
+        .transition(.opacity)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .animation(p.world.widgetAnimation, value: phaseKey)
+        // 1 分ごとの絵の間を、住人がすべるように進む（WidgetKit の描き直しの動きは 2 秒まで）
+        .animation(.smooth(duration: 1.8), value: phaseKey)
     }
 
     /// 描き直しの目印（位相が変わったら世界観の動き方でつなぐ）
     private var phaseKey: Double { phase ?? WorldMotion.dayFraction(date) }
+
+    private var lapKey: Int { phase == nil ? WorldMotion.lap(date, period: CritterWidgetArt.period(p.world)) : 0 }
 
     private func knobs() -> CritterKnobs {
         let world: World = p.world

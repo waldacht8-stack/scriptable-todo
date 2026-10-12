@@ -51,8 +51,10 @@ struct TodoProvider: TimelineProvider {
         for item in data.items {
             if let due = item.due, due > now, due < end { times.append(due.addingTimeInterval(1)) }
         }
+        // 世界観があれば、その間を 1 分ごとの絵で埋める（住人と背景がなめらかに進む。読み直しは増えない）
+        times.append(contentsOf: WorldMotion.minuteTimes(from: now, span: end.timeIntervalSince(now), world: data.palette.world))
         let sorted: [Date] = Array(Set(times)).sorted()
-        let entries: [TodoEntry] = sorted.prefix(24).map { TodoEntry(date: $0, data: data.at($0)) }
+        let entries: [TodoEntry] = sorted.prefix(200).map { TodoEntry(date: $0, data: data.at($0)) }
         completion(Timeline(entries: entries, policy: .after(end)))
     }
 }
