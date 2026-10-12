@@ -28,8 +28,9 @@ final class WorldMigrationTests: XCTestCase {
         XCTAssertEqual(s.world, "none")
     }
 
-    func testSixWorldsRemain() {
+    func testTwelveWorldsRemain() {
         let names: [String] = World.allCases.filter { $0.isOn }.map { $0.rawValue }
-        XCTAssertEqual(Set(names), Set(["strata", "galaxy", "sky", "mist", "deepsea", "aurora"]))
+        XCTAssertEqual(Set(names), Set(["strata", "galaxy", "sky", "mist", "deepsea", "aurora",
+                                        "yohaku", "terminal", "zankou", "breath", "crystal", "ink"]))
     }
 }
