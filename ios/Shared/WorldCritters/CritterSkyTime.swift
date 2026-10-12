@@ -138,7 +138,7 @@ extension CritterArt {
             let bp: Double = (k.t / 34 + 0.3).truncatingRemainder(dividingBy: 1)
             let bx: Double = -40 + bp * (w + 80)
             let by: Double = lane - 22 + sin(k.t * 0.5) * 4
-            let flock: [(Double, Double)] = [(0, 0), (-10, -5), (-10, 6), (-20, -10), (-19, 11)]
+            let flock: [(Double, Double)] = [(0, 0), (-12, -6), (-13, 7)]
             for (i, o) in flock.enumerated() {
                 let flap: Double = sin(k.t * 9 + Double(i) * 1.3) * 2.2
                 Critters.bird(D.local(ctx, at: D.pt(bx + o.0, by + o.1), scale: 1), flap: flap, color: birdColor)

@@ -274,7 +274,7 @@ enum SkyScene {
         for c in nearClouds {
             let cw: Double = w * 0.62 * c.scale
             let x: Double = wrapX(c.x, t: t, speed: c.speed, w: w, cw: cw)
-            drawCloud(ctx, at: CGPoint(x: x, y: c.y * h), width: cw, color: cloudColor.opacity(0.45), seed: c.seed)
+            drawCloud(ctx, at: CGPoint(x: x, y: c.y * h), width: cw, color: cloudColor.opacity(0.3), seed: c.seed)
         }
     }
 

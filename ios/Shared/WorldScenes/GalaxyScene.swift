@@ -43,7 +43,7 @@ enum GalaxyScene {
     static let twinkles: [Star] = {
         var rnd = SceneRandom(909)
         var out: [Star] = []
-        for _ in 0..<22 {
+        for _ in 0..<14 {
             out.append(Star(x: rnd.next(), y: rnd.range(0.02, 0.92), r: rnd.range(0.8, 1.7), tint: Int(rnd.next() * 3.99), alpha: rnd.range(0, 6.28)))
         }
         return out

@@ -17,8 +17,8 @@ enum CritterArt {
         case .strata: 46
         case .galaxy: 48
         case .sky: 26
-        case .mist: 75
-        case .deepsea: 70
+        case .mist: 95
+        case .deepsea: 90
         case .aurora: 15
         case .yohaku: 90
         case .terminal: 24
@@ -145,14 +145,14 @@ enum CritterArt {
             nearStars(ctx, w: w, h: h, t: k.t)
             // 星雲のもや（通り道のあたりを、違う速さで2層ただよう）
             Fantasy.fogBank(ctx, width: w, y: lane - 16, height: 48, t: k.t, speed: 2.2, seed: 71, count: 6,
-                            color: sceneColor(0x9C7BFF), alpha: 0.14)
+                            color: sceneColor(0x9C7BFF), alpha: 0.08)
             Fantasy.fogBank(ctx, width: w, y: lane + 16, height: 34, t: k.t, speed: -1.4, seed: 72, count: 5,
-                            color: sceneColor(0xFF86C8), alpha: 0.1)
+                            color: sceneColor(0xFF86C8), alpha: 0.05)
             // 宇宙飛行士は左から 7 割までを行き来する（右下の＋ボタンの裏に入らないように）
             let swing: Double = sin(k.progress * 2 * Double.pi)
             let ax: Double = w * (0.4 + 0.24 * swing)
-            let ay: Double = lane - 10 + sin(k.t * 0.8) * 6
-            let angle: Double = sin(k.progress * 4 * Double.pi) * 0.32 + sin(k.t * 0.5) * 0.06
+            let ay: Double = lane - 10 + sin(k.t * 0.4) * 4
+            let angle: Double = sin(k.progress * 2 * Double.pi) * 0.22 + sin(k.t * 0.25) * 0.05
             let scale: Double = 1.25
             astronautTether(ctx, at: D.pt(ax, ay), angle: angle, scale: scale, t: k.t, w: w, lane: lane)
             let ac: GraphicsContext = D.local(ctx, at: D.pt(ax, ay), scale: scale, angle: angle)
@@ -178,8 +178,8 @@ enum CritterArt {
     static let galaxyNear: [Mote] = {
         var rnd = SceneRandom(4242)
         var out: [Mote] = []
-        for _ in 0..<18 {
-            out.append(Mote(x: rnd.next(), y: rnd.next(), r: rnd.range(0.6, 1.5), speed: rnd.range(2.5, 6), phase: rnd.range(0, 6.28)))
+        for _ in 0..<10 {
+            out.append(Mote(x: rnd.next(), y: rnd.next(), r: rnd.range(0.5, 1.1), speed: rnd.range(2.5, 6), phase: rnd.range(0, 6.28)))
         }
         return out
     }()
@@ -282,7 +282,7 @@ enum CritterArt {
             let side: Double = lampX < dx ? -1 : 1
             let dist: Double = abs(dx - lampX)
             let light: Double = max(0.2, 1 - dist / (w * 0.7))
-            let pose = Fantasy.DeerPose(walk: t * 2.4, headDown: sniff, ear: ear, tail: tail, breath: breath, lightSide: side, light: light)
+            let pose = Fantasy.DeerPose(walk: t * 2.0, headDown: sniff, ear: ear, tail: tail, breath: breath, lightSide: side, light: light)
             var dc: GraphicsContext = D.local(ctx, at: D.pt(dx, ground), scale: 1.05)
             dc.opacity = 0.9
             Fantasy.deer(dc, pose: pose, near: sceneColor(0x56626D), far: sceneColor(0x86909A), belly: sceneColor(0x3B454F),
@@ -301,7 +301,7 @@ enum CritterArt {
             Fantasy.lantern(D.local(ctx, at: D.pt(lanternX, ground), scale: 1), height: mistLanternHeight, swing: swing,
                             flicker: flicker, t: t)
             // 手前を速く流れるうすい霧
-            Fantasy.fogBank(ctx, width: w, y: ground + 12, height: 16, t: t, speed: 11, seed: 13, count: 6, color: fogWhite, alpha: 0.32)
+            Fantasy.fogBank(ctx, width: w, y: ground + 12, height: 16, t: t, speed: 7, seed: 13, count: 5, color: fogWhite, alpha: 0.22)
         case .reaction:
             guard let r = k.react else { return }
             let flare: Double = sin(D.span(r, 0, 1) * Double.pi)
@@ -325,15 +325,15 @@ enum CritterArt {
     static let seaMoteList: [Mote] = {
         var rnd = SceneRandom(2718)
         var out: [Mote] = []
-        for _ in 0..<26 {
-            out.append(Mote(x: rnd.next(), y: rnd.range(-1, 1), r: rnd.range(0.7, 1.6), speed: rnd.range(0.4, 1.4), phase: rnd.range(0, 6.28)))
+        for _ in 0..<10 {
+            out.append(Mote(x: rnd.next(), y: rnd.range(-1, 1), r: rnd.range(0.5, 1.1), speed: rnd.range(0.4, 1.4), phase: rnd.range(0, 6.28)))
         }
         return out
     }()
 
     @_optimize(none)
     static func anglerSpot(_ w: Double, lane: Double, t: Double) -> CGPoint {
-        D.pt(w * 0.3, lane + 28 + sin(t * 0.9) * 2)
+        D.pt(w * 0.3, lane + 14 + sin(t * 0.5) * 2)
     }
 
     @_optimize(none)
@@ -347,15 +347,25 @@ enum CritterArt {
         let anglerY: Double = Double(angler.y)
         switch layer {
         case .idle:
-            seaShafts(ctx, w: w, h: h, lane: lane, t: t)
-            let L: Double = min(200, w * 0.5)
-            let wx: Double = w + L * 0.7 - k.progress * (w + L * 1.4)
-            let wy: Double = lane - 28 + sin(t * 0.4) * 5
-            seaMotes(ctx, w: w, lane: lane, t: t, wakeX: wx + L * 0.45, wakeY: wy)
-            let pitch: Double = sin(t * 0.4 + 1.2) * 0.04
-            Fantasy.whale(D.local(ctx, at: D.pt(wx, wy), scale: 1, angle: pitch), t: t, length: L, haze: 0.22)
-            let glow: Double = 0.5 + 0.5 * sin(t * 2.2)
-            Fantasy.angler(D.local(ctx, at: angler, scale: 1.05), t: t, glow: glow)
+            // 主役は一度に1匹：一巡の真ん中の 7 割はクジラがゆっくり横切り、その前後は深みでアンコウが提灯を灯す
+            let L: Double = min(210, w * 0.54)
+            let swim: Double = D.span(k.progress, 0.15, 0.85)
+            let wx: Double = w + L * 0.7 - swim * (w + L * 1.4)
+            let wy: Double = lane - 28 + sin(t * 0.25) * 4
+            let whaleOn: Bool = swim > 0 && swim < 1
+            seaMotes(ctx, w: w, lane: lane, t: t, wakeX: whaleOn ? wx + L * 0.45 : anglerX + 28, wakeY: whaleOn ? wy : anglerY - 30)
+            if whaleOn {
+                let pitch: Double = sin(t * 0.25 + 1.2) * 0.03
+                Fantasy.whale(D.local(ctx, at: D.pt(wx, wy), scale: 1, angle: pitch), t: t * 0.65, length: L, haze: 0.3)
+            }
+            let edge: Double = min(k.progress, 1 - k.progress)
+            let show: Double = 1 - D.ease(D.span(edge, 0.08, 0.14))
+            if show > 0 {
+                let glow: Double = 0.55 + 0.45 * sin(t * 1.3)
+                var ac: GraphicsContext = D.local(ctx, at: angler, scale: 1.55)
+                ac.opacity = show
+                Fantasy.angler(ac, t: t, glow: glow)
+            }
         case .reaction:
             guard let r = k.react else { return }
             for i in 0..<12 {
@@ -409,7 +419,7 @@ enum CritterArt {
             let dy: Double = y - wakeY
             let near: Double = exp(-(dx * dx + dy * dy) / (2 * 70 * 70))
             let tw: Double = 0.5 + 0.5 * sin(t * 1.3 * m.speed + m.phase)
-            let a: Double = 0.16 + 0.24 * tw + 0.6 * near
+            let a: Double = 0.08 + 0.14 * tw + 0.5 * near
             let color: Color = i % 3 == 0 ? sceneColor(0x9FD8FF) : sceneColor(0x7DF9E6)
             D.glow(ctx, x, y, m.r * (3.5 + near * 4), color, a * 0.6)
             D.circle(ctx, x, y, m.r * 0.55, color.opacity(min(1, a + 0.2)))
@@ -421,8 +431,8 @@ enum CritterArt {
     static let snowFlakes: [Mote] = {
         var rnd = SceneRandom(1717)
         var out: [Mote] = []
-        for _ in 0..<20 {
-            out.append(Mote(x: rnd.next(), y: rnd.next(), r: rnd.range(0.6, 1.4), speed: rnd.range(0.01, 0.025), phase: rnd.range(0, 6.28)))
+        for _ in 0..<12 {
+            out.append(Mote(x: rnd.next(), y: rnd.next(), r: rnd.range(0.5, 1.1), speed: rnd.range(0.008, 0.016), phase: rnd.range(0, 6.28)))
         }
         return out
     }()
@@ -441,9 +451,9 @@ enum CritterArt {
             for i in 0..<3 {
                 let fi: Double = Double(i)
                 let top: Double = h * (0.05 + 0.075 * fi)
-                let phase: Double = t * 0.22 * (1 + fi * 0.3) + fi * 1.7
+                let phase: Double = t * 0.14 * (1 + fi * 0.3) + fi * 1.7
                 C.auroraCurtain(ctx, width: w, top: top, amp: 18, thick: 104 - fi * 18, wave: 1.1 + fi * 0.35,
-                                phase: phase, color: sceneColor(colors[i]), alpha: 0.24)
+                                phase: phase, color: sceneColor(colors[i]), alpha: 0.18)
             }
             snowfall(ctx, w: w, h: h, t: t)
             snowDrift(ctx, w: w, h: h, ground: ground, t: t)

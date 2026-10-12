@@ -537,7 +537,7 @@ enum Fantasy {
         // 手前の熱い光
         D.glow(c, lx, ly + 1.5, 17, sceneColor(0xFFD9A0), 0.55 * bright)
         // 灯りのまわりを舞う小さな虫・火の粉
-        for i in 0..<3 {
+        for i in 0..<1 {
             let fi: Double = Double(i)
             let mx: Double = lx + cos(t * (1.3 + fi * 0.4) + fi * 2.1) * (9 + fi * 3)
             let my: Double = ly - 2 + sin(t * (1.9 + fi * 0.3) + fi) * (5 + fi)
@@ -724,7 +724,7 @@ enum Fantasy {
         vfill(c, body, [skin, dark], -13, 11)
         var bc: GraphicsContext = c
         bc.clip(to: body)
-        let lit = Gradient(colors: [lure.opacity(0.5 * glow + 0.1), lure.opacity(0)])
+        let lit = Gradient(colors: [lure.opacity(0.55 * glow + 0.2), lure.opacity(0)])
         bc.fill(body, with: .radialGradient(lit, center: esca, startRadius: 0, endRadius: 30))
         var rnd = SceneRandom(31)
         for _ in 0..<9 {

@@ -1,18 +1,18 @@
 import SwiftUI
 
 // MARK: - 深海：日の差す浅瀬から、光の届かない深みへ。水面のゆらめく光（コースティクス）、斜めの光の筋、
-// 降りつづくマリンスノー、深いところでかすかに光るクラゲと発光の粒。
+// 降りつづくマリンスノー、深いところでかすかに光る発光の粒。にぎやかにせず、深さで暗くなる色と静かな動きで見せる。
 // コースティクス・マリンスノー・発光は TimelineView（15fps）の Canvas 1枚、光の筋は repeatForever の明滅。
 
 enum DeepSeaScene {
     static let water: [Gradient.Stop] = [
-        Gradient.Stop(color: sceneColor(0x1489A8), location: 0),
-        Gradient.Stop(color: sceneColor(0x0C6A8A), location: 0.06),
-        Gradient.Stop(color: sceneColor(0x095478), location: 0.16),
-        Gradient.Stop(color: sceneColor(0x074166), location: 0.3),
-        Gradient.Stop(color: sceneColor(0x04264A), location: 0.5),
-        Gradient.Stop(color: sceneColor(0x021127), location: 0.72),
-        Gradient.Stop(color: sceneColor(0x01060E), location: 1),
+        Gradient.Stop(color: sceneColor(0x167E9C), location: 0),
+        Gradient.Stop(color: sceneColor(0x0B5F80), location: 0.07),
+        Gradient.Stop(color: sceneColor(0x07405F), location: 0.18),
+        Gradient.Stop(color: sceneColor(0x042A47), location: 0.32),
+        Gradient.Stop(color: sceneColor(0x02172E), location: 0.5),
+        Gradient.Stop(color: sceneColor(0x010B19), location: 0.7),
+        Gradient.Stop(color: sceneColor(0x00040A), location: 1),
     ]
 
     struct Mote { let x: Double; let y: Double; let r: Double; let speed: Double; let phase: Double }
@@ -20,8 +20,8 @@ enum DeepSeaScene {
     static let snow: [Mote] = {
         var rnd = SceneRandom(1201)
         var out: [Mote] = []
-        for _ in 0..<44 {
-            out.append(Mote(x: rnd.next(), y: rnd.next(), r: rnd.range(0.6, 1.5), speed: rnd.range(0.006, 0.016), phase: rnd.range(0, 6.28)))
+        for _ in 0..<36 {
+            out.append(Mote(x: rnd.next(), y: rnd.next(), r: rnd.range(0.3, 1.1), speed: rnd.range(0.0035, 0.009), phase: rnd.range(0, 6.28)))
         }
         return out
     }()
@@ -29,8 +29,8 @@ enum DeepSeaScene {
     static let glows: [Mote] = {
         var rnd = SceneRandom(88)
         var out: [Mote] = []
-        for _ in 0..<9 {
-            out.append(Mote(x: rnd.range(0.05, 0.95), y: rnd.range(0.55, 0.95), r: rnd.range(1, 2), speed: rnd.range(0.6, 1.4), phase: rnd.range(0, 6.28)))
+        for _ in 0..<4 {
+            out.append(Mote(x: rnd.range(0.05, 0.95), y: rnd.range(0.6, 0.95), r: rnd.range(0.7, 1.3), speed: rnd.range(0.25, 0.6), phase: rnd.range(0, 6.28)))
         }
         return out
     }()
@@ -39,12 +39,12 @@ enum DeepSeaScene {
     @_optimize(none)
     static func drawCaustics(_ ctx: GraphicsContext, size: CGSize, t: Double, compact: Bool) {
         let w: Double = Double(size.width)
-        let depth: Double = Double(size.height) * (compact ? 0.4 : 0.26)
-        let rows: Int = compact ? 5 : 8
+        let depth: Double = Double(size.height) * (compact ? 0.32 : 0.2)
+        let rows: Int = compact ? 4 : 5
         let steps: Int = 16
-        let drift: Double = t * 0.5
+        let drift: Double = t * 0.3
         for layer in 0..<2 {
-            let alpha: Double = layer == 0 ? 0.34 : 0.2
+            let alpha: Double = layer == 0 ? 0.2 : 0.1
             let width: Double = layer == 0 ? 1.6 : 0.9
             let speed: Double = layer == 0 ? 1 : -0.7
             // 横の波線
@@ -85,15 +85,18 @@ enum DeepSeaScene {
     static func drawLife(_ ctx: GraphicsContext, size: CGSize, t: Double, compact: Bool) {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
+        // マリンスノー：小さく不ぞろいなかけらが、ゆっくり沈みながら横へ少しただよう（光の届く上ほど見えやすい）
         for (i, m) in snow.enumerated() where !compact || i % 2 == 0 {
             let y: Double = ((m.y + t * m.speed).truncatingRemainder(dividingBy: 1)) * h
-            let x: Double = m.x * w + sin(t / 3 + m.phase) * 5
-            let a: Double = 0.35 + 0.35 * (y / h)
-            ctx.fill(Path(ellipseIn: CGRect(x: x - m.r, y: y - m.r, width: m.r * 2, height: m.r * 2)),
-                     with: .color(sceneColor(0xE6F5FF, a)))
+            let x: Double = m.x * w + sin(t / 7 + m.phase) * 3
+            let depthFade: Double = 1 - 0.55 * (y / h)
+            let a: Double = (0.14 + 0.3 * (0.5 + 0.5 * sin(m.phase * 3))) * depthFade
+            let rx: Double = m.r * (i % 3 == 0 ? 1.6 : 1)
+            ctx.fill(Path(ellipseIn: CGRect(x: x - rx, y: y - m.r, width: rx * 2, height: m.r * 2)),
+                     with: .color(sceneColor(0xD8E8EE, a)))
         }
         for (i, g) in glows.enumerated() where !compact || i % 2 == 0 {
-            let pulse: Double = t == 0 ? 0.6 : 0.35 + 0.55 * (0.5 + 0.5 * sin(t * g.speed + g.phase))
+            let pulse: Double = t == 0 ? 0.35 : 0.15 + 0.35 * (0.5 + 0.5 * sin(t * g.speed + g.phase))
             let c = CGPoint(x: g.x * w, y: g.y * h)
             let color: Color = i % 2 == 0 ? sceneColor(0x7DF9E6) : sceneColor(0x9FD8FF)
             let gr: Double = g.r * 5
@@ -102,10 +105,7 @@ enum DeepSeaScene {
             ctx.fill(Path(ellipseIn: CGRect(x: c.x - gr, y: c.y - gr, width: gr * 2, height: gr * 2)), with: shade)
             ctx.fill(Path(ellipseIn: CGRect(x: c.x - g.r, y: c.y - g.r, width: g.r * 2, height: g.r * 2)), with: .color(color.opacity(pulse)))
         }
-        drawJelly(ctx, at: CGPoint(x: w * 0.74, y: h * 0.7 + bob(t, 0)), size: compact ? 30 : 46, tint: sceneColor(0xC8B4FF), t: t)
-        if !compact {
-            drawJelly(ctx, at: CGPoint(x: w * 0.16, y: h * 0.82 + bob(t, 3)), size: 28, tint: sceneColor(0x8CF0FF), t: t + 2)
-        }
+        // クラゲは描かない（主役は住人の層のクジラかアンコウの1匹だけにする）
     }
 
     static func bob(_ t: Double, _ delay: Double) -> Double { t == 0 ? 0 : sin((t + delay) * 2 * .pi / 9) * 9 }
@@ -156,12 +156,10 @@ struct DeepSeaBackdrop: View {
             ZStack {
                 LinearGradient(stops: DeepSeaScene.water, startPoint: .top, endPoint: .bottom)
                 LinearGradient(colors: [Color.white.opacity(0.12), Color.white.opacity(0)], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.14))
-                ray(w: w, h: h, x: 0.6, width: 34, length: 0.62, alpha: 0.32)
-                    .scenePulse(animated, low: 0.4, high: 1, duration: 8)
-                ray(w: w, h: h, x: 0.8, width: 20, length: 0.55, alpha: 0.28)
-                    .scenePulse(animated, low: 0.4, high: 1, duration: 8, delay: 2.5)
-                ray(w: w, h: h, x: 0.36, width: 46, length: 0.66, alpha: 0.24)
-                    .scenePulse(animated, low: 0.4, high: 1, duration: 8, delay: 5)
+                ray(w: w, h: h, x: 0.62, width: 40, length: 0.5, alpha: 0.16)
+                    .scenePulse(animated, low: 0.5, high: 1, duration: 14)
+                ray(w: w, h: h, x: 0.34, width: 28, length: 0.42, alpha: 0.12)
+                    .scenePulse(animated, low: 0.5, high: 1, duration: 14, delay: 6)
                 SceneClock(fps: 15, animated: animated, stillT: stillT) { t in
                     Canvas { ctx, s in
                         DeepSeaScene.drawCaustics(ctx, size: s, t: t, compact: compact)

@@ -31,7 +31,7 @@ enum StrataScene {
     static let grains: [Grain] = {
         var rnd = SceneRandom(31)
         var out: [Grain] = []
-        for _ in 0..<70 {
+        for _ in 0..<44 {
             let y: Double = rnd.range(0.2, 1.0)
             out.append(Grain(x: rnd.next(), y: y, r: rnd.range(0.6, 2.2), light: rnd.next() > 0.55))
         }
@@ -44,8 +44,8 @@ enum StrataScene {
     static let dust: [Dust] = {
         var rnd = SceneRandom(77)
         var out: [Dust] = []
-        for _ in 0..<16 {
-            out.append(Dust(x: rnd.next(), speed: rnd.range(0.012, 0.03), offset: rnd.next(), r: rnd.range(0.7, 1.6)))
+        for _ in 0..<9 {
+            out.append(Dust(x: rnd.next(), speed: rnd.range(0.008, 0.02), offset: rnd.next(), r: rnd.range(0.7, 1.6)))
         }
         return out
     }()
