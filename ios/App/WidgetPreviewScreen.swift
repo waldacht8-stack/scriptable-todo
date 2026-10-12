@@ -171,14 +171,27 @@ struct WidgetPreviewScreen: View {
         Text(s).font(.caption.weight(.bold)).foregroundStyle(p.sub)
     }
 
+    /// 見本のウィジェットの種類（本物のウィジェットと同じ背景の違いを出す）
+    private static func variant<V>(of type: V.Type) -> WidgetBackdropVariant {
+        let id: ObjectIdentifier = ObjectIdentifier(type)
+        if id == ObjectIdentifier(WakeWidgetView.self) { return .wake }
+        if id == ObjectIdentifier(ReviewWidgetView.self) { return .review }
+        if id == ObjectIdentifier(SummaryWidgetView.self) { return .day }
+        if id == ObjectIdentifier(KakeiboWidgetView.self) { return .kakeibo }
+        if id == ObjectIdentifier(ConsultWidgetView.self) { return .consult }
+        if id == ObjectIdentifier(InfoWidgetView.self) { return .info }
+        return .todo
+    }
+
     /// ウィジェットの枠（余白 16・角丸 22。背景は containerBackground と同じもの）
     private func frame<V: View>(_ view: V, _ size: CGSize, scale: CGFloat, padded: Bool = true,
                                 phase: Double? = nil) -> some View {
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        let variant: WidgetBackdropVariant = Self.variant(of: V.self)
         return view
             .padding(padded ? 16 : 0)
             .frame(width: size.width, height: size.height)
-            .background(WidgetPaletteBackground(p: p, phase: phase))
+            .background(WidgetPaletteBackground(p: p, phase: phase, variant: variant))
             .containerShape(shape)
             .clipShape(shape)
             .scaleEffect(scale)

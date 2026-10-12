@@ -51,7 +51,9 @@ struct WidgetPaletteBackground: View {
     var date: Date = .now
     /// 見本の画面用の位相
     var phase: Double? = nil
-    var body: some View { WidgetWorldBackground(p: p, date: date, phase: phase) }
+    /// ウィジェットの種類（同じ世界観でも背景を少し変える。WorldWidget.swift）
+    var variant: WidgetBackdropVariant = .todo
+    var body: some View { WidgetWorldBackground(p: p, date: date, phase: phase, variant: variant) }
 }
 
 struct TodoWidgetView: View {

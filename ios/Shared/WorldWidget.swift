@@ -21,21 +21,36 @@ struct WidgetWorldBackground: View {
     var date: Date = .now
     /// 見本の画面用：時刻の代わりにこの位相（0〜1）で描く
     var phase: Double? = nil
+    /// どのウィジェットの背景か（同じ世界観でも、種類ごとに少し違う切り取り・時間帯の気分にする）
+    var variant: WidgetBackdropVariant = .todo
 
     var body: some View {
+        let v: WidgetBackdropVariant = p.world.isOn ? variant : .todo
+        let sx: CGFloat = (v.mirrored ? -1 : 1) * v.zoom
         ZStack {
             // 入れ替えの間に下が透けないよう、色の土台は動かさずに敷いておく
             LinearGradient(colors: p.background.count > 1 ? p.background : [p.background[0], p.background[0]],
                            startPoint: .top, endPoint: .bottom)
             // 背景は 1 分ごとの絵の間をふわっと重ねて入れ替える（雲・星・カーテンなどの細かな動きが跳ばない）
             scenery
+                .scaleEffect(x: sx, y: v.zoom, anchor: v.anchor)
+                .clipped()
                 .id(sceneryKey)
                 .transition(.opacity)
+            if v == .wake {
+                WidgetWakeMood(dark: p.scheme == .dark)
+            }
             if WorldMotion.hasCritters(p.world) {
                 WidgetWorldCritters(p: p, date: date, phase: phase)
             }
         }
         .animation(.smooth(duration: 1.6), value: sceneryKey)
+    }
+
+    /// 背景の絵の時刻（ウィジェットの種類ごとにずらし、雲や星の並びを変える）
+    private var sceneT: Double {
+        let base: Double = phase.map { 1 + $0 * 2400 } ?? WorldMotion.sceneTime(date)
+        return base + (p.world.isOn ? variant.timeOffset : 0)
     }
 
     /// 背景の描き直しの目印（世界観のあるときだけ 1 分ごとに変わる）
@@ -52,9 +67,9 @@ struct WidgetWorldBackground: View {
         case .none:
             base
         case .strata, .galaxy, .sky, .mist, .deepsea:
-            WidgetSceneBackground(p: p, stillT: phase.map { 1 + $0 * 2400 } ?? WorldMotion.sceneTime(date))
+            WidgetSceneBackground(p: p, stillT: sceneT)
         case .yohaku, .terminal, .zankou, .breath, .crystal, .ink:
-            WidgetSceneBackground(p: p, stillT: phase.map { 1 + $0 * 2400 } ?? WorldMotion.sceneTime(date))
+            WidgetSceneBackground(p: p, stillT: sceneT)
         case .aurora:
             ZStack {
                 base
@@ -349,4 +364,80 @@ struct AccessoryWorldFrame: ViewModifier {
 extension View {
     /// ロック画面の四角いウィジェットに世界観の飾りを付ける
     func accessoryWorldFrame(_ world: World) -> some View { modifier(AccessoryWorldFrame(world: world)) }
+}
+
+// MARK: ウィジェットの種類ごとの背景の違い
+
+/// 同じ世界観でも、ウィジェットの種類ごとに背景の切り取り・向き・時刻をずらして、並べても同じ絵にならないようにする。
+/// 起床は夜明け前・夜の気分（暗い色合いはより深く、明るい色合いは朝の淡い光）を重ねる。どれも文字の側のコントラストを下げない
+enum WidgetBackdropVariant: Equatable {
+    case todo, wake, day, review, kakeibo, consult, info
+
+    /// 背景の時刻のずれ（秒）
+    var timeOffset: Double {
+        switch self {
+        case .todo: 0
+        case .wake: 700
+        case .day: 333
+        case .review: 911
+        case .kakeibo: 1207
+        case .consult: 1571
+        case .info: 1888
+        }
+    }
+
+    /// 左右を反転するか
+    var mirrored: Bool { self == .day || self == .kakeibo || self == .info }
+
+    /// 拡大（別の切り取り）
+    var zoom: CGFloat {
+        switch self {
+        case .wake: 1.3
+        case .review: 1.15
+        case .consult: 1.2
+        case .info: 1.1
+        default: 1
+        }
+    }
+
+    /// 拡大の中心
+    var anchor: UnitPoint {
+        switch self {
+        case .wake: .bottom
+        case .review: .topTrailing
+        case .consult: .leading
+        case .info: .top
+        default: .center
+        }
+    }
+}
+
+/// 起床のウィジェットの気分：暗い色合いは上を深い藍に沈めて星を少し、明るい色合いは上を淡い青・下を朝焼けの色で明るく
+/// （暗い色合いは背景を暗く、明るい色合いは背景を明るくするだけなので、文字とのコントラストは下がらない）
+struct WidgetWakeMood: View {
+    let dark: Bool
+
+    var body: some View {
+        if dark {
+            ZStack {
+                LinearGradient(colors: [wwx(0x050820, 0.45), wwx(0x050820, 0.12), wwx(0x050820, 0)],
+                               startPoint: .top, endPoint: .bottom)
+                Canvas { c, s in
+                    var rnd = SceneRandom(2207)
+                    let w: Double = Double(s.width)
+                    let h: Double = Double(s.height)
+                    for _ in 0..<14 {
+                        let x: Double = rnd.next() * w
+                        let y: Double = rnd.range(0, 0.45) * h
+                        let r: Double = rnd.range(0.4, 1)
+                        let a: Double = rnd.range(0.35, 0.8)
+                        c.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: .color(Color.white.opacity(a)))
+                    }
+                }
+            }
+        } else {
+            LinearGradient(colors: [wwx(0xE4ECFF, 0.4), wwx(0xFFFFFF, 0.06), wwx(0xFFE4C8, 0.34)],
+                           startPoint: .top, endPoint: .bottom)
+        }
+    }
 }

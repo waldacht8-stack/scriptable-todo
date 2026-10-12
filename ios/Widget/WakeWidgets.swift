@@ -70,7 +70,7 @@ struct WakeWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "WakeWidget", provider: WakeProvider()) { entry in
             WakeWidgetView(entry: entry)
-                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date) }
+                .containerBackground(for: .widget) { WidgetPaletteBackground(p: entry.palette, date: entry.date, variant: .wake) }
         }
         .configurationDisplayName("起床")
         .description("夜は明日のアラームの確認、見張り中は歩数、朝は「起きた！」と出発までの時間。スタンバイでは枕元の時計に。")
