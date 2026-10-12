@@ -35,7 +35,10 @@ enum AlarmTest {
             let attributes = AlarmAttributes<WakeMetadata>(presentation: AlarmPresentation(alert: alert), tintColor: .blue)
             let at = Date().addingTimeInterval(60)
             let config = AlarmManager.AlarmConfiguration<WakeMetadata>.alarm(schedule: .fixed(at), attributes: attributes)
-            _ = try await manager.schedule(id: UUID(), configuration: config)
+            let id = UUID()
+            // 起床アラームの予約し直しで消されないよう、テストの1件として覚えておく
+            WakeTestAlarms.remember(id)
+            _ = try await manager.schedule(id: id, configuration: config)
             return "\(at.formatted(date: .omitted, time: .standard)) に鳴ります。画面をロックして待ってください"
         } catch {
             return "アラームを設定できませんでした：\(error.localizedDescription)"

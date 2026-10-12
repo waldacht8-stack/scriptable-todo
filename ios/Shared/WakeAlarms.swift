@@ -62,7 +62,8 @@ enum WakeActions {
         let existing: [Alarm] = (try? manager.alarms) ?? []
         let watch: WakeWatchRecord? = WakeWatchStore.active(now: now)
         let watchIDs: Set<String> = Set((watch?.alarms ?? []).map(\.id))
-        for a in existing where a.state != .alerting && !watchIDs.contains(a.id.uuidString) {
+        let testIDs: Set<String> = WakeTestAlarms.ids()
+        for a in existing where a.state != .alerting && !watchIDs.contains(a.id.uuidString) && !testIDs.contains(a.id.uuidString) {
             try? manager.cancel(id: a.id)
         }
         let alerting = Set(existing.filter { $0.state == .alerting }.map { $0.id.uuidString })
@@ -226,6 +227,25 @@ enum WakeActions {
         }
         #endif
         return nil
+    }
+}
+
+/// 設定の「テストアラーム」で入れた1件（起床アラームの予約し直しで取り消さない。10分たったら忘れる）
+enum WakeTestAlarms {
+    private static let key = "wake-test-alarms"
+
+    static func remember(_ id: UUID) {
+        var map: [String: Double] = UserDefaults.standard.dictionary(forKey: key) as? [String: Double] ?? [:]
+        map[id.uuidString] = Date().timeIntervalSince1970
+        UserDefaults.standard.set(map, forKey: key)
+    }
+
+    static func ids(now: Date = .now) -> Set<String> {
+        let map: [String: Double] = UserDefaults.standard.dictionary(forKey: key) as? [String: Double] ?? [:]
+        let limit: Double = now.timeIntervalSince1970 - 10 * 60
+        let fresh: [String: Double] = map.filter { $0.value > limit }
+        if fresh.count != map.count { UserDefaults.standard.set(fresh, forKey: key) }
+        return Set(fresh.keys)
     }
 }
 
