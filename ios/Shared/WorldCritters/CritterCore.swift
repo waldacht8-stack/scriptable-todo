@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 // MARK: - 世界観の小さな住人（地層のモグラ・銀河の宇宙飛行士・空の鳥と紙飛行機・霧の鹿・深海のクジラ・日なたの猫など）
 // どれも図形（Path）だけで描く。画像は使わない。クレイには住人はいない。
@@ -173,10 +174,12 @@ struct WidgetWorldCritters: View {
     let date: Date
     var done: Int? = nil
     var phase: Double? = nil
+    /// ウィジェットの余白（住人はこの外側の帯だけを通る）
+    @Environment(\.widgetContentMargins) private var margins: EdgeInsets
 
     var body: some View {
         GeometryReader { geo in
-            CritterWidgetArt.view(p, size: geo.size, knobs: knobs())
+            CritterWidgetArt.view(p, size: geo.size, knobs: knobs(), margins: margins)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
