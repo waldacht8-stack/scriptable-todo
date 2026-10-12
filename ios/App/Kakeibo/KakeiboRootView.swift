@@ -21,6 +21,7 @@ struct KakeiboRootView: View {
                 VStack(spacing: 12) {
                     header
                     KakeiboSpendCard(summary: store.summary(month), monthOffset: $monthOffset)
+                    goalCard
                     pendingCard
                     KakeiboCategoryCard(entries: store.entries(in: month))
                     recentSection
@@ -36,6 +37,8 @@ struct KakeiboRootView: View {
                 .padding(.bottom, 96)
             }
             .scrollIndicators(.hidden)
+            // 左右にスライドで月を切り替える（左へ＝次の月、右へ＝前の月。今月より先には行かない）
+            .simultaneousGesture(monthSwipe)
             .paletteBackground(p)
             .overlay(alignment: .bottomTrailing) { addButton }
             .toolbar(.hidden, for: .navigationBar)
@@ -97,6 +100,37 @@ struct KakeiboRootView: View {
         .frame(height: 44)
         .overlay(Capsule().strokeBorder(p.accent, lineWidth: 1.5))
         .contentShape(Capsule())
+    }
+
+    // MARK: 月の切り替え（スライド）
+
+    private var monthSwipe: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { v in
+                let dx: CGFloat = v.translation.width
+                let dy: CGFloat = v.translation.height
+                guard abs(dx) > 60, abs(dx) > abs(dy) * 1.5 else { return }
+                if dx < 0 {
+                    guard monthOffset < 0 else { return }
+                    withAnimation(motion.change) { monthOffset += 1 }
+                } else {
+                    withAnimation(motion.change) { monthOffset -= 1 }
+                }
+            }
+    }
+
+    // MARK: 目標貯金
+
+    @ViewBuilder private var goalCard: some View {
+        if let goal = store.settings.savingsGoal, let g = store.savingsProgress {
+            Button { path.append(.settings) } label: { KakeiboGoalCard(goal: goal, progress: g) }
+                .buttonStyle(.plain)
+        } else {
+            KakeiboLinkRow(icon: "flag.checkered", title: "目標貯金を決める",
+                           detail: "「来年3月までに50万円」のように、総額と期限で決めます") {
+                path.append(.settings)
+            }
+        }
     }
 
     // MARK: 金額の入力待ち（Apple Pay で金額が届かなかった）

@@ -132,6 +132,7 @@ struct KakeiboSettings: Codable {
     var mappings: [String: KakeiboColumnMapping] = [:]   // 銀行・カードごとの列の対応
     var excludeTransfers: Bool = true   // カード引落・振替を入れない
     var applePayTested: Bool = false    // テストの1件が届いたことがある
+    var savingsGoal: KakeiboSavingsGoal? = nil   // 目標貯金（期限つきの総額）
 
     init() {}
 
@@ -144,10 +145,11 @@ struct KakeiboSettings: Codable {
         mappings = (try? c.decodeIfPresent([String: KakeiboColumnMapping].self, forKey: .mappings)) ?? d.mappings
         excludeTransfers = (try? c.decodeIfPresent(Bool.self, forKey: .excludeTransfers)) ?? d.excludeTransfers
         applePayTested = (try? c.decodeIfPresent(Bool.self, forKey: .applePayTested)) ?? d.applePayTested
+        savingsGoal = try? c.decodeIfPresent(KakeiboSavingsGoal.self, forKey: .savingsGoal)
     }
 
     enum CodingKeys: String, CodingKey {
-        case categories, budget, rules, mappings, excludeTransfers, applePayTested
+        case categories, budget, rules, mappings, excludeTransfers, applePayTested, savingsGoal
     }
 }
 
@@ -448,4 +450,42 @@ enum KakeiboFormat {
 
     /// 12,345
     static func yen(_ v: Int) -> String { number.string(from: NSNumber(value: v)) ?? "\(v)" }
+}
+
+// MARK: - 目標貯金（期限つきの総額）
+
+/// 「2027年3月までに50万円」。数えはじめの月から、毎月の「収入 − 支出」を積み上げる
+struct KakeiboSavingsGoal: Codable, Hashable {
+    var amount: Int         // 目標の総額（円）
+    var deadline: Date      // この月の末まで
+    var start: Date         // 数えはじめる月（ふつうは決めた月）
+}
+
+enum KakeiboSavings {
+    struct Progress: Hashable {
+        var saved: Int          // いままでに残せた額（マイナスもある）
+        var remaining: Int      // 目標まであと（0 以上）
+        var monthsLeft: Int     // 今月を含めて、期限の月まであと何か月（過ぎたら 0）
+        var perMonth: Int       // 月あたりあと何円残せばよいか
+        var ratio: Double       // 0〜1
+        var reached: Bool { remaining == 0 }
+    }
+
+    static func progress(_ goal: KakeiboSavingsGoal, entries: [KakeiboEntry], now: Date = .now) -> Progress {
+        let cal = Calendar.current
+        let from: Date = KakeiboMonth.start(goal.start)
+        let end: Date = KakeiboMonth.start(goal.deadline, offset: 1)
+        var saved = 0
+        for e in entries where e.counts && e.isTest != true && e.date >= from && e.date < end {
+            saved += e.signed
+        }
+        let remaining: Int = max(0, goal.amount - saved)
+        let thisMonth: Date = KakeiboMonth.start(now)
+        let last: Date = KakeiboMonth.start(goal.deadline)
+        let diff: Int = cal.dateComponents([.month], from: thisMonth, to: last).month ?? 0
+        let monthsLeft: Int = max(0, diff + 1)
+        let perMonth: Int = monthsLeft > 0 ? (remaining + monthsLeft - 1) / monthsLeft : remaining
+        let ratio: Double = goal.amount > 0 ? min(1, max(0, Double(saved) / Double(goal.amount))) : 0
+        return Progress(saved: saved, remaining: remaining, monthsLeft: monthsLeft, perMonth: perMonth, ratio: ratio)
+    }
 }

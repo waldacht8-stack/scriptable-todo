@@ -75,6 +75,11 @@ final class KakeiboStore: ObservableObject {
         KakeiboSummary.make(entries: entries, budget: settings.budget, month: month)
     }
 
+    /// 目標貯金の進み具合（決めていなければ nil）
+    var savingsProgress: KakeiboSavings.Progress? {
+        settings.savingsGoal.map { KakeiboSavings.progress($0, entries: entries) }
+    }
+
     /// 手入力のシートの「最近の記録をもう一度」（同じ内容は1つに）
     var recentTemplates: [KakeiboEntry] {
         var seen = Set<String>()
