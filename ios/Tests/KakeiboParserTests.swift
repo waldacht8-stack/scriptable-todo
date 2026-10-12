@@ -265,6 +265,28 @@ final class KakeiboParserTests: TokyoTestCase {
         XCTAssertNil(KakeiboRecorder.parseAmount(nil))
     }
 
+    func testSavingsGoalProgress() {
+        func e(_ d: Date, _ a: Int, _ kind: KakeiboKind = .expense) -> KakeiboEntry {
+            KakeiboEntry(date: d, amount: a, kind: kind, category: "食費", memo: "見本", source: .manual, dedupeKey: "")
+        }
+        // 2026年9月から数えて、2027年3月までに 100,000 円
+        let goal = KakeiboSavingsGoal(amount: 100_000, deadline: T.d(2027, 3, 1), start: T.d(2026, 9, 15))
+        let list = [e(T.d(2026, 8, 25), 50_000, .income),      // 数えはじめより前
+                    e(T.d(2026, 9, 25), 200_000, .income), e(T.d(2026, 9, 28), 170_000),
+                    e(T.d(2026, 10, 5), 10_000)]
+        let g = KakeiboSavings.progress(goal, entries: list, now: T.now)
+        XCTAssertEqual(g.saved, 20_000)
+        XCTAssertEqual(g.remaining, 80_000)
+        XCTAssertEqual(g.monthsLeft, 6, "10月〜3月（今月を含む）")
+        XCTAssertEqual(g.perMonth, 13_334, "端数は切り上げ")
+        XCTAssertEqual(g.ratio, 0.2, accuracy: 0.0001)
+        XCTAssertFalse(g.reached)
+        // 期限を過ぎた
+        let late = KakeiboSavings.progress(goal, entries: list, now: T.d(2027, 4, 2))
+        XCTAssertEqual(late.monthsLeft, 0)
+        XCTAssertEqual(late.perMonth, 80_000)
+    }
+
     func testSummary() {
         let now = T.now
         func e(_ d: Date, _ a: Int, _ kind: KakeiboKind = .expense, excluded: Bool = false, test: Bool = false) -> KakeiboEntry {

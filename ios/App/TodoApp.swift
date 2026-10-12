@@ -9,6 +9,7 @@ struct HiyoriApp: App {
 
     init() {
         TodoNotifier.shared.setUp() // 通知のボタン（完了・10分後）をアプリを開かずに処理する
+        RetiredDataCleanup.runOnce()  // なくした習慣・集中の記録を1回だけ消す
     }
 
     var body: some Scene {
@@ -56,7 +57,7 @@ enum BackgroundRefresh {
 
 struct RootView: View {
     @EnvironmentObject var store: TodoStore
-    // 起動引数 -tab 0〜4（0 今日・1 起床・2 習慣・3 集中・4 情報。シミュレーターのスクリーンショット用）
+    // 起動引数 -tab 0〜4（0 TODO・1 起床・2 家計簿・3 相談・4 情報。シミュレーターのスクリーンショット用）
     @State private var tab: Int = {
         let args = ProcessInfo.processInfo.arguments
         if let i = args.firstIndex(of: "-tab"), i + 1 < args.count { return Int(args[i + 1]) ?? 0 }
@@ -75,7 +76,6 @@ struct RootView: View {
                     HomeView().tabItem { Label("TODO", systemImage: "checklist") }.tag(0)
                     WakeRootView().tabItem { Label("起床", systemImage: "alarm") }.tag(1)
                         .environment(\.worldWakeScene, true)   // 結晶・墨流しは起床の絵に描き替える
-                    // 習慣・集中はタブから外した（コードと記録は残す。リリース4）
                     KakeiboRootView().tabItem { Label("家計簿", systemImage: "yensign.circle") }.tag(2)
                     ConsultRootView().tabItem { Label("相談", systemImage: "bubble.left.and.text.bubble.right") }.tag(3)
                     InfoRootView().tabItem { Label("情報", systemImage: "newspaper") }.tag(4)

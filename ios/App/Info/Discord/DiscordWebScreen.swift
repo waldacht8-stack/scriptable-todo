@@ -69,6 +69,9 @@ struct DiscordWebScreen: View {
     @StateObject private var web: DiscordWebController
     @State private var showNotice = true
     @State private var audio = DiscordAudioSession()
+    /// ボットの画面（お知らせ・募集。DiscordHome）をシートで開く
+    @State private var showBot = false
+    @Environment(\.motion) private var motion
 
     init(onClose: @escaping () -> Void) {
         self.onClose = onClose
@@ -91,6 +94,18 @@ struct DiscordWebScreen: View {
         .paletteBackground(p)
         .onAppear { if !web.isDemo { audio.begin() } }
         .onDisappear { audio.end() }
+        .sheet(isPresented: $showBot) {
+            NavigationStack {
+                DiscordHome()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("閉じる") { showBot = false }.fontWeight(.semibold)
+                        }
+                    }
+            }
+            .environment(\.palette, p)
+            .environment(\.motion, motion)
+        }
     }
 
     // 閉じる・題名・読み込み中・Discord アプリで開く
@@ -106,6 +121,10 @@ struct DiscordWebScreen: View {
                 if web.isLoading { ProgressView().controlSize(.small) }
             }
             Spacer(minLength: 4)
+            Button("ボット") { showBot = true }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(p.accent)
+                .accessibilityLabel("ボットの画面（お知らせ・募集）を開く")
             Button { openInApp() } label: {
                 Image(systemName: "arrow.up.forward.app").font(.title3)
             }

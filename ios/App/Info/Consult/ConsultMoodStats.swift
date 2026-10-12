@@ -3,7 +3,7 @@ import Charts
 
 // MARK: - 気分の記録と分析（相談の「今日の気分は？」を1日1件ずつ残し、傾向を見る）
 // - 記録は端末のファイル（consult-moods.json）。同じ日に選び直すと、その日の気分を上書きする
-// - 分析は端末の中で計算する（平均・推移・曜日・起床/習慣/TODO/集中との関係）
+// - 分析は端末の中で計算する（平均・推移・曜日・起床/TODO との関係）
 // - 「AI で性格と傾向を分析」だけ Gemini に送る。送るのは集計した数字と、相談で自分が書いた文（最近の10件）だけ
 // - 起動引数 -moodstats で分析の画面を開く（スクリーンショット用。-demo では見本の記録）
 
@@ -27,9 +27,7 @@ struct MoodDay: Identifiable, Equatable {
     var date: Date
     var mood: ConsultMood
     var wake: Int?              // 何回目のアラームで起きたか（0 = アラームの前。記録がない日は nil）
-    var habitRate: Double?      // 習慣の達成率 0〜1（習慣がなければ nil）
     var doneCount: Int          // 完了した TODO の数
-    var focusMinutes: Double    // 集中した分
 
     var id: Date { date }
     var score: Int { mood.score }
@@ -104,9 +102,7 @@ struct MoodStats: Equatable {
         }
         let list: [MoodFactor?] = [
             compare("起床が1回目までの日") { d in d.wake.map { s in s <= 1 } },
-            compare("習慣を半分以上できた日") { d in d.habitRate.map { r in r >= 0.5 } },
             compare("TODO を3件以上終えた日") { d in d.doneCount >= 3 },
-            compare("30分以上集中した日") { d in d.focusMinutes >= 30 },
             compare("土日") { d in [1, 7].contains(d.weekday) },
         ]
         return list.compactMap { $0 }.sorted { abs($0.diff) > abs($1.diff) }
@@ -161,7 +157,7 @@ struct MoodStats: Equatable {
     static func weekdayName(_ w: Int) -> String { ["日", "月", "火", "水", "木", "金", "土"][(w - 1 + 7) % 7] }
 }
 
-// MARK: - 記録を集める（気分と、同じ日の起床・習慣・TODO・集中）
+// MARK: - 記録を集める（気分と、同じ日の起床・TODO）
 
 enum MoodCollector {
     @MainActor
@@ -169,27 +165,21 @@ enum MoodCollector {
         if ProcessInfo.processInfo.arguments.contains("-demo") { return MoodDemo.days(now: now) }
         let entries = MoodData.entries()
         guard !entries.isEmpty else { return [] }
-        let cal = Calendar.current
         var wake: [String: Int] = [:]
         for s in WakeStore.sessions() where !s.isMissed { wake[s.day] = s.stage }
-        let habits = HabitData.habits()
-        let log = HabitData.log()
         var done: [String: Int] = [:]
         for t in TodoData.all() {
             if let d = t.doneAt { done[WakeLogic.key(d), default: 0] += 1 }
         }
-        var focus: [String: Double] = [:]
-        for r in FocusTimerData.sessions() { focus[WakeLogic.key(r.start), default: 0] += r.minutes }
         return entries.compactMap { e in
             guard let date = WakeLogic.date(fromKey: e.day) else { return nil }
-            let rate: Double? = habits.isEmpty ? nil : HabitData.dayProgress(habits, log, on: cal.startOfDay(for: date))
-            return MoodDay(date: date, mood: e.mood, wake: wake[e.day], habitRate: rate,
-                           doneCount: done[e.day] ?? 0, focusMinutes: focus[e.day] ?? 0)
+            let count: Int = done[e.day] ?? 0
+            return MoodDay(date: date, mood: e.mood, wake: wake[e.day], doneCount: count)
         }
     }
 }
 
-// MARK: - 見本（-demo。架空の記録。起床がよい日・習慣ができた日は気分が高め）
+// MARK: - 見本（-demo。架空の記録。起床がよい日・TODO を多く終えた日は気分が高め）
 
 enum MoodDemo {
     static func days(now: Date = .now) -> [MoodDay] {
@@ -201,17 +191,16 @@ enum MoodDemo {
             if i % 9 == 5 { continue }   // 記録しなかった日
             let w = cal.component(.weekday, from: date)
             let wake: Int = [1, 2, 1, 3, 1, 0, 2, 4][i * 5 % 8]   // 何回目で起きたか
-            let habit = Double((i * 13) % 10) / 10
+            let done: Int = (i * 5) % 6
             var s = 3
             if wake <= 1 { s += 1 }
-            if habit >= 0.6 { s += 1 }
+            if done >= 4 { s += 1 }
             if w == 2 { s -= 1 }          // 月曜は低め
             if w == 7 || w == 1 { s += 0 }
             if i % 7 == 3 { s -= 1 }
             if i < 7 { s = min(s + 1, 5) } // 最近は上向き
             let mood = ConsultMood.from(score: s)
-            out.append(MoodDay(date: date, mood: mood, wake: wake, habitRate: habit,
-                               doneCount: (i * 5) % 6, focusMinutes: Double((i * 17) % 70)))
+            out.append(MoodDay(date: date, mood: mood, wake: wake, doneCount: done))
         }
         return out.sorted { $0.date < $1.date }
     }
@@ -222,15 +211,15 @@ enum MoodDemo {
 
     【性格の特徴（記録からの傾向）】
     ・朝の調子がその日の気分に強く響くタイプのようです。よく起きられた日は気分が高めです。
-    ・習慣をこなせた日に気分が上がっているので、「小さな達成」を積み重ねると元気が出やすい人だと考えられます。
+    ・TODO をいくつも終えられた日に気分が上がっているので、「小さな達成」を積み重ねると元気が出やすい人だと考えられます。
     ・TODO の多さよりも、生活のリズムのほうが気分に影響しています。
 
     【ストレスのたまり方と発散のしかた】
-    週の始まりと、寝不足の日に気分が下がりやすいようです。相談では「たまっている」「追いつかない」という言葉が多く、量の多さが負担になりやすい傾向があります。体を動かした日や、習慣をこなせた日に持ち直しています。
+    週の始まりと、寝不足の日に気分が下がりやすいようです。相談では「たまっている」「追いつかない」という言葉が多く、量の多さが負担になりやすい傾向があります。体を動かした日や、TODO を片づけられた日に持ち直しています。
 
     【自己改革の一歩】
     ・日曜の夜は早めに休み、月曜の朝の負担を軽くする
-    ・つらい日は、習慣を1つだけにしぼって「できた」を作る
+    ・つらい日は、TODO を1つだけにしぼって「できた」を作る
     【今日の一歩】寝る30分前にスマホを置く
     """
 }
@@ -296,7 +285,7 @@ struct MoodStatsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Image(systemName: "chart.xyaxis.line").font(.system(size: 40)).foregroundStyle(p.accent)
             Text("記録がたまると分析できます").font(.title3.weight(.heavy)).foregroundStyle(p.text)
-            Text("相談の「今日の気分は？」を毎日1回選ぶと、ここに推移やグラフが出ます。3日分から傾向を、2週間ほどたまると起床や習慣との関係もわかります。いまの記録：\(stats.days.count)日")
+            Text("相談の「今日の気分は？」を毎日1回選ぶと、ここに推移やグラフが出ます。3日分から傾向を、2週間ほどたまると起床や TODO との関係もわかります。いまの記録：\(stats.days.count)日")
                 .font(.subheadline).foregroundStyle(p.sub)
         }
         .paletteCard(p)
@@ -570,7 +559,7 @@ private struct MoodWeekdayCard: View {
     }
 }
 
-/// 起床・習慣などとの関係
+/// 起床・TODO などとの関係
 private struct MoodFactorCard: View {
     @Environment(\.palette) private var p
     let stats: MoodStats

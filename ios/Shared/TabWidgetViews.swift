@@ -471,7 +471,10 @@ struct InfoWidgetView: View {
             }
             if info.shownHeadlines.isEmpty { emptyText }
             Spacer(minLength: 0)
-            if let s = info.currentSplat(entry.date) {
+            // ゲームは1つだけ。情報 › ゲームの並びで先にあるほう（オフにしたものは InfoFeed で消してある）
+            if info.steamFirst, let sale = info.steamSale {
+                steamLine(sale)
+            } else if let s = info.currentSplat(entry.date) {
                 splatStrip(s, compact: true)
             } else if let sale = info.steamSale {
                 steamLine(sale)
@@ -487,8 +490,9 @@ struct InfoWidgetView: View {
             }
             if info.shownHeadlines.isEmpty { emptyText }
             Spacer(minLength: 0)
+            if info.steamFirst, let sale = info.steamSale { steamLine(sale) }
             if let s = info.currentSplat(entry.date) { splatStrip(s, compact: false) }
-            if let sale = info.steamSale { steamLine(sale) }
+            if !info.steamFirst, let sale = info.steamSale { steamLine(sale) }
         }
     }
 

@@ -24,6 +24,10 @@ enum World: String, CaseIterable, Identifiable {
     case sky        // 空：いまの時刻と天気の空に雲が流れる（WorldScenes/SkyScene.swift）
     case mist       // 霧：夜明けの湖と森。霧の層が流れる（WorldScenes/MistScene.swift）
     case deepsea    // 深海：浅瀬から深みへ。光がゆらぎマリンスノーが降る（WorldScenes/DeepSeaScene.swift）
+    case yohaku     // 余白：広い余白と細い線、明朝体。完了で朱の印を押す（WorldScenes/YohakuScene.swift）
+    case terminal   // ターミナル：黒地に緑の等幅文字と走査線。完了で done ✓ を打ち出す（WorldScenes/TerminalScene.swift）
+    case zankou     // 残光：黒い画面に、完了した用事が光の筋として残る（WorldScenes/ZankouScene.swift）
+    case breath     // 呼吸：色のかたまりが呼吸する。期限が近いほど速く深く（WorldScenes/BreathScene.swift）
     case crystal    // 結晶：完了するたびに一日の結晶の面が育つ（WorldScenes/CrystalScene.swift）
     case ink        // 墨流し：生成りの水面に藍と朱の墨の輪が広がる（WorldScenes/InkScene.swift）
 
@@ -47,6 +51,10 @@ enum World: String, CaseIterable, Identifiable {
         case .sky: "空"
         case .mist: "霧"
         case .deepsea: "深海"
+        case .yohaku: "余白"
+        case .terminal: "ターミナル"
+        case .zankou: "残光"
+        case .breath: "呼吸"
         case .crystal: "結晶"
         case .ink: "墨流し"
         }
@@ -66,6 +74,10 @@ enum World: String, CaseIterable, Identifiable {
         case .sky: "いまの時刻の空と雲"
         case .mist: "夜明けの湖に霧が流れる"
         case .deepsea: "光がゆらぐ深い海"
+        case .yohaku: "細い線と広い余白"
+        case .terminal: "緑の文字とカーソル"
+        case .zankou: "片付けた用事が光の筋で残る"
+        case .breath: "期限が近いほど速く脈打つ"
         case .crystal: "片付けるたびに結晶が育つ"
         case .ink: "墨の輪がゆっくり広がる"
         }
@@ -86,6 +98,10 @@ enum World: String, CaseIterable, Identifiable {
         case .sky: .smooth         // 雲のようにふわりと
         case .mist: .gentle        // 霧のように控えめに
         case .deepsea: .smooth     // 水の中のようにゆったり
+        case .yohaku: .gentle      // 紙の上で静かに
+        case .terminal: .crisp     // 端末のようにきびきび
+        case .zankou: .smooth      // 光が尾を引くようになめらかに
+        case .breath: .gentle      // 息のようにゆっくり
         case .crystal: .crisp      // きらりと、くっきり
         case .ink: .gentle         // 墨のようにゆっくりにじむ
         }
@@ -152,6 +168,30 @@ enum World: String, CaseIterable, Identifiable {
                            text: wx(0xE8F8FF), sub: wx(0xC8EAF5), accent: wx(0x7DF9E6),
                            overdue: wx(0xFFC2A3), onAccent: wx(0x02213A),
                            fontDesign: .rounded, radius: 22, scheme: .dark, world: .deepsea)
+        case .yohaku:
+            // 生成りの紙に墨の文字。強調は朱（白い紙の上で 5.2）
+            return Palette(background: [wx(0xFBF8F2), wx(0xF4F1EA)], card: wx(0xFFFEFA),
+                           text: wx(0x1A1A18), sub: wx(0x5E5B55), accent: wx(0xB4461E),
+                           overdue: wx(0x8C3416), onAccent: .white,
+                           fontDesign: .serif, radius: 6, scheme: .light, world: .yohaku)
+        case .terminal:
+            // 黒地に燐光の緑。補足は落とした緑（#0B0F0B の上で 6.9）、警告は琥珀
+            return Palette(background: [wx(0x0B0F0B), wx(0x060906)], card: wx(0x0F1711),
+                           text: wx(0xC8F7D0), sub: wx(0x7FA889), accent: wx(0x5CF27A),
+                           overdue: wx(0xFFB547), onAccent: wx(0x0B0F0B),
+                           fontDesign: .monospaced, radius: 6, scheme: .dark, world: .terminal)
+        case .zankou:
+            // 黒い画面に明るい文字（本文 16 以上・補足 11 以上）。強調は琥珀色の光
+            return Palette(background: [wx(0x0A0A0F), wx(0x07070C)], card: wx(0x17141C),
+                           text: wx(0xF1EDF8), sub: wx(0xC9C4D8), accent: wx(0xFFB347),
+                           overdue: wx(0xFF8FA6), onAccent: wx(0x1A120A),
+                           fontDesign: .default, radius: 24, scheme: .dark, world: .zankou)
+        case .breath:
+            // 淡い桃色の地に濃い紫の文字（いちばん濃いかたまりの上でも本文 7 以上）
+            return Palette(background: [wx(0xF7F0F4), wx(0xF3E8F0)], card: wx(0xFFF9F7),
+                           text: wx(0x3A2A40), sub: wx(0x5A4460), accent: wx(0xA63E22),
+                           overdue: wx(0x9A1F14), onAccent: .white,
+                           fontDesign: .rounded, radius: 26, scheme: .light, world: .breath)
         case .crystal:
             // 紺の夜（#1E2840〜#0F1420）に、本文 13・補足 10・強調（金）11 以上
             return Palette(background: [wx(0x1E2840), wx(0x0F1420)], card: wx(0x18203A),
@@ -229,7 +269,7 @@ struct WorldBackground: View {
             }
         case .strata, .galaxy, .sky, .mist, .deepsea:
             SceneBackdrop(p: p)
-        case .crystal, .ink:
+        case .yohaku, .terminal, .zankou, .breath, .crystal, .ink:
             SceneBackdrop(p: p)
         default:
             base
@@ -302,7 +342,7 @@ struct WorldCardSurface: View {
             shape.fill(p.card)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             SceneCardSurface(p: p)
-        case .crystal, .ink:
+        case .yohaku, .terminal, .zankou, .breath, .crystal, .ink:
             SceneCardSurface(p: p)
         case .none:
             let shadow: Color = .black.opacity(p.scheme == .dark || p.outline != nil ? 0 : 0.06)
@@ -324,6 +364,9 @@ extension World {
         case .strata: return (Color.white.opacity(0.6), 0, 1, .clear, 0)
         case .sky: return (Color.white.opacity(p.scheme == .dark ? 0.25 : 0.55), 10, 0, .clear, 0)
         case .mist: return (wx(0xFFE2BC, 0.7), 12, 0, .clear, 0)
+        case .terminal: return (wx(0x5CF27A, 0.55), 6, 0, wx(0x5CF27A, 0.25), 16)
+        case .zankou: return (wx(0xFFD9A0, 0.7), 8, 0, wx(0xFF9A3D, 0.45), 20)
+        case .breath: return (wx(0xFFC2B0, 0.6), 12, 0, .clear, 0)
         default: return (.clear, 0, 0, .clear, 0)
         }
     }
@@ -351,6 +394,10 @@ struct SceneBackdrop: View {
         case .sky: v = AnyView(SkyBackdrop(p: p))
         case .mist: v = AnyView(MistBackdrop(p: p))
         case .deepsea: v = AnyView(DeepSeaBackdrop(p: p))
+        case .yohaku: v = AnyView(YohakuBackdrop(p: p))
+        case .terminal: v = AnyView(TerminalBackdrop(p: p))
+        case .zankou: v = AnyView(ZankouBackdrop(p: p))
+        case .breath: v = AnyView(BreathBackdrop(p: p))
         case .crystal: v = AnyView(CrystalBackdrop(p: p))
         case .ink: v = AnyView(InkBackdrop(p: p))
         default: v = AnyView(p.background[0])
@@ -371,6 +418,10 @@ struct SceneCardSurface: View {
         case .sky: v = AnyView(SkyCloudCard(p: p))
         case .mist: v = AnyView(MistCard(p: p))
         case .deepsea: v = AnyView(DeepSeaGlass(p: p))
+        case .yohaku: v = AnyView(YohakuSheet(p: p))
+        case .terminal: v = AnyView(TerminalPane(p: p))
+        case .zankou: v = AnyView(ZankouCard(p: p))
+        case .breath: v = AnyView(BreathCard(p: p))
         case .crystal: v = AnyView(CrystalCard(p: p))
         case .ink: v = AnyView(InkCard(p: p))
         default: v = AnyView(RoundedRectangle(cornerRadius: p.radius, style: .continuous).fill(p.card))

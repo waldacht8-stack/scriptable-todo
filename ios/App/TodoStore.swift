@@ -25,6 +25,13 @@ final class TodoStore: ObservableObject {
         if args.contains("-demo") || args.contains("-showdone") { s.showDone = args.contains("-showdone") }
         // 世界観も同じ（-world が無ければ「なし」に戻す）
         if args.contains("-demo") || args.contains("-world") { s.world = Self.arg("-world", args) ?? "none" }
+        // ゲームの並びと表示も同じ（-demo のたびに既定へ。-gameorder steam,splatoon / -gamehide identityV で変える）
+        if args.contains("-demo") {
+            let order: String = Self.arg("-gameorder", args) ?? ""
+            let hide: String = Self.arg("-gamehide", args) ?? ""
+            s.gameOrder = order.split(separator: ",").map { String($0) }
+            s.hiddenGames = hide.split(separator: ",").map { String($0) }
+        }
         if args.contains("-theme") || args.contains("-layout") || args.contains("-showdone") || args.contains("-demo")
             || args.contains("-world") { SettingsData.save(s) }
         reload()

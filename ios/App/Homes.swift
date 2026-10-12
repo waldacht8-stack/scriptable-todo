@@ -631,6 +631,9 @@ struct FocusCard: View {
         } else {
             let q: Palette = { var q = p; q.radius = p.radius + 4; return q }()
             ZStack {
+                if p.world == .breath && index == 0 {
+                    BreathRings(radius: q.radius)   // 呼吸：先頭の1枚のまわりに、息に合わせて輪が広がる
+                }
                 WorldCardSurface(p: q)
                 if p.world == .hinata {
                     if index == 0 {

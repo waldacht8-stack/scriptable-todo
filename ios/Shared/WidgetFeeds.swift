@@ -317,6 +317,8 @@ struct InfoFeed: Codable, Equatable {
     var splat: Splat? = nil
     var steamSale: SteamSale? = nil
     var isSample: Bool = false
+    /// 情報 › ゲームの並びで Steam がスプラトゥーンより前（保存しない。読むときに設定から決める）
+    var steamFirst: Bool = false
 
     static let file = "info-widget.json"
 
@@ -325,12 +327,25 @@ struct InfoFeed: Codable, Equatable {
     }
 
     static func load(now: Date = .now) -> InfoFeed {
+        let settings: AppSettings = SettingsData.load()
         guard let f = SharedStore.load(InfoFeed.self, from: file) else {
             var d = demo(now: now)
             d.isSample = true
-            return d
+            return d.applyingGames(settings)
         }
-        return f
+        return f.applyingGames(settings)
+    }
+
+    /// 情報 › ゲームの設定を当てる：オフにしたゲームは消し、並びの順を覚える
+    func applyingGames(_ s: AppSettings) -> InfoFeed {
+        var out: InfoFeed = self
+        if !s.isGameShown(.splatoon) { out.splat = nil }
+        if !s.isGameShown(.steam) { out.steamSale = nil }
+        let order: [GameItem] = s.gameOrderItems
+        let steamAt: Int = order.firstIndex(of: .steam) ?? 0
+        let splatAt: Int = order.firstIndex(of: .splatoon) ?? 0
+        out.steamFirst = steamAt < splatAt
+        return out
     }
 
     /// 見本：一般的な話題の見出し3件、次の切り替わりは次の奇数時、Steam のセール

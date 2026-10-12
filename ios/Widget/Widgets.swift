@@ -18,7 +18,6 @@ struct AppWidgets: WidgetBundle {
         KakeiboWidget()
         ConsultWidget()
         InfoWidget()
-        // 習慣・集中のタブを外したので、そのウィジェットも一覧から外す（リリース4）
     }
 }
 

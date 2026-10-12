@@ -6,6 +6,8 @@ enum KakeiboDemo {
         KakeiboData.saveEntries(entries(now: now))
         var s = KakeiboSettings()
         s.budget = 50_000
+        // 目標貯金の見本（先月から数えて、半年後の月までに 30 万円）
+        s.savingsGoal = KakeiboSavingsGoal(amount: 300_000, deadline: KakeiboMonth.start(now, offset: 5), start: KakeiboMonth.start(now, offset: -1))
         // 見本の CSV は列の対応を覚えた状態にする（-kakeiboimport mapping のときは覚えていない状態）
         if !ProcessInfo.processInfo.arguments.contains("mapping") {
             s.mappings[KakeiboInstitution.juroku.rawValue] = KakeiboCSV.autoMapping(sampleHeaders)
