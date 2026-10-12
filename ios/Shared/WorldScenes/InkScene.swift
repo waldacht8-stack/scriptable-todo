@@ -15,6 +15,7 @@ enum InkScene {
     struct Drop { let x: Double; let y: Double; let scale: Double; let reverse: Bool; let delay: Double; let rings: [Ring] }
 
     /// 輪の組（中心からの比。幅は pt）
+    @_optimize(none)
     static func rings(_ seed: UInt64, count: Int, red: Bool) -> [Ring] {
         var rnd = SceneRandom(seed)
         var out: [Ring] = []
@@ -46,6 +47,7 @@ enum InkScene {
     }()
 
     /// 水の流れのゆがみ（墨流しのたゆたい）
+    @_optimize(none)
     static func flow(_ x: Double, _ y: Double, t: Double, amp: Double) -> CGPoint {
         let fx: Double = sin(y * 0.021 + t * 0.11) * amp + sin(x * 0.013 - t * 0.07 + 1.3) * amp * 0.5
         let fy: Double = cos(x * 0.018 - t * 0.09) * amp + sin(y * 0.011 + t * 0.05 + 2.1) * amp * 0.5
@@ -53,6 +55,7 @@ enum InkScene {
     }
 
     /// ゆがんだ輪を1本描く
+    @_optimize(none)
     static func ringPath(cx: Double, cy: Double, r: Double, twist: Double, t: Double, amp: Double) -> Path {
         var path = Path()
         let steps: Int = max(24, min(72, Int(r / 2.4)))

@@ -10,6 +10,7 @@ struct WorldDayCount: Equatable {
     var done: Int = 0
     var open: Int = 0
 
+    @_optimize(none)
     static func now(_ date: Date = .now) -> WorldDayCount {
         let cal: Calendar = Calendar.current
         let all: [TodoItem] = TodoData.all()
@@ -82,6 +83,7 @@ enum CrystalScene {
     }()
 
     /// 結晶の中心と大きさ（住人の層の反応も同じ場所を使う）
+    @_optimize(none)
     static func frame(_ size: CGSize, compact: Bool) -> (center: CGPoint, scale: Double) {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
@@ -93,10 +95,12 @@ enum CrystalScene {
         return (CGPoint(x: w * 0.62, y: h * 0.3), s)
     }
 
+    @_optimize(none)
     static func point(_ c: CGPoint, _ s: Double, _ u: CGPoint) -> CGPoint {
         CGPoint(x: Double(c.x) + Double(u.x) * s, y: Double(c.y) + Double(u.y) * s)
     }
 
+    @_optimize(none)
     static func facetPath(_ i: Int, c: CGPoint, s: Double) -> Path {
         let a: CGPoint = point(c, s, rim[i])
         let b: CGPoint = point(c, s, rim[(i + 1) % rim.count])
@@ -109,6 +113,7 @@ enum CrystalScene {
     }
 
     /// 四つ角の星
+    @_optimize(none)
     static func star(_ ctx: GraphicsContext, _ x: Double, _ y: Double, _ r: Double, _ color: Color) {
         let k: Double = r * 0.2
         var path = Path()
@@ -124,6 +129,7 @@ enum CrystalScene {
         ctx.fill(path, with: .color(color))
     }
 
+    @_optimize(none)
     static func twinkle(_ t: Double, _ phase: Double) -> Double {
         t == 0 ? 0.7 : 0.15 + 0.85 * (0.5 + 0.5 * sin(t * 2 * Double.pi / 2.8 + phase))
     }
@@ -226,6 +232,7 @@ enum CrystalScene {
     }
 
     /// 形になっていないかけら（四角を崩した輪郭）
+    @_optimize(none)
     static func shard(_ ctx: GraphicsContext, _ cx: Double, _ cy: Double, _ r: Double, _ rot: Double, alpha: Double) {
         let pts: [(Double, Double)] = [(-0.9, 0.4), (-0.1, -1.0), (0.9, -0.3), (0.4, 1.0)]
         var path = Path()
@@ -241,6 +248,7 @@ enum CrystalScene {
     }
 
     /// 朝の近さ（0〜1。22時ごろから上がりはじめ、6時ごろにいちばん強い）
+    @_optimize(none)
     static func morning(_ date: Date) -> Double {
         let day: Double = WorldMotion.dayFraction(date) * 24
         let until: Double = (30 - day).truncatingRemainder(dividingBy: 24)

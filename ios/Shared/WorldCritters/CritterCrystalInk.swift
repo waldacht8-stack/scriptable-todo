@@ -9,6 +9,7 @@ extension CritterArt {
     /// 今日完了した数（反応の行き先の面を決める。1秒ごとに読み直す）
     nonisolated(unsafe) private static var doneCache: (at: Date, done: Int) = (Date.distantPast, 0)
 
+    @_optimize(none)
     static func doneToday() -> Int {
         let now: Date = Date()
         if now.timeIntervalSince(doneCache.at) > 1 {
@@ -119,6 +120,7 @@ extension CritterArt {
 
 extension CritterWidgetArt {
     /// 結晶：小さな宝石が下の余白を進み、そばで星がまたたく（一日で左から右へ）
+    @_optimize(none)
     static func crystalLane(size: CGSize, k: CritterKnobs) -> AnyView {
         let w: CGFloat = size.width
         let lane: CGFloat = laneY(size.height)
@@ -145,6 +147,7 @@ extension CritterWidgetArt {
     }
 
     /// 墨流し：小さな墨の輪が下の余白を流れ、15分ごとに輪の大きさが変わる
+    @_optimize(none)
     static func inkLane(size: CGSize, k: CritterKnobs) -> AnyView {
         let w: CGFloat = size.width
         let lane: CGFloat = laneY(size.height)
@@ -184,17 +187,7 @@ struct CrystalWakeRing: View {
                 .stroke(grad, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .opacity(shown > 0 ? 1 : 0)
-            Canvas { c, s in
-                let cx: Double = Double(s.width) / 2
-                let cy: Double = Double(s.height) / 2
-                let rad: Double = Double(min(s.width, s.height)) / 2 - Double(lineWidth) / 2
-                for i in 0..<n {
-                    let f: Double = shown * Double(i + 1) / Double(n)
-                    let ang: Double = f * 2 * Double.pi - Double.pi / 2
-                    let r: Double = Double(lineWidth) * (i == n - 1 ? 0.9 : 0.5)
-                    CrystalScene.star(c, cx + cos(ang) * rad, cy + sin(ang) * rad, r, Color.white.opacity(i == n - 1 ? 1 : 0.75))
-                }
-            }
+            Canvas { c, s in CrystalWakeRing.stars(c, size: s, shown: shown, n: n, lineWidth: Double(lineWidth)) }
         }
         .shadow(color: sceneColor(0x7FD4F5, 0.35 + 0.3 * shown), radius: 4)
     }
@@ -214,14 +207,39 @@ struct InkWakeRing: View {
                 .stroke(sceneColor(InkScene.indigo), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .opacity(shown > 0 ? 1 : 0)
-            Canvas { c, s in
-                let cx: Double = Double(s.width) / 2
-                let cy: Double = Double(s.height) / 2
-                let outer: Double = Double(min(s.width, s.height)) / 2
-                let rr: Double = outer - Double(lineWidth) * (1.4 - 0.4 * shown)
-                let path: Path = InkScene.ringPath(cx: cx, cy: cy, r: max(4, rr), twist: shown * 3, t: shown * 40, amp: 0.8)
-                c.stroke(path, with: .color(sceneColor(InkScene.vermilion, 0.35 + 0.5 * shown)), lineWidth: max(1, Double(lineWidth) * 0.22))
-            }
+            Canvas { c, s in InkWakeRing.ring(c, size: s, shown: shown, lineWidth: Double(lineWidth)) }
         }
+    }
+}
+
+extension CrystalWakeRing {
+    /// 輪の上の星（進んだところまで並べ、先頭をいちばん大きく）
+    @_optimize(none)
+    static func stars(_ c: GraphicsContext, size s: CGSize, shown: Double, n: Int, lineWidth: Double) {
+        let cx: Double = Double(s.width) / 2
+        let cy: Double = Double(s.height) / 2
+        let rad: Double = Double(min(s.width, s.height)) / 2 - lineWidth / 2
+        for i in 0..<n {
+            let f: Double = shown * Double(i + 1) / Double(n)
+            let ang: Double = f * 2 * Double.pi - Double.pi / 2
+            let r: Double = lineWidth * (i == n - 1 ? 0.9 : 0.5)
+            let x: Double = cx + cos(ang) * rad
+            let y: Double = cy + sin(ang) * rad
+            CrystalScene.star(c, x, y, r, Color.white.opacity(i == n - 1 ? 1 : 0.75))
+        }
+    }
+}
+
+extension InkWakeRing {
+    /// 内側の朱の輪（進むほど外へ広がる）
+    @_optimize(none)
+    static func ring(_ c: GraphicsContext, size s: CGSize, shown: Double, lineWidth: Double) {
+        let cx: Double = Double(s.width) / 2
+        let cy: Double = Double(s.height) / 2
+        let outer: Double = Double(min(s.width, s.height)) / 2
+        let rr: Double = outer - lineWidth * (1.4 - 0.4 * shown)
+        let path: Path = InkScene.ringPath(cx: cx, cy: cy, r: max(4, rr), twist: shown * 3, t: shown * 40, amp: 0.8)
+        let color: Color = sceneColor(InkScene.vermilion, 0.35 + 0.5 * shown)
+        c.stroke(path, with: .color(color), lineWidth: max(1, lineWidth * 0.22))
     }
 }
