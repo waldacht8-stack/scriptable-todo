@@ -1,7 +1,9 @@
 // アプリのアイコン「日和」を描いて PNG にする（GitHub Actions の macOS で実行）。
 // 使い方: swift Tools/MakeIcon.swift <出力先.png> [dark]
-// 絵柄：地平線から昇る朝日（ふつうの表示）。dark を付けると、同じ地平線から昇る三日月と星（ダークモード）。
-// iPhone のダークモードを「自動」にしていれば、日没で月、日の出で太陽に切り替わる
+// 絵柄：「日」の形の窓（枠は地の色に溶かし、4つの角丸の窓だけで「日」に見せる）。上の窓に空、下の窓に海。
+//   ふつうの表示：キャメル色の地、青空に太陽と鳥、波
+//   dark（ダークモード）：生成りの地、夜空に三日月と星、夜の波
+// iPhone のダークモードを「自動」にしていれば、日没で夜、日の出で昼に切り替わる
 import AppKit
 import CoreGraphics
 
@@ -21,50 +23,86 @@ let s = CGFloat(size)
 // 下書きは 180 四方・上が y=0。CoreGraphics は下が y=0 なので変換する
 let k = s / 180
 func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * k, y: s - y * k) }
+func rect(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> CGRect {
+    CGRect(x: x * k, y: s - (y + h) * k, width: w * k, height: h * k)
+}
 func circle(_ x: CGFloat, _ y: CGFloat, _ r: CGFloat, _ c: CGColor) {
     let c0 = p(x, y)
     ctx.setFillColor(c)
     ctx.fillEllipse(in: CGRect(x: c0.x - r * k, y: c0.y - r * k, width: r * 2 * k, height: r * 2 * k))
 }
-/// 角の丸い横線（水面の光）
-func bar(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ c: CGColor) {
-    let r = CGRect(x: x * k, y: s - (y + 6) * k, width: w * k, height: 6 * k)
-    ctx.addPath(CGPath(roundedRect: r, cornerWidth: 3 * k, cornerHeight: 3 * k, transform: nil))
+/// 波（y の高さから下を、4つのうねりで塗る）
+func wave(_ y: CGFloat, _ c: CGColor) {
+    ctx.beginPath()
+    ctx.move(to: p(52, y))
+    var x: CGFloat = 52
+    for i in 0..<4 {
+        let up: CGFloat = i % 2 == 0 ? -8 : 8
+        ctx.addQuadCurve(to: p(x + 19, y), control: p(x + 9.5, y + up))
+        x += 19
+    }
+    ctx.addLine(to: p(128, 150))
+    ctx.addLine(to: p(52, 150))
+    ctx.closePath()
     ctx.setFillColor(c)
     ctx.fillPath()
 }
-
-let horizon: CGFloat = 112   // 地平線（下書きの y）
-
-// 空
-let skyColors: [CGColor] = dark ? [rgb(0x2A2F5E), rgb(0x151832)] : [rgb(0xFFB25B), rgb(0xF0603A)]
-let sky = CGGradient(colorsSpace: cs, colors: skyColors as CFArray, locations: [0, 1])!
-ctx.drawLinearGradient(sky, start: CGPoint(x: 0, y: s), end: CGPoint(x: 0, y: 0), options: [])
-
-if dark {
-    // 星
-    for (x, y, r) in [(40.0, 44.0, 2.5), (138.0, 36.0, 2.0), (150.0, 70.0, 1.6), (62.0, 24.0, 1.4), (24.0, 84.0, 1.4)] as [(CGFloat, CGFloat, CGFloat)] {
-        circle(x, y, r, rgb(0xFFFFFF, 0.9))
-    }
-    // 月のまわりの淡い光
-    let glow = CGGradient(colorsSpace: cs, colors: [rgb(0xF3EBCF, 0.28), rgb(0xF3EBCF, 0)] as CFArray, locations: [0, 1])!
-    ctx.drawRadialGradient(glow, startCenter: p(90, horizon), startRadius: 0, endCenter: p(90, horizon), endRadius: 70 * k, options: [])
-    // 三日月：満月から、空の色の円で右上を欠く
-    circle(90, horizon, 40, rgb(0xF3EBCF))
-    circle(106, 100, 34, rgb(0x22274F))
-} else {
-    // 朝日のまわりの光
-    let glow = CGGradient(colorsSpace: cs, colors: [rgb(0xFFF4E0, 0.45), rgb(0xFFF4E0, 0)] as CFArray, locations: [0, 1])!
-    ctx.drawRadialGradient(glow, startCenter: p(90, horizon), startRadius: 0, endCenter: p(90, horizon), endRadius: 72 * k, options: [])
-    circle(90, horizon, 40, rgb(0xFFF4E0))
+/// 鳥（ふたつの山の線）
+func bird(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ c: CGColor, _ lw: CGFloat) {
+    ctx.beginPath()
+    ctx.move(to: p(x, y))
+    ctx.addQuadCurve(to: p(x + w, y), control: p(x + w / 2, y - w / 2))
+    ctx.addQuadCurve(to: p(x + w * 2, y), control: p(x + w * 1.5, y - w / 2))
+    ctx.setStrokeColor(c)
+    ctx.setLineWidth(lw * k)
+    ctx.setLineCap(.round)
+    ctx.strokePath()
 }
 
-// 地平線から下（水面）
-ctx.setFillColor(dark ? rgb(0x0E1026) : rgb(0xC9402A))
-ctx.fill(CGRect(x: 0, y: 0, width: s, height: s - horizon * k))
-let shine: UInt32 = dark ? 0xF3EBCF : 0xFFF4E0
-bar(28, 124, 124, rgb(shine, dark ? 0.35 : 0.55))
-bar(48, 140, 84, rgb(shine, dark ? 0.2 : 0.35))
+// 地（枠も同じ色。窓のあいだの横線もこの色で、「日」の字になる）
+let ground: UInt32 = dark ? 0xF3EBCF : 0xC29468
+ctx.setFillColor(rgb(ground))
+ctx.fill(CGRect(x: 0, y: 0, width: s, height: s))
+
+// 窓（角丸の「日」の形）の中だけに描く
+let window = CGPath(roundedRect: rect(52, 30, 76, 120), cornerWidth: 18 * k, cornerHeight: 18 * k, transform: nil)
+ctx.saveGState()
+ctx.addPath(window)
+ctx.clip()
+
+// 空
+ctx.setFillColor(dark ? rgb(0x1B2045) : rgb(0x9ED2F5))
+ctx.fill(rect(52, 30, 76, 60))
+if dark {
+    circle(108, 54, 11, rgb(0xF3EBCF))
+    circle(113, 50, 9, rgb(0x1B2045))   // 欠いて三日月に
+    circle(66, 44, 1.6, rgb(0xFFFFFF))
+    circle(80, 66, 1.3, rgb(0xFFFFFF))
+} else {
+    circle(108, 54, 12, rgb(0xFFC94D))
+    bird(66, 64, 8, rgb(0x24345E), 2.2)
+    bird(80, 74, 6, rgb(0x24345E), 2.0)
+}
+
+// 海と波
+ctx.setFillColor(dark ? rgb(0x0E1838) : rgb(0x3E8FC4))
+ctx.fill(rect(52, 90, 76, 60))
+wave(116, dark ? rgb(0x15214A) : rgb(0x2B6DA0))
+wave(134, dark ? rgb(0x1C2A5C) : rgb(0x1D4F86))
+if dark {
+    // 月明かりの小さな波
+    ctx.beginPath()
+    ctx.move(to: p(98, 112))
+    ctx.addQuadCurve(to: p(108, 112), control: p(103, 108))
+    ctx.setStrokeColor(rgb(0xF3EBCF, 0.6))
+    ctx.setLineWidth(2 * k)
+    ctx.strokePath()
+}
+ctx.restoreGState()
+
+// 「日」の横線（水平線）：地の色で窓を上下に分ける
+ctx.setFillColor(rgb(ground))
+ctx.fill(rect(52, 84, 76, 12))
 
 guard let image = ctx.makeImage() else { fatalError("image") }
 let rep = NSBitmapImageRep(cgImage: image)
