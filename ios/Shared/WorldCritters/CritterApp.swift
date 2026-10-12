@@ -59,6 +59,7 @@ enum CritterArt {
         case .swiss: swiss(ctx, size: size, k: k, layer: layer)
         case .yohaku: yohaku(ctx, size: size, k: k, layer: layer)
         case .terminal: terminal(ctx, size: size, k: k, layer: layer)
+        case .zankou, .breath: break   // 背景そのものが反応する（ZankouScene・BreathScene）
         case .none, .clay: break
         }
     }

@@ -21,6 +21,8 @@ struct WidgetSceneBackground: View {
         case .deepsea: v = AnyView(DeepSeaBackdrop(p: p, still: true, compact: true, stillT: stillT))
         case .yohaku: v = AnyView(YohakuBackdrop(p: p, still: true, compact: true, stillT: stillT))
         case .terminal: v = AnyView(TerminalBackdrop(p: p, still: true, compact: true, stillT: stillT))
+        case .zankou: v = AnyView(ZankouWidgetBackdrop(p: p, stillT: stillT))
+        case .breath: v = AnyView(BreathBackdrop(p: p, still: true, compact: true, stillT: stillT))
         default: v = AnyView(p.background[0])
         }
         return v
@@ -42,6 +44,8 @@ struct WidgetSceneCard: View {
         case .deepsea: v = AnyView(DeepSeaGlass(p: p, radius: radius, light: true))
         case .yohaku: v = AnyView(YohakuSheet(p: p, radius: radius, light: true))
         case .terminal: v = AnyView(TerminalPane(p: p, radius: radius, light: true))
+        case .zankou: v = AnyView(ZankouCard(p: p, radius: radius, light: true))
+        case .breath: v = AnyView(BreathCard(p: p, radius: radius, light: true))
         default: v = AnyView(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(p.card))
         }
         return v
@@ -101,6 +105,16 @@ extension World {
             return AnyTransition.asymmetric(
                 insertion: AnyTransition.move(edge: .leading).combined(with: .opacity),
                 removal: AnyTransition.scale(scale: 0.98, anchor: .leading).combined(with: .opacity))
+        case .zankou:
+            // 残光：光の筋のように右へ流れて消える
+            return AnyTransition.asymmetric(
+                insertion: AnyTransition.opacity,
+                removal: AnyTransition.offset(x: 50).combined(with: .opacity))
+        case .breath:
+            // 呼吸：ふくらんで、ひと息で消える
+            return AnyTransition.asymmetric(
+                insertion: AnyTransition.scale(scale: 0.9).combined(with: .opacity),
+                removal: AnyTransition.scale(scale: 1.08).combined(with: .opacity))
         default:
             return AnyTransition.opacity
         }
@@ -111,6 +125,7 @@ extension World {
         switch self {
         case .strata, .galaxy, .sky, .mist, .deepsea: true
         case .yohaku, .terminal: true
+        case .zankou, .breath: true
         default: false
         }
     }

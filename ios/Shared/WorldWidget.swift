@@ -43,7 +43,7 @@ struct WidgetWorldBackground: View {
             base
         case .strata, .galaxy, .sky, .mist, .deepsea:
             WidgetSceneBackground(p: p, stillT: phase.map { 1 + $0 * 2400 } ?? WorldMotion.sceneTime(date))
-        case .yohaku, .terminal:
+        case .yohaku, .terminal, .zankou, .breath:
             WidgetSceneBackground(p: p, stillT: phase.map { 1 + $0 * 2400 } ?? WorldMotion.sceneTime(date))
         case .hinata:
             ZStack {
@@ -150,7 +150,7 @@ struct WidgetCardSurface: View {
             shape.fill(p.card)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             WidgetSceneCard(p: p, radius: r)
-        case .yohaku, .terminal:
+        case .yohaku, .terminal, .zankou, .breath:
             WidgetSceneCard(p: p, radius: r)
         case .brutal:
             ZStack {
@@ -216,7 +216,7 @@ struct WidgetButtonSurface: View {
             shape.fill(p.accent)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             WidgetSceneButton(p: p, radius: r)
-        case .yohaku, .terminal:
+        case .yohaku, .terminal, .zankou, .breath:
             WidgetSceneButton(p: p, radius: r)
         }
     }
@@ -369,7 +369,7 @@ extension World {
             return AnyTransition.scale(scale: 0.88).combined(with: .opacity)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             return sceneRowTransition()
-        case .yohaku, .terminal:
+        case .yohaku, .terminal, .zankou, .breath:
             return sceneRowTransition()
         }
     }
@@ -453,6 +453,8 @@ extension World {
         case .strata, .mist: .default
         case .yohaku: .serif
         case .terminal: .monospaced
+        case .zankou: .default
+        case .breath: .rounded
         }
     }
 
