@@ -79,9 +79,11 @@ final class IdvScheduleTests: TokyoTestCase {
         let allDay = IdvScheduleItem(id: "c", kind: .maintenance, title: "x", start: T.d(2026, 10, 16), end: nil, hasTime: false, link: nil)
         let season = IdvSeason(number: 44, name: "シーズン44", start: T.d(2026, 9, 10), end: T.d(2026, 11, 12), source: "見本", link: nil)
         let p = IdvReminder.plan(events: [], schedule: [m, u, allDay], season: season, now: T.now)
-        XCTAssertEqual(p.map(\.at), [T.d(2026, 10, 14, 8, 0), T.d(2026, 11, 9, 19, 0), T.d(2026, 11, 11, 19, 0)])
+        XCTAssertEqual(p.map(\.at), [T.d(2026, 10, 13, 19, 0), T.d(2026, 10, 15, 19, 0), T.d(2026, 11, 9, 19, 0)],
+                       "メンテナンスは前の日の夜、シーズンは終了の3日前")
         XCTAssertTrue(p.allSatisfy { $0.id.hasPrefix("idv-") })
-        XCTAssertEqual(p[1].title, "ランクマ シーズン44 終了まであと3日")
+        XCTAssertEqual(p[0].title, "明日はメンテナンス")
+        XCTAssertEqual(p[2].title, "ランクマ シーズン44 終了まであと3日")
     }
 
     // MARK: コラボ・ガチャ

@@ -144,7 +144,30 @@ enum IdvSchedule {
             out.append(IdvScheduleItem(id: id, kind: k, title: displayTitle(n.title), start: w.start, end: w.end,
                                        hasTime: w.hasTime, link: n.link))
         }
+        // 公式の本文の「次回のメンテナンスは2026年10月15日午前8:00（UTC+8）になります」（同じ時刻のものが無ければ足す）
+        let starts = Set(out.map { Int($0.start.timeIntervalSince1970) })
+        var nextSeen = Set<Int>()
+        for n in news where n.kind == .official {
+            guard let text = articles[n.link], let w = nextMaintenance(in: text, reference: n.date ?? now) else { continue }
+            let ts = Int(w.start.timeIntervalSince1970)
+            guard w.start > now.addingTimeInterval(-30 * 86400), !starts.contains(ts), nextSeen.insert(ts).inserted else { continue }
+            out.append(IdvScheduleItem(id: "next-\(ts)", kind: .maintenance, title: "次回のメンテナンス（公式の予告）", start: w.start,
+                                       end: w.end, hasTime: w.hasTime, link: n.link))
+        }
         return sorted(out, now: now)
+    }
+
+    /// 「次回のメンテナンスは…」の行の日時
+    static func nextMaintenance(in text: String, reference: Date) -> When? {
+        for line in text.components(separatedBy: .newlines) where line.contains("次回のメンテナンス") {
+            if let w = when(in: line, reference: reference) { return w }
+        }
+        return nil
+    }
+
+    /// これからの最初のメンテナンス
+    static func nextMaintenanceItem(_ items: [IdvScheduleItem], now: Date = .now) -> IdvScheduleItem? {
+        items.filter { $0.kind == .maintenance && !$0.isPast(now: now) }.min { $0.start < $1.start }
     }
 
     /// これからのものを近い順に、そのあと終わったものを新しい順に
@@ -342,19 +365,16 @@ enum IdvOfficial {
         return out
     }
 
-    private static let keepLine = try? NSRegularExpression(pattern: "\\d{1,2}月\\d{1,2}日|\\d{1,2}/\\d{1,2}|UTC|所要時間|シーズン|S\\d{2}|ラストスパート|メンテナンス|期間|日時")
+    private static let keepLine = try? NSRegularExpression(pattern: "\\d{1,2}月\\d{1,2}日|\\d{1,2}/\\d{1,2}|UTC|所要時間|シーズン|S\\d{2}|ラストスパート|メンテナンス|期間|日時|ランク|開放|段位|リセット|\\d{1,2}:\\d{2}")
 
     /// 記事の HTML から、日付や期間のある行だけを残した文（キャッシュ用。最大6000字）
     static func text(fromHTML html: String) -> String {
-        var s = html
-        for p in ["<script[\\s\\S]*?</script>", "<style[\\s\\S]*?</style>", "<!--[\\s\\S]*?-->"] {
-            s = s.replacingOccurrences(of: p, with: " ", options: [.regularExpression, .caseInsensitive])
-        }
-        s = s.replacingOccurrences(of: "<(br|/p|/div|/li|/h\\d|/tr|/dd|/dt)[^>]*>", with: "\n", options: [.regularExpression, .caseInsensitive])
-        s = s.replacingOccurrences(of: "<[^>]+>", with: "\n", options: .regularExpression)
-        s = InfoFeedParser.unescape(s.replacingOccurrences(of: "&amp;nbsp;", with: " "))
-        let lines = s.components(separatedBy: .newlines)
-            .map { $0.replacingOccurrences(of: "[\\s\\x{00A0}\\x{3000}]+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces) }
+        text(lines: IdvArticle.lines(fromHTML: html))
+    }
+
+    /// 行に分けたものから（期間の読み取りと同じ行を使う）
+    static func text(lines all: [String]) -> String {
+        let lines = all
             .filter { line in
                 guard !line.isEmpty, line.count < 400, let re = keepLine else { return false }
                 let n = IdvDates.normalize(line)

@@ -13,9 +13,9 @@ enum InfoFetcher {
         return URLSession(configuration: c)
     }()
 
-    static func get(_ url: URL) async throws -> Data {
+    static func get(_ url: URL, userAgent ua: String = InfoFetcher.userAgent) async throws -> Data {
         var req = URLRequest(url: url)
-        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        req.setValue(ua, forHTTPHeaderField: "User-Agent")
         let (data, resp) = try await session.data(for: req)
         if let h = resp as? HTTPURLResponse, !(200..<300).contains(h.statusCode) { throw FetchError.badStatus(h.statusCode) }
         return data

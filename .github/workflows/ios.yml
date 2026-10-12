@@ -105,7 +105,7 @@ jobs:
           # 起動して撮る。真っ白（小さいファイル）なら、待って撮り直す（遅いシミュレーター対策）
           # 担当の枝では、SHOTS_ON_BRANCH に名前が合う写真だけ撮る（時間短縮）。main ではすべて撮る
           # 各担当は自分の枝でこの値に自分の写真の名前（正規表現）を足す。例："kakeibo|tab-2"
-          SHOTS_ON_BRANCH="tab-|home-focus"
+          SHOTS_ON_BRANCH="idv"
           shot() {
             out=$1; shift
             if [ "$GITHUB_REF_NAME" != "main" ] && ! echo "$out" | grep -qE "$SHOTS_ON_BRANCH"; then
@@ -230,6 +230,9 @@ jobs:
           shot shots/idv.png -demo -theme focus -tab 4 -infogames -idvdemo
           shot shots/idv-schedule.png -demo -theme focus -tab 4 -infogames -idvdemo -idvscroll schedule
           shot shots/idv-deadlines.png -demo -theme focus -tab 4 -infogames -idvdemo -idvscroll deadlines
+          shot shots/idv-matches.png -demo -theme focus -tab 4 -infogames -idvdemo -idvscroll matches
+          shot shots/idv-daigoroku.png -demo -theme focus -tab 4 -infogames -idvdemo -idvscroll daigoroku
+          shot shots/idv-settings.png -demo -theme focus -tab 4 -infogames -idvdemo -idvsettings
           shot shots/info-games-r4.png -demo -theme night -tab 4 -infogames -gamesscroll
           # ゲームの並びと表示（右上の ↑↓）。-gameorder・-gamehide で見本の並びにする
           shot shots/game-settings.png -demo -theme focus -tab 4 -infogames -gamesettings -gameorder steam,splatoon,identityV -gamehide identityV

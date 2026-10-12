@@ -30,7 +30,7 @@ private struct IdvOrnament: View {
     }
 }
 
-private struct IdvDaysBadge: View {
+struct IdvDaysBadge: View {
     let end: Date
 
     var start: Date? = nil
@@ -40,13 +40,18 @@ private struct IdvDaysBadge: View {
         let n: Int = IdvDates.daysLeft(end)
         let notYet: Bool = start.map { IdvDates.daysLeft($0) > 0 } ?? false
         let urgent: Bool = !notYet && n >= 0 && n <= 3
+        // 残り1日までは、金の縁と赤い光で目立たせる
+        let lastDay: Bool = !notYet && IdvCountdown.isLastDay(end: end)
         let fill: Color = n < 0 ? IdvInk.line : (urgent ? IdvInk.red : IdvInk.panel)
-        Text(text ?? IdvDates.label(end))
+        let border: Color = lastDay ? IdvInk.gold : (urgent ? IdvInk.redBright : IdvInk.line)
+        Text(text ?? (notYet ? IdvDates.label(end) : IdvCountdown.text(end: end)))
             .font(.system(.subheadline, design: .serif).weight(.bold))
             .foregroundStyle(n < 0 ? IdvInk.sub : IdvInk.sepia)
+            .monospacedDigit()
             .padding(.horizontal, 10).frame(height: 30)
             .background(fill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(urgent ? IdvInk.redBright : IdvInk.line, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(border, lineWidth: lastDay ? 1.5 : 1))
+            .shadow(color: lastDay ? IdvInk.redBright.opacity(0.55) : .clear, radius: 6)
     }
 }
 
@@ -106,18 +111,28 @@ struct IdvHome: View {
     @State private var opening: IdvLink?
     @State private var adding = false
     @State private var editingSeason = false
+    @State private var settings = false
 
     var body: some View {
         let content = VStack(alignment: .leading, spacing: 18) {
             header
-            IdvSeasonCard(season: store.season, overridden: store.seasonOverride.season != nil) { editingSeason = true }
-                .id("season")
+            VStack(alignment: .leading, spacing: 10) {
+                IdvSeasonCard(season: store.season, overridden: store.seasonOverride.season != nil) { editingSeason = true }
+                IdvRankPanel(rank: store.rank, nextMaintenance: store.nextMaintenance, latestOfficial: store.latestOfficial,
+                             fresh: store.fresh(IdvSource.official), open: open)
+            }
+            .id("season")
+            IdvMatchesSection(modes: store.modes, tournaments: store.tournaments, broadcasts: store.broadcasts,
+                              fresh: store.fresh(IdvSource.official), open: open)
+                .id("matches")
             scheduleSection
                 .id("schedule")
             deadlines
                 .id("deadlines")
+            IdvDaigorokuSection(headlines: store.play.headlines, fresh: store.fresh(IdvSource.daigoroku), open: open)
+                .id("daigoroku")
             newsSection
-            Text("お知らせは公式 YouTube チャンネル、公式サイトのアップデート情報、運営のプレスリリース（PR TIMES）から読み込みます。NetEase Games とは関係のない個人のアプリです。")
+            Text("お知らせ・期間・ランクマッチの情報は、公式サイトのアップデート情報、公式 YouTube チャンネル、運営のプレスリリース（PR TIMES）から、アプリの版は App Store から読み込みます。「第五録の新着」はファンの攻略サイト「第五録」の見出しと日付だけを表示しています。NetEase Games・第五録とは関係のない個人のアプリです。")
                 .font(.caption2).foregroundStyle(IdvInk.sub)
         }
         .padding(.horizontal, 16)
@@ -127,7 +142,13 @@ struct IdvHome: View {
 
         ScrollViewReader { proxy in
             ScrollView { content }
-                .onAppear { Self.scrollForShot(proxy) }
+                .onAppear {
+                    Self.scrollForShot(proxy)
+                    // 画面写真用：-idvsettings で設定を開いておく
+                    if ProcessInfo.processInfo.arguments.contains("-idvsettings") {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { settings = true }
+                    }
+                }
         }
             .refreshable { await store.refresh() }
             .background(IdvInk.background.ignoresSafeArea())
@@ -143,10 +164,18 @@ struct IdvHome: View {
             }
             .sheet(isPresented: $adding) { IdvAddSheet() }
             .sheet(isPresented: $editingSeason) { IdvSeasonSheet() }
+            .sheet(isPresented: $settings) { IdvSettingsSheet() }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { settings = true } label: { Image(systemName: "gearshape") }
+                        .foregroundStyle(IdvInk.sepia)
+                        .accessibilityLabel("第五人格の設定")
+                }
+            }
             .task { await store.prepareNotifications() }
     }
 
-    /// 画面写真用：起動引数 -idvscroll schedule|deadlines でその欄まで下げておく
+    /// 画面写真用：起動引数 -idvscroll matches|schedule|deadlines|daigoroku でその欄まで下げておく
     private static func scrollForShot(_ proxy: ScrollViewProxy) {
         let args = ProcessInfo.processInfo.arguments
         guard let i = args.firstIndex(of: "-idvscroll"), i + 1 < args.count else { return }
@@ -165,10 +194,11 @@ struct IdvHome: View {
         let upcoming: [IdvScheduleItem] = items.filter { !$0.isPast() }
         let past: [IdvScheduleItem] = Array(items.filter { $0.isPast() }.prefix(3))
         return VStack(alignment: .leading, spacing: 10) {
-            Text("予定").font(.system(.headline, design: .serif)).foregroundStyle(IdvInk.sepia)
+            IdvBlockTitle(title: "アップデート・メンテナンス", fresh: store.fresh(IdvSource.official))
             if items.isEmpty {
                 Text("メンテナンスやアップデートのお知らせが見つかると、ここに日時を出します。")
                     .font(.footnote).foregroundStyle(IdvInk.sub)
+                IdvCheckOfficial(label: "メンテナンスの予定は公式で確認", link: IdvOfficial.updateListURL?.absoluteString, open: open)
             }
             ForEach(upcoming.prefix(6)) { s in
                 IdvScheduleRow(item: s, past: false) { open(s.link) }
@@ -176,8 +206,10 @@ struct IdvHome: View {
             ForEach(past) { s in
                 IdvScheduleRow(item: s, past: true) { open(s.link) }
             }
-            if upcoming.contains(where: { $0.kind == .maintenance && $0.hasTime }) {
-                Text("メンテナンスの始まる1時間前に通知します").font(.caption2).foregroundStyle(IdvInk.sub)
+            IdvAppVersionRow(app: store.play.app, fresh: store.fresh(IdvSource.app), open: open)
+            if upcoming.contains(where: { $0.kind == .maintenance }) {
+                Text(store.notifyEnabled ? "メンテナンスの前の日の 19:00 に通知します" : "通知は右上の ⚙ でオンにできます")
+                    .font(.caption2).foregroundStyle(IdvInk.sub)
             }
         }
         .padding(16)
@@ -216,7 +248,7 @@ struct IdvHome: View {
         let found: [IdvEvent] = store.suggestions
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("イベント・シーズンの期限").font(.system(.headline, design: .serif)).foregroundStyle(IdvInk.sepia)
+                Text("ガチャ・コラボの期限").font(.system(.headline, design: .serif)).foregroundStyle(IdvInk.sepia)
                 Spacer()
                 Button { adding = true } label: {
                     Label("追加", systemImage: "plus").font(.caption.weight(.bold)).foregroundStyle(IdvInk.sepia)
@@ -226,21 +258,20 @@ struct IdvHome: View {
                 .buttonStyle(.plain)
             }
             if list.isEmpty && found.isEmpty {
-                Text("終わる日を登録すると「あと◯日」を表示し、前日の夜に知らせます。")
+                Text("終わる日を登録すると「あと◯日」「残り1日」を表示します。")
                     .font(.footnote).foregroundStyle(IdvInk.sub)
             }
             ForEach(list) { e in
                 eventRow(e, suggested: false)
             }
             if !found.isEmpty {
-                Text("お知らせから見つけた期間").font(.caption.weight(.bold)).foregroundStyle(IdvInk.sub).padding(.top, 4)
+                Text("公式のお知らせから見つけた期間").font(.caption.weight(.bold)).foregroundStyle(IdvInk.sub).padding(.top, 4)
                 ForEach(found.prefix(6)) { e in
                     eventRow(e, suggested: true)
                 }
             }
-            if !list.isEmpty {
-                Text("終わる日の前日 19:00 に通知します").font(.caption2).foregroundStyle(IdvInk.sub)
-            }
+            Text(store.notifyEnabled ? "ガチャ・コラボと登録した期限は、残り1日（前日の 19:00）に通知します" : "通知は右上の ⚙ でオンにできます")
+                .font(.caption2).foregroundStyle(IdvInk.sub)
         }
         .padding(16)
         .background(IdvInk.panel.opacity(0.85), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -249,14 +280,19 @@ struct IdvHome: View {
 
     private func eventRow(_ e: IdvEvent, suggested: Bool) -> some View {
         let period: String = e.start.map { "\(JP.shortDate($0))〜\(JP.shortDate(e.end))" } ?? "\(JP.date(e.end))まで"
-        let sub: String = suggested ? "\(period)・\(e.label)" : period
+        let notYet: Bool = e.start.map { IdvDates.daysLeft($0) > 0 } ?? false
+        let left: String = notYet ? e.label : IdvCountdown.text(end: e.end)
+        let lastDay: Bool = suggested && !notYet && IdvCountdown.isLastDay(end: e.end)
+        let sub: String = suggested ? "\(period)・\(left)" : period
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if let tag = e.tag { IdvTagChip(text: tag) }
                     Text(e.title).font(.subheadline.weight(.semibold)).foregroundStyle(IdvInk.sepia).lineLimit(2)
                 }
-                Text(sub).font(.caption).foregroundStyle(IdvInk.sub)
+                Text(sub).font(.caption.weight(lastDay ? .bold : .regular))
+                    .foregroundStyle(lastDay ? IdvInk.redBright : IdvInk.sub)
+                    .monospacedDigit()
             }
             Spacer(minLength: 6)
             if suggested {
@@ -270,7 +306,7 @@ struct IdvHome: View {
                 .buttonStyle(.plain)
                 .accessibilityHint("期限に登録して、前日に通知します")
             } else {
-                IdvDaysBadge(end: e.end, start: e.start, text: e.label)
+                IdvDaysBadge(end: e.end, start: e.start, text: notYet ? e.label : nil)
             }
         }
         .padding(.vertical, 4)
@@ -392,7 +428,7 @@ private struct IdvAddSheet: View {
 
 // MARK: - 予定・コラボの小さな部品
 
-private struct IdvTagChip: View {
+struct IdvTagChip: View {
     let text: String
 
     var body: some View {
@@ -499,7 +535,7 @@ struct IdvSeasonCard: View {
 
     private func sourceText(_ s: IdvSeason) -> String {
         if overridden { return "手動で入れた日付を使っています" }
-        let notice: String = s.end != nil ? "・終了の3日前と前日に通知" : ""
+        let notice: String = s.end != nil ? "・終了の3日前に通知できます（⚙）" : ""
         return "出どころ：\(s.source)\(notice)"
     }
 
