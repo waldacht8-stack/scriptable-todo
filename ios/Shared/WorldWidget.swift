@@ -24,11 +24,24 @@ struct WidgetWorldBackground: View {
 
     var body: some View {
         ZStack {
+            // 入れ替えの間に下が透けないよう、色の土台は動かさずに敷いておく
+            LinearGradient(colors: p.background.count > 1 ? p.background : [p.background[0], p.background[0]],
+                           startPoint: .top, endPoint: .bottom)
+            // 背景は 1 分ごとの絵の間をふわっと重ねて入れ替える（雲・星・カーテンなどの細かな動きが跳ばない）
             scenery
+                .id(sceneryKey)
+                .transition(.opacity)
             if WorldMotion.hasCritters(p.world) {
                 WidgetWorldCritters(p: p, date: date, phase: phase)
             }
         }
+        .animation(.smooth(duration: 1.6), value: sceneryKey)
+    }
+
+    /// 背景の描き直しの目印（世界観のあるときだけ 1 分ごとに変わる）
+    private var sceneryKey: Int {
+        guard p.world.isOn, phase == nil else { return 0 }
+        return Int(date.timeIntervalSinceReferenceDate / 60)
     }
 
     @ViewBuilder

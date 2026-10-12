@@ -147,7 +147,10 @@ enum CritterWidgetArt {
         let run: Double = k.progress * 90
         let day: Double = k.day
         return AnyView(ZStack {
+            // カーテンは 1 分ごとに少しずつ形を変え、絵の間はふわっと重ねて入れ替える
             Canvas { c, s in curtains(c, size: s, day: day) }
+                .id(Int(day * 1440))
+                .transition(.opacity)
             fitted(box: CGSize(width: 74, height: 35), origin: CGPoint(x: 42, y: 34), band: band, x: x, maxScale: 0.5) { c in
                 Fantasy.foxRun(c, run: run, rim: sceneColor(0x86FBDD))
             }
@@ -166,7 +169,7 @@ enum CritterWidgetArt {
             let top: Double = h * rnd.range(0.02, 0.16) + Double(i) * h * 0.08
             let amp: Double = rnd.range(6, 14)
             let wave: Double = rnd.range(0.7, 1.8)
-            let phase: Double = rnd.range(0, 6.28)
+            let phase: Double = rnd.range(0, 6.28) + day * 1440 * 0.05
             C.auroraCurtain(ctx, width: w, top: top, amp: amp, thick: h * 0.22, wave: wave,
                             phase: phase, color: sceneColor(colors[i]), alpha: 0.2)
         }

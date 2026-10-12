@@ -52,9 +52,12 @@ struct DayProvider: TimelineProvider {
                 q = q.addingTimeInterval(quarter)
             }
         }
+        // 世界観があれば、はじめの 2 時間を 1 分ごとの絵で埋める（読み直さず、直前の中身を時刻だけ変えて使う）
+        let world: World = AppTheme.current().world
+        times.append(contentsOf: WorldMotion.minuteTimes(from: now, span: min(span, 2 * 3600), world: world))
         let sorted: [Date] = Array(Set(times)).sorted()
         var entries: [DayWidgetEntry] = []
-        for d in sorted.prefix(72) {
+        for d in sorted.prefix(220) {
             if loadTimes.contains(d) || entries.isEmpty {
                 entries.append(DayWidgetEntry.load(at: d, todos: todos))
             } else if let prev = entries.last {
