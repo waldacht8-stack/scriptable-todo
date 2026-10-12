@@ -12,6 +12,7 @@ enum KakeiboStyle {
         "食費": 0xD2643A, "日用品": 0xE39B3C, "交通": 0x4E8C8A, "娯楽": 0x9A6BC9, "ゲーム": 0x5A7FD8,
         "サブスク": 0xC0598A, "住まい": 0x8A735A, "光熱": 0xCBA92E, "通信": 0x3D98D2, "医療": 0x5CA56A,
         "服": 0xD6849A, "交際": 0xB8862B, "その他": 0x9C9384, "収入": 0x3D9A5B,
+        "給料": 0x2F8F57, "買い物": 0xD07A2E, "車・ガソリン": 0x5C6F86,
     ]
     private static let extra: [UInt32] = [0x6E8B3D, 0xB5603F, 0x4A6FA5, 0xA05C7B, 0x7C7A3A, 0x3F8F7F]
 
@@ -89,44 +90,6 @@ struct KakeiboBigYen: View {
     }
 }
 
-/// 予算の残りの棒
-struct KakeiboBudgetBar: View {
-    let summary: KakeiboSummary
-    @Environment(\.palette) private var p
-    @Environment(\.motion) private var motion
-
-    var body: some View {
-        let over = summary.isOver
-        let fill: Color = over ? p.overdue : p.accent
-        VStack(alignment: .leading, spacing: 6) {
-            GeometryReader { geo in
-                let w: CGFloat = geo.size.width * CGFloat(summary.progress)
-                ZStack(alignment: .leading) {
-                    Capsule().fill(p.accent.opacity(0.15))
-                    Capsule().fill(fill).frame(width: max(summary.spent > 0 ? 12 : 0, w))
-                }
-            }
-            .frame(height: 12)
-            .animation(motion.change, value: summary.progress)
-            HStack {
-                Text(over ? "予算を \(KakeiboFormat.yen(-summary.remaining)) 円こえています" : "残り \(KakeiboFormat.yen(summary.remaining)) 円")
-                    .foregroundStyle(over ? p.overdue : p.accent)
-                Spacer(minLength: 8)
-                Text(budgetNote).foregroundStyle(p.sub)
-            }
-            .font(.caption.weight(.bold))
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var budgetNote: String {
-        let base = "予算 \(KakeiboFormat.yen(summary.budget)) 円"
-        return summary.daysLeft > 0 ? base + " ・ あと \(summary.daysLeft) 日" : base
-    }
-}
-
 /// 手順の番号
 struct KakeiboStepNumber: View {
     let n: Int
@@ -139,7 +102,7 @@ struct KakeiboStepNumber: View {
     }
 }
 
-/// 進み具合の棒（取り込み 4 段・Apple Pay 3 段）
+/// 進み具合の棒（取り込み 4 段）
 struct KakeiboProgress: View {
     let labels: [String]
     let current: Int
@@ -233,51 +196,3 @@ struct KakeiboSafariView: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
 }
 
-// MARK: - 目標貯金
-
-struct KakeiboGoalCard: View {
-    let goal: KakeiboSavingsGoal
-    let progress: KakeiboSavings.Progress
-    @Environment(\.palette) private var p
-    @Environment(\.motion) private var motion
-
-    var body: some View {
-        let cal = Calendar.current
-        let y: Int = cal.component(.year, from: goal.deadline)
-        let m: Int = cal.component(.month, from: goal.deadline)
-        let title: String = "\(y)年\(m)月までに \(KakeiboFormat.yen(goal.amount)) 円"
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: progress.reached ? "flag.checkered.circle.fill" : "flag.checkered")
-                    .foregroundStyle(p.accent)
-                Text("目標貯金").font(.subheadline.weight(.bold)).foregroundStyle(p.sub)
-                Spacer(minLength: 4)
-                Text(title).font(.caption.weight(.bold)).foregroundStyle(p.sub).lineLimit(1).minimumScaleFactor(0.8)
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(KakeiboFormat.yen(progress.saved)).font(.title.weight(.heavy)).monospacedDigit().foregroundStyle(p.text)
-                Text("円 残せています").font(.footnote.weight(.bold)).foregroundStyle(p.sub)
-            }
-            GeometryReader { geo in
-                let w: CGFloat = geo.size.width * CGFloat(progress.ratio)
-                ZStack(alignment: .leading) {
-                    Capsule().fill(p.accent.opacity(0.15))
-                    Capsule().fill(p.accent).frame(width: max(progress.ratio > 0 ? 12 : 0, w))
-                }
-            }
-            .frame(height: 12)
-            .animation(motion.change, value: progress.ratio)
-            Text(note).font(.caption.weight(.bold)).foregroundStyle(progress.monthsLeft == 0 && !progress.reached ? p.overdue : p.accent)
-                .lineLimit(2)
-        }
-        .paletteCard(p, padding: 16)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var note: String {
-        if progress.reached { return "目標に届きました" }
-        let rest: String = KakeiboFormat.yen(progress.remaining)
-        if progress.monthsLeft == 0 { return "期限を過ぎました・あと \(rest) 円" }
-        return "あと \(rest) 円・月に \(KakeiboFormat.yen(progress.perMonth)) 円ずつ（あと\(progress.monthsLeft)か月）"
-    }
-}

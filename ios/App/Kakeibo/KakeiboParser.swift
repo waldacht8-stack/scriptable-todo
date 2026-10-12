@@ -18,17 +18,19 @@ struct KakeiboDraft: Identifiable, Hashable {
     var category: String = "その他"
     var include: Bool = true
     var flag: Flag? = nil
+    var salary: Bool = false            // 振り込み元の会社名などで給料と見分けた
 
     enum Flag: String, Hashable {
-        case duplicate      // すでにある
-        case transfer       // カード引落・振替
-        case cardOverlap    // カードの明細と重なる（JCB の引落）
+        case duplicate          // すでにある（同じ取引をほかの明細・前の取り込みで記録済み）
+        case cardSettlement     // 銀行の明細にあるカードの引き落とし（カードの明細で1件ずつ数える）
+        case ownTransfer        // 自分の口座どうしの振替・積立
 
+        /// 外した理由（確認画面の札）
         var label: String {
             switch self {
-            case .duplicate: "重複"
-            case .transfer: "入れない"
-            case .cardOverlap: "カードと重複"
+            case .duplicate: "重複（すでに記録あり）"
+            case .cardSettlement: KakeiboExcludeReason.cardSettlement.label
+            case .ownTransfer: KakeiboExcludeReason.ownTransfer.label
             }
         }
     }

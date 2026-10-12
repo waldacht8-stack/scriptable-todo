@@ -152,32 +152,23 @@ struct SummaryWidgetView: View {
 
     private var kakeiboTile: some View {
         let k: KakeiboFeed = entry.kakeibo
-        let spent: Int = k.spentThisMonth(entry.date)
-        let remaining: Int? = k.remainingThisMonth(entry.date)
-        let used: Double? = k.usedFraction(entry.date)
-        let over: Bool = (remaining ?? 0) < 0
+        let spent: Int = k.spentNow(entry.date)
+        let left: Int = k.leftNow(entry.date)
         return Link(destination: WidgetLinks.kakeibo) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
-                    Text("今月の支出").font(.caption2.weight(.bold)).foregroundStyle(p.sub)
+                    Text(k.title(entry.date)).font(.caption2.weight(.bold)).foregroundStyle(p.sub)
                     if k.isSample { WidgetSampleBadge(color: p.sub) }
                     Spacer(minLength: 0)
                 }
                 WidgetCount(p: p, text: WidgetFeedDay.yenText(spent), value: Double(spent), size: 17)
                     .lineLimit(1).minimumScaleFactor(0.6)
-                if let used, let remaining {
-                    GeometryReader { g in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(p.sub.opacity(0.18))
-                            Capsule().fill(over ? p.overdue : p.accent).frame(width: g.size.width * used)
-                        }
-                    }
-                    .frame(height: 4)
-                    Text(over ? "予算を \(WidgetFeedDay.yenText(-remaining)) 超え" : "残り \(WidgetFeedDay.yenText(remaining))")
-                        .font(.caption2.weight(.semibold)).foregroundStyle(over ? p.overdue : p.sub).lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .contentTransition(.numericText())
-                }
+                Text("残り \(WidgetFeedDay.yenText(left))")
+                    .font(.caption2.weight(.semibold)).foregroundStyle(left < 0 ? p.overdue : p.sub).lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .contentTransition(.numericText())
+                Text(k.paydayText(entry.date)).font(.caption2).foregroundStyle(p.sub).lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Spacer(minLength: 0)
             }
             .padding(10)

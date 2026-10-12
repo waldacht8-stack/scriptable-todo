@@ -1,23 +1,19 @@
 import SwiftUI
 
-/// 家計簿の設定：予算・分類（足す・消す・並べ替え）・分類の決まり（覚えたものも）・列の対応・取り込みの既定
+/// 家計簿の設定：給料日・振り込み元・目標貯金・覚えた分類・取り込みの既定と列の対応
 struct KakeiboSettingsView: View {
     @ObservedObject var store: KakeiboStore
     @Environment(\.palette) private var p
-    @State private var budgetText = ""
-    @State private var newCategory = ""
-    @State private var newKeyword = ""
-    @State private var newRuleCategory = "食費"
-    @FocusState private var budgetFocused: Bool
+    @State private var employerText = ""
+    @FocusState private var employerFocused: Bool
     @State private var goalText = ""
     @FocusState private var goalFocused: Bool
 
     var body: some View {
         List {
-            budgetSection
+            paySection
             goalSection
-            categorySection
-            ruleSection
+            learnedSection
             importSection
         }
         .scrollContentBackground(.hidden)
@@ -25,43 +21,57 @@ struct KakeiboSettingsView: View {
         .navigationTitle("家計簿の設定")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) { EditButton() }
-        }
         .onAppear {
-            budgetText = String(store.settings.budget)
+            employerText = store.settings.employer
             goalText = store.settings.savingsGoal.map { String($0.amount) } ?? ""
         }
     }
 
-    // MARK: 予算
+    // MARK: 給料日・振り込み元
 
-    private var budgetSection: some View {
-        Section {
+    private var paySection: some View {
+        let cycle: KakeiboCycle.Period = store.cycle(offset: 0)
+        return Section {
+            Picker(selection: Binding(get: { store.settings.payday ?? 0 },
+                                      set: { v in store.updateSettings { $0.payday = KakeiboCycle.validDay(v) } })) {
+                Text("決めない（暦の月）").tag(0)
+                ForEach(1...30, id: \.self) { d in Text("\(d)日").tag(d) }
+                Text("月末").tag(31)
+            } label: {
+                Text("給料日").foregroundStyle(p.text)
+            }
+            .tint(p.accent)
+            .listRowBackground(p.card)
             HStack {
-                Text("1か月の予算").foregroundStyle(p.text)
+                Text("振り込み元").foregroundStyle(p.text)
                 Spacer()
-                TextField("50000", text: $budgetText)
-                    .keyboardType(.numberPad)
+                TextField("会社名（例：ミホンショウジ）", text: $employerText)
                     .multilineTextAlignment(.trailing)
-                    .focused($budgetFocused)
-                    .frame(maxWidth: 140)
-                    .onSubmit(saveBudget)
-                Text("円").foregroundStyle(p.sub)
+                    .focused($employerFocused)
+                    .submitLabel(.done)
+                    .onSubmit(saveEmployer)
             }
             .listRowBackground(p.card)
-            .onChange(of: budgetFocused) { _, f in if !f { saveBudget() } }
+            .onChange(of: employerFocused) { _, f in if !f { saveEmployer() } }
+            HStack {
+                Text("いまの周期").foregroundStyle(p.text)
+                Spacer()
+                Text("\(cycle.title) ・ \(cycle.rangeText)").foregroundStyle(p.sub).monospacedDigit()
+            }
+            .listRowBackground(p.card)
         } header: {
-            header("予算")
+            header("給料")
         } footer: {
-            Text("ホームの「残り」とウィジェットに使います。0 にすると予算なし").font(.caption).foregroundStyle(p.sub)
+            Text("家計簿の「1か月」は、給料日から次の給料日の前の日までです（給料日 25 日なら 9/25〜10/24 が「10月分」）。給料日が土日・祝日なら、前の営業日を給料日にします。振り込み元は、明細の収入の行にこの名前があれば「給料」にします。通帳の書き方（カタカナなど）で入れると確実です。「、」で区切ると、いくつも入れられます")
+                .font(.caption).foregroundStyle(p.sub)
         }
     }
 
-    private func saveBudget() {
-        let v = max(0, Int(budgetText.filter(\.isNumber)) ?? store.settings.budget)
-        store.updateSettings { $0.budget = v }
-        budgetText = String(v)
+    private func saveEmployer() {
+        let v = employerText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard v != store.settings.employer else { return }
+        store.updateSettings { $0.employer = v }
+        store.applyEmployer()
     }
 
     // MARK: 目標貯金
@@ -83,7 +93,7 @@ struct KakeiboSettingsView: View {
             .listRowBackground(p.card)
             .onChange(of: goalFocused) { _, f in if !f { saveGoal() } }
             if let goal {
-                DatePicker("期限（この月の末まで）", selection: goalBinding(\.deadline, goal), in: Date.now..., displayedComponents: .date)
+                DatePicker("期限（この月分まで）", selection: goalBinding(\.deadline, goal), in: Date.now..., displayedComponents: .date)
                     .foregroundStyle(p.text)
                     .listRowBackground(p.card)
                 DatePicker("数えはじめ", selection: goalBinding(\.start, goal), in: ...Date.now, displayedComponents: .date)
@@ -98,7 +108,7 @@ struct KakeiboSettingsView: View {
         } header: {
             header("目標貯金")
         } footer: {
-            Text("数えはじめの月から、毎月の「収入 − 支出」を積み上げます。収入は明細の取り込みか手入力で記録してください")
+            Text("数えはじめの日を含む周期から、周期ごとの「収入 − 支出」を積み上げます。ホームに、月にいくら残せばよいかと、今の周期が目標どおりかを出します")
                 .font(.caption).foregroundStyle(p.sub)
         }
     }
@@ -116,122 +126,44 @@ struct KakeiboSettingsView: View {
             goalText = store.settings.savingsGoal.map { String($0.amount) } ?? ""
             return
         }
+        let cycle: KakeiboCycle.Period = store.cycle(offset: 0)
         store.updateSettings { s in
             if s.savingsGoal != nil {
                 s.savingsGoal?.amount = v
             } else {
-                // はじめて決めたとき：期限は半年後の月、数えはじめは今月
-                let deadline: Date = KakeiboMonth.start(.now, offset: 6)
-                s.savingsGoal = KakeiboSavingsGoal(amount: v, deadline: deadline, start: KakeiboMonth.start(.now))
+                // はじめて決めたとき：期限は半年後の月分、数えはじめは今の周期
+                let deadline: Date = KakeiboMonth.start(cycle.label, offset: 6)
+                s.savingsGoal = KakeiboSavingsGoal(amount: v, deadline: deadline, start: cycle.start)
             }
         }
         goalText = String(v)
     }
 
-    // MARK: 分類
+    // MARK: 覚えた分類（記録の分類を直したもの）
 
-    private var categorySection: some View {
+    @ViewBuilder private var learnedSection: some View {
+        let rules: [KakeiboRule] = store.settings.rules
         Section {
-            ForEach(store.settings.categories, id: \.self) { c in
-                HStack(spacing: 10) {
-                    Circle().fill(KakeiboStyle.color(c)).frame(width: 10, height: 10)
-                    Text(c).foregroundStyle(p.text)
-                }
-                .listRowBackground(p.card)
+            if rules.isEmpty {
+                Text("まだありません").foregroundStyle(p.sub).listRowBackground(p.card)
             }
-            .onDelete { idx in
-                store.updateSettings { s in
-                    let keep = s.categories.count - idx.count >= 1
-                    if keep { s.categories.remove(atOffsets: idx) }
-                }
-            }
-            .onMove { from, to in store.updateSettings { $0.categories.move(fromOffsets: from, toOffset: to) } }
-            HStack {
-                TextField("分類を足す（例：ペット）", text: $newCategory).foregroundStyle(p.text)
-                Button("足す") { addCategory() }
-                    .disabled(newCategory.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .listRowBackground(p.card)
-        } header: {
-            header("分類")
-        } footer: {
-            Text("右上の「編集」で並べ替え・削除。消した分類の記録はそのまま残ります").font(.caption).foregroundStyle(p.sub)
-        }
-    }
-
-    private func addCategory() {
-        let name = newCategory.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty, !store.settings.categories.contains(name) else { return }
-        store.updateSettings { s in
-            let at = s.categories.firstIndex(of: "その他") ?? s.categories.count
-            s.categories.insert(name, at: at)
-        }
-        newCategory = ""
-    }
-
-    // MARK: 決まり
-
-    private var ruleSection: some View {
-        Section {
-            ForEach(store.settings.rules) { r in
+            ForEach(rules) { r in
                 HStack(spacing: 8) {
-                    if r.learned {
-                        Image(systemName: "sparkles").font(.caption).foregroundStyle(p.accent)
-                            .accessibilityLabel("覚えた決まり")
-                    }
+                    Image(systemName: "sparkles").font(.caption).foregroundStyle(p.accent)
                     Text(r.keyword).foregroundStyle(p.text).lineLimit(1)
                     Spacer()
-                    Menu {
-                        ForEach(store.settings.categories, id: \.self) { c in
-                            Button(c) { setRule(r.id, category: c) }
-                        }
-                    } label: {
-                        HStack(spacing: 3) {
-                            Text(r.category)
-                            Image(systemName: "chevron.up.chevron.down").font(.caption2)
-                        }
-                        .font(.subheadline.weight(.bold)).foregroundStyle(p.accent)
-                    }
+                    Circle().fill(KakeiboStyle.color(r.category)).frame(width: 8, height: 8)
+                    Text(r.category).font(.subheadline.weight(.bold)).foregroundStyle(p.text)
                 }
                 .listRowBackground(p.card)
             }
             .onDelete { idx in store.updateSettings { $0.rules.remove(atOffsets: idx) } }
-            .onMove { from, to in store.updateSettings { $0.rules.move(fromOffsets: from, toOffset: to) } }
-            HStack {
-                TextField("言葉（例：ベーカリー）", text: $newKeyword).foregroundStyle(p.text)
-                Picker("分類", selection: $newRuleCategory) {
-                    ForEach(store.settings.categories, id: \.self) { Text($0).tag($0) }
-                }
-                .labelsHidden()
-                Button("足す") { addRule() }
-                    .disabled(newKeyword.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .listRowBackground(p.card)
-            Button("決まりを最初の状態に戻す") {
-                store.updateSettings { $0.rules = KakeiboRule.defaults }
-            }
-            .foregroundStyle(p.overdue)
-            .listRowBackground(p.card)
         } header: {
-            header("分類の決まり")
+            header("覚えた分類")
         } footer: {
-            Text("摘要やお店の名前にこの言葉が入っていたら、その分類にします。上にあるものが先。取り込みの確認で分類を直すと、ここに覚えます（✦の印）")
+            Text("分類は取引先の名前から自動で決めます（ETC は交通、ENEOS は車・ガソリン、Amazon は買い物 など）。合わなければ記録をタップして直すと、ここに覚えて次から使います。左へ払うと忘れます")
                 .font(.caption).foregroundStyle(p.sub)
         }
-    }
-
-    private func setRule(_ id: String, category: String) {
-        store.updateSettings { s in
-            if let i = s.rules.firstIndex(where: { $0.id == id }) { s.rules[i].category = category }
-        }
-    }
-
-    private func addRule() {
-        let k = newKeyword.trimmingCharacters(in: .whitespaces)
-        guard !k.isEmpty else { return }
-        let c = newRuleCategory
-        store.updateSettings { $0.rules.insert(KakeiboRule(keyword: k, category: c, learned: true), at: 0) }
-        newKeyword = ""
     }
 
     // MARK: 取り込み
@@ -240,7 +172,7 @@ struct KakeiboSettingsView: View {
         Section {
             Toggle(isOn: Binding(get: { store.settings.excludeTransfers },
                                  set: { v in store.updateSettings { $0.excludeTransfers = v } })) {
-                Text("カード引落・振替を入れない").foregroundStyle(p.text)
+                Text("カードの引き落とし・振替を合計に入れない").foregroundStyle(p.text)
             }
             .tint(p.accent)
             .listRowBackground(p.card)
@@ -257,13 +189,11 @@ struct KakeiboSettingsView: View {
                 }
                 .listRowBackground(p.card)
             }
-            Button("テストの記録（Apple Pay）を消す") { store.deleteTests() }
-                .foregroundStyle(p.overdue)
-                .listRowBackground(p.card)
         } header: {
             header("取り込み")
         } footer: {
-            Text("JCB の明細を取り込むと、銀行の明細にある JCB の引落は合計から外します（2回数えないため）").font(.caption).foregroundStyle(p.sub)
+            Text("銀行の明細にあるカードの引き落とし（十六カード・JCB・ニコス など）は、カードの明細で1件ずつ数えるので合計に入れません。同じ取引がほかの明細や前の取り込みにあれば、1件だけ残します")
+                .font(.caption).foregroundStyle(p.sub)
         }
     }
 

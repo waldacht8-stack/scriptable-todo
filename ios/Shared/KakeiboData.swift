@@ -1,9 +1,10 @@
 import Foundation
 import WidgetKit
 
-// 家計簿のデータ（アプリ・ウィジェット・ショートカットの App Intent が同じファイルを読み書きする）。
+// 家計簿のデータ（アプリとウィジェットが同じファイルを読み書きする）。
 // ファイルは App Group の共有フォルダに kakeibo-entries.json / kakeibo-settings.json として置く。
 // 書き込みは SharedStore.url へ直接（SharedStore.save は使わない）。
+// 「月」は給料の周期（KakeiboCycle.swift）。給料日を決めていなければ暦の月。
 
 // MARK: - 記録
 
@@ -13,7 +14,7 @@ enum KakeiboKind: String, Codable, CaseIterable, Identifiable {
     var name: String { self == .expense ? "支出" : "収入" }
 }
 
-/// 記録の出どころ
+/// 記録の出どころ（applePay は前の版の自動記録。記録はそのまま残す）
 enum KakeiboSource: String, Codable, CaseIterable {
     case bankCSV, bankPDF, cardCSV, cardPDF, applePay, manual
 
@@ -40,6 +41,19 @@ enum KakeiboInstitution: String, Codable, CaseIterable, Identifiable {
     var isCard: Bool { self == .jcb }
 }
 
+/// 合計に入れない理由
+enum KakeiboExcludeReason: String, Codable, Hashable {
+    case cardSettlement     // 銀行の明細にあるカードの引き落とし（カードの明細で1件ずつ数える）
+    case ownTransfer        // 自分の口座どうしの振替・積立
+
+    var label: String {
+        switch self {
+        case .cardSettlement: "カードの引き落とし（明細で計上）"
+        case .ownTransfer: "口座間の振替（合計に入れない）"
+        }
+    }
+}
+
 struct KakeiboEntry: Codable, Identifiable, Hashable {
     var id: String = UUID().uuidString
     var date: Date
@@ -49,20 +63,30 @@ struct KakeiboEntry: Codable, Identifiable, Hashable {
     var memo: String                    // お店・摘要・メモ
     var source: KakeiboSource
     var institution: String? = nil      // KakeiboInstitution.rawValue（明細から取り込んだとき）
-    var card: String? = nil             // Apple Pay のカード名
+    var card: String? = nil             // 前の版の Apple Pay のカード名
     var dedupeKey: String
     var batch: String? = nil            // 取り込みの単位（「今回の取り込みを取り消す」に使う）
-    var excluded: Bool? = nil           // 合計に入れない（カードの明細と重なる銀行の引落など）
-    var needsAmount: Bool? = nil        // 金額が届かなかった（Apple Pay の iD・QUICPay など）
-    var isTest: Bool? = nil             // 「テストで1件送る」で入れた1件
+    var excluded: Bool? = nil           // 合計に入れない（カードの引き落とし・口座間の振替）
+    var excludeReason: KakeiboExcludeReason? = nil
+    var needsAmount: Bool? = nil        // 金額が届かなかった（前の版の Apple Pay の iD・QUICPay など）
+    var isTest: Bool? = nil             // 前の版の「テストで1件送る」で入れた1件
+    var salary: Bool? = nil             // 給料（振り込み元の会社名などで見つけた）
+    var categoryFixed: Bool? = nil      // 分類を手で直した（自動の分類で上書きしない）
     var createdAt: Date = .now
 
     var signed: Int { kind == .expense ? -amount : amount }
     var isExcluded: Bool { excluded ?? false }
     var isPending: Bool { needsAmount ?? false }
-    var counts: Bool { !isExcluded && !isPending }
+    var isSalary: Bool { salary ?? false }
+    var counts: Bool { !isExcluded && !isPending && isTest != true }
 
     var institutionValue: KakeiboInstitution? { institution.flatMap(KakeiboInstitution.init(rawValue:)) }
+
+    /// 合計に入れない理由の文（前の版で外した JCB の引落は「カードの引き落とし」）
+    var excludeLabel: String? {
+        guard isExcluded else { return nil }
+        return (excludeReason ?? .cardSettlement).label
+    }
 
     /// 一覧の小さな札に出す名前（十六銀行 / JCB / MUFG / Apple Pay / 手入力）
     var sourceTag: String {
@@ -76,33 +100,14 @@ struct KakeiboEntry: Codable, Identifiable, Hashable {
     }
 }
 
-// MARK: - 設定（分類・予算・分類の決まり・列の対応）
+// MARK: - 設定（給料日・振り込み元・覚えた分類・列の対応・目標貯金）
 
-/// 分類の決まり：摘要やお店の名前に keyword が入っていれば category にする
+/// 分類の決まり：摘要やお店の名前に keyword が入っていれば category にする（記録の分類を直したときに覚える）
 struct KakeiboRule: Codable, Hashable, Identifiable {
     var id: String = UUID().uuidString
     var keyword: String
     var category: String
-    var learned: Bool = false           // 確認画面で直した内容から覚えたもの
-
-    static let defaults: [KakeiboRule] = {
-        let table: [(String, [String])] = [
-            ("食費", ["スーパー", "コンビニ", "セブン", "ローソン", "ファミリーマート", "ファミマ", "イオン", "バロー", "ベーカリー", "弁当", "マクドナルド", "スターバックス", "食堂", "レストラン", "カフェ"]),
-            ("日用品", ["ドラッグ", "薬局", "ダイソー", "セリア", "無印", "ホームセンター", "カインズ", "ニトリ"]),
-            ("交通", ["JR", "鉄道", "名鉄", "バス", "タクシー", "SUICA", "PASMO", "TOICA", "MANACA", "ENEOS", "出光", "ガソリン", "駐車", "高速"]),
-            ("サブスク", ["NETFLIX", "SPOTIFY", "APPLE.COM", "APPLE COM", "YOUTUBE", "PRIME", "DISNEY", "ICLOUD", "U-NEXT"]),
-            ("ゲーム", ["STEAM", "NINTENDO", "任天堂", "PLAYSTATION", "ゲーム"]),
-            ("娯楽", ["映画", "シネマ", "カラオケ", "書店", "本屋", "チケット"]),
-            ("住まい", ["家賃", "管理費", "不動産"]),
-            ("光熱", ["電気", "電力", "ガス", "水道", "デンキ", "スイドウ"]),
-            ("通信", ["携帯", "ドコモ", "DOCOMO", "SOFTBANK", "ソフトバンク", "楽天モバイル", "KDDI", "NTT", "プロバイダ"]),
-            ("医療", ["病院", "クリニック", "医院", "歯科", "調剤"]),
-            ("服", ["ユニクロ", "UNIQLO", "しまむら", "ZARA", "靴"]),
-            ("交際", ["プレゼント", "居酒屋", "ギフト"]),
-            ("収入", ["給与", "給料", "賞与", "利息", "キュウヨ"]),
-        ]
-        return table.flatMap { cat, words in words.map { KakeiboRule(keyword: $0, category: cat) } }
-    }()
+    var learned: Bool = true            // 直した内容から覚えたもの（前の版の組みこみの決まりは false。読むときに捨てる）
 }
 
 /// CSV の列の対応（見出しの名前で覚える。列の順序に頼らない）
@@ -123,15 +128,13 @@ struct KakeiboColumnMapping: Codable, Hashable {
     }
 }
 
+/// 家計簿の設定。前の版の「予算」「分類の一覧」「Apple Pay」は読み捨てる（ファイルに残っていても使わない）
 struct KakeiboSettings: Codable {
-    static let defaultCategories = ["食費", "日用品", "交通", "娯楽", "ゲーム", "サブスク", "住まい", "光熱", "通信", "医療", "服", "交際", "その他", "収入"]
-
-    var categories: [String] = KakeiboSettings.defaultCategories
-    var budget: Int = 50_000            // 1か月の予算（円）
-    var rules: [KakeiboRule] = KakeiboRule.defaults
+    var payday: Int? = nil              // 給料日（1〜31。31 は月末）。nil は暦の月で数える
+    var employer: String = ""           // 振り込み元（会社名）。明細の収入の行と比べて給料を見つける
+    var rules: [KakeiboRule] = []       // 覚えた分類（新しいものが先）
     var mappings: [String: KakeiboColumnMapping] = [:]   // 銀行・カードごとの列の対応
-    var excludeTransfers: Bool = true   // カード引落・振替を入れない
-    var applePayTested: Bool = false    // テストの1件が届いたことがある
+    var excludeTransfers: Bool = true   // カードの引き落とし・口座間の振替を合計に入れない
     var savingsGoal: KakeiboSavingsGoal? = nil   // 目標貯金（期限つきの総額）
 
     init() {}
@@ -139,17 +142,24 @@ struct KakeiboSettings: Codable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = KakeiboSettings()
-        categories = (try? c.decodeIfPresent([String].self, forKey: .categories)) ?? d.categories
-        budget = (try? c.decodeIfPresent(Int.self, forKey: .budget)) ?? d.budget
-        rules = (try? c.decodeIfPresent([KakeiboRule].self, forKey: .rules)) ?? d.rules
-        mappings = (try? c.decodeIfPresent([String: KakeiboColumnMapping].self, forKey: .mappings)) ?? d.mappings
-        excludeTransfers = (try? c.decodeIfPresent(Bool.self, forKey: .excludeTransfers)) ?? d.excludeTransfers
-        applePayTested = (try? c.decodeIfPresent(Bool.self, forKey: .applePayTested)) ?? d.applePayTested
-        savingsGoal = try? c.decodeIfPresent(KakeiboSavingsGoal.self, forKey: .savingsGoal)
+        let day: Int? = (try? c.decodeIfPresent(Int.self, forKey: .payday)) ?? nil
+        payday = KakeiboCycle.validDay(day)
+        employer = ((try? c.decodeIfPresent(String.self, forKey: .employer)) ?? nil) ?? d.employer
+        // 前の版の組みこみの決まり（learned でないもの）は辞書に移ったので捨てる
+        let saved: [KakeiboRule] = ((try? c.decodeIfPresent([KakeiboRule].self, forKey: .rules)) ?? nil) ?? d.rules
+        rules = saved.filter(\.learned)
+        mappings = ((try? c.decodeIfPresent([String: KakeiboColumnMapping].self, forKey: .mappings)) ?? nil) ?? d.mappings
+        excludeTransfers = ((try? c.decodeIfPresent(Bool.self, forKey: .excludeTransfers)) ?? nil) ?? d.excludeTransfers
+        savingsGoal = (try? c.decodeIfPresent(KakeiboSavingsGoal.self, forKey: .savingsGoal)) ?? nil
     }
 
     enum CodingKeys: String, CodingKey {
-        case categories, budget, rules, mappings, excludeTransfers, applePayTested, savingsGoal
+        case payday, employer, rules, mappings, excludeTransfers, savingsGoal
+    }
+
+    /// d を含む周期（offset で前後へ）
+    func cycle(_ d: Date = .now, offset: Int = 0) -> KakeiboCycle.Period {
+        KakeiboCycle.period(containing: d, payday: payday, offset: offset)
     }
 }
 
@@ -179,23 +189,23 @@ enum KakeiboData {
 
     static func saveEntries(_ list: [KakeiboEntry]) {
         write(list.sorted { $0.date > $1.date }, entriesFile)
-        writeSummary(entries: list, budget: settings().budget)
+        writeSummary(entries: list, settings: settings())
     }
 
     static func settings() -> KakeiboSettings { read(KakeiboSettings.self, settingsFile) ?? KakeiboSettings() }
 
     static func saveSettings(_ s: KakeiboSettings) {
         write(s, settingsFile)
-        writeSummary(entries: entries(), budget: s.budget)
+        writeSummary(entries: entries(), settings: s)
     }
 
-    /// ウィジェット用の今月のまとめ（kakeibo-summary.json）を書き、ウィジェットを更新する
-    static func writeSummary(entries list: [KakeiboEntry], budget: Int, now: Date = .now) {
-        write(KakeiboSummary.make(entries: list, budget: budget, month: now, now: now), KakeiboSummary.file)
+    /// ウィジェット用のいまの周期のまとめ（kakeibo-summary.json）を書き、ウィジェットを更新する
+    static func writeSummary(entries list: [KakeiboEntry], settings s: KakeiboSettings, now: Date = .now) {
+        write(KakeiboSummary.make(entries: list, cycle: s.cycle(now), payday: s.payday, now: now), KakeiboSummary.file)
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    /// 読んで、変えて、書く（アプリとショートカットが同時に書いても、直前の中身から変える）
+    /// 読んで、変えて、書く（直前の中身から変える）
     @discardableResult
     static func update<R>(_ change: (inout [KakeiboEntry]) -> R) -> R {
         var list = entries()
@@ -208,12 +218,21 @@ enum KakeiboData {
 // MARK: - 文字の比べ方・分類・重複
 
 enum KakeiboText {
-    /// 比べるための形：全角英数・半角カナをそろえ、ひらがなはカタカナに、大文字に、空白や記号・長音を取る
+    private static let smallKana: [Character: Character] = [
+        "ァ": "ア", "ィ": "イ", "ゥ": "ウ", "ェ": "エ", "ォ": "オ", "ャ": "ヤ", "ュ": "ユ", "ョ": "ヨ", "ッ": "ツ", "ヮ": "ワ", "ヵ": "カ", "ヶ": "ケ",
+    ]
+
+    /// 比べるための形：全角英数・半角カナをそろえ、ひらがなはカタカナに、小さい字は大きく、大文字に、空白や記号・長音を取る
+    /// （銀行の半角カナは小さい字を使えないので「ｼﾞｴｰｼｰﾋﾞｰ」と「ジェーシービー」を同じにする）
     static func normalize(_ s: String) -> String {
         let nfkc = s.precomposedStringWithCompatibilityMapping
         let kata = nfkc.applyingTransform(.hiraganaToKatakana, reverse: false) ?? nfkc
-        let drop: Set<Character> = [" ", "　", "-", "ー", "‐", "−", "・", ".", ",", "(", ")", "（", "）", "/", "*", "＊", "_", "'", "\""]
-        return String(kata.uppercased().filter { !drop.contains($0) })
+        let drop: Set<Character> = [" ", "　", "-", "ー", "‐", "−", "・", ".", ",", "(", ")", "（", "）", "/", "*", "＊", "_", "'", "\"", "!"]
+        let chars: [Character] = kata.uppercased().compactMap { ch -> Character? in
+            if drop.contains(ch) { return nil }
+            return smallKana[ch] ?? ch
+        }
+        return String(chars)
     }
 
     /// だいたい同じ文字か（片方が空、どちらかがどちらかを含む、先頭4文字が同じ）
@@ -230,17 +249,18 @@ enum KakeiboText {
         return words.contains { n.contains(normalize($0)) }
     }
 
-    /// カードの引落・口座の振替らしい行（2回数えないため既定で入れない）
+    /// カードの引き落とし・口座の振替らしい行（2回数えないため既定で入れない）
     static func isTransferLike(_ s: String) -> Bool {
-        containsAny(s, ["振替", "フリカエ", "引落", "ヒキオトシ", "カード", "クレジット", "JCB", "ジェーシービー", "ジエーシービー", "UFJニコス", "セゾン"])
+        if KakeiboMerchants.isCardSettlement(s) || KakeiboMerchants.isOwnTransfer(s) { return true }
+        return containsAny(s, ["引落", "ヒキオトシ", "カード"]) && !containsAny(s, ["口座振替", "コウザフリカエ"])
     }
 
-    /// JCB の引落らしい行（JCB の明細を取り込むと、銀行側のこの行は合計から外す）
+    /// JCB の引落らしい行
     static func isJCBWithdrawal(_ s: String) -> Bool {
         containsAny(s, ["JCB", "ジェーシービー", "ジエーシービー"])
     }
 
-    /// 決まりの言葉にする（確認画面で分類を直したときに覚える）。数字や記号を除いた先頭 12 文字
+    /// 決まりの言葉にする（分類を直したときに覚える）。数字や記号を除いた先頭 12 文字
     static func ruleKeyword(_ s: String) -> String {
         let nfkc = s.precomposedStringWithCompatibilityMapping.trimmingCharacters(in: .whitespacesAndNewlines)
         let first = nfkc.split(whereSeparator: { $0 == " " || $0 == "　" }).first.map(String.init) ?? nfkc
@@ -250,21 +270,39 @@ enum KakeiboText {
 }
 
 enum KakeiboRules {
-    /// 摘要・お店の名前から分類の候補を決める（覚えた決まりが先、収入は「収入」）
-    static func suggest(_ text: String, kind: KakeiboKind, settings: KakeiboSettings) -> String {
+    struct Result: Hashable {
+        var category: String
+        var salary: Bool
+    }
+
+    /// 摘要・お店の名前から分類を決める。
+    /// 収入：振り込み元の会社名 → 覚えた分類 → 給料らしい言葉 → 「収入」。
+    /// 支出：覚えた分類 → 組みこみの辞書 → 「その他」
+    static func classify(_ text: String, kind: KakeiboKind, settings: KakeiboSettings) -> Result {
         let n = KakeiboText.normalize(text)
-        let ordered = settings.rules.filter(\.learned) + settings.rules.filter { !$0.learned }
+        if kind == .income && KakeiboMerchants.isFromEmployer(text, employer: settings.employer) {
+            return Result(category: KakeiboCategories.salary, salary: true)
+        }
         if !n.isEmpty {
-            for r in ordered {
+            for r in settings.rules where r.learned {
                 let k = KakeiboText.normalize(r.keyword)
                 guard !k.isEmpty, n.contains(k) else { continue }
-                if kind == .income && r.category != "収入" { continue }
-                if kind == .expense && r.category == "収入" { continue }
-                if settings.categories.contains(r.category) { return r.category }
+                let isIncome: Bool = KakeiboCategories.isIncomeCategory(r.category)
+                if (kind == .income) != isIncome { continue }
+                return Result(category: r.category, salary: r.category == KakeiboCategories.salary)
             }
         }
-        if kind == .income { return settings.categories.contains("収入") ? "収入" : (settings.categories.last ?? "収入") }
-        return settings.categories.contains("その他") ? "その他" : (settings.categories.first ?? "その他")
+        if kind == .income {
+            let words: [String] = KakeiboMerchants.salaryWords.map(KakeiboText.normalize)
+            if words.contains(where: { n.contains($0) }) { return Result(category: KakeiboCategories.salary, salary: true) }
+            return Result(category: KakeiboCategories.income, salary: false)
+        }
+        return Result(category: KakeiboMerchants.category(text) ?? KakeiboCategories.other, salary: false)
+    }
+
+    /// 分類だけ
+    static func suggest(_ text: String, kind: KakeiboKind, settings: KakeiboSettings) -> String {
+        classify(text, kind: kind, settings: settings).category
     }
 
     /// 直した分類を覚える（同じ言葉の決まりがあれば上書き、なければ先頭に足す）
@@ -279,6 +317,14 @@ enum KakeiboRules {
         } else {
             s.rules.insert(KakeiboRule(keyword: key, category: category, learned: true), at: 0)
         }
+    }
+
+    /// 銀行の明細の行が、合計に入れない行か（カードの明細の行は見ない）
+    static func excludeReason(_ text: String, kind: KakeiboKind, isCard: Bool) -> KakeiboExcludeReason? {
+        guard !isCard else { return nil }
+        if kind == .expense && KakeiboMerchants.isCardSettlement(text) { return .cardSettlement }
+        if KakeiboMerchants.isOwnTransfer(text) { return .ownTransfer }
+        return nil
     }
 }
 
@@ -297,22 +343,30 @@ enum KakeiboDedupe {
         "\(dayFormat.string(from: date))|\(kind == .expense ? "e" : "i")|\(amount)|\(KakeiboText.normalize(text).prefix(12))"
     }
 
-    /// すでにある記録と重なるか：同じ日（Apple Pay とは前後1日）・同じ金額・似た文字
-    static func isDuplicate(date: Date, amount: Int, kind: KakeiboKind, text: String, in list: [KakeiboEntry], fromFile: Bool = true) -> Bool {
+    /// すでにある記録と重なる1件（なければ nil）：同じ金額・似た文字で、日付が前後1日まで。
+    /// 同じ銀行・カードの明細どうしは同じ日だけ（2回取り込んだ明細は日付も同じ。翌日の同じ買い物は別の1件）
+    static func match(date: Date, amount: Int, kind: KakeiboKind, text: String, institution: String? = nil,
+                      in list: [KakeiboEntry], fromFile: Bool = true) -> KakeiboEntry? {
         let cal = Calendar.current
         let day = cal.startOfDay(for: date)
-        return list.contains { e in
+        return list.first { e in
             guard e.amount == amount, e.kind == kind, e.isTest != true else { return false }
             let other = cal.startOfDay(for: e.date)
-            let gap = abs(cal.dateComponents([.day], from: day, to: other).day ?? 99)
-            let allowed = (fromFile && e.source == .applePay) ? 1 : 0
+            let gap: Int = abs(cal.dateComponents([.day], from: day, to: other).day ?? 99)
+            let sameStatement: Bool = institution != nil && e.institution == institution && e.source.isFile
+            let allowed: Int = fromFile && !sameStatement ? 1 : 0
             guard gap <= allowed else { return false }
             return KakeiboText.similar(text, e.memo)
         }
     }
+
+    static func isDuplicate(date: Date, amount: Int, kind: KakeiboKind, text: String, institution: String? = nil,
+                            in list: [KakeiboEntry], fromFile: Bool = true) -> Bool {
+        match(date: date, amount: amount, kind: kind, text: text, institution: institution, in: list, fromFile: fromFile) != nil
+    }
 }
 
-// MARK: - 月
+// MARK: - 暦の月（目標の期限の選び方などに使う）
 
 enum KakeiboMonth {
     static func start(_ d: Date, offset: Int = 0) -> Date {
@@ -326,81 +380,91 @@ enum KakeiboMonth {
     }
 }
 
-// MARK: - ウィジェット向けの読み出し用（今月の支出・予算・残り）
+// MARK: - 周期のまとめ（ホーム・ウィジェット）
 
-/// 家計簿の今月のまとめ。ウィジェットは共有フォルダの kakeibo-summary.json を読むだけにする。
+/// 家計簿の周期のまとめ。ウィジェットは共有フォルダの kakeibo-summary.json を読むだけにする。
 /// ファイルの形（名前は固定）：
-/// { "month": "2026-10", "spent": 12345, "budget": 50000, "remaining": 37655,
+/// { "month": "2026-10", "spent": 12345, "income": 210000,
+///   "cycleStart": "2026-09-25", "cycleEnd": "2026-10-22", "payday": 25,
 ///   "topCategories": [ { "name": "食費", "amount": 4938 }, … 最大3つ ] }
-/// budget・remaining は予算なし（0）のとき null。アプリの中だけで使う項目（収入・残り日数など）はファイルに書かない
+/// month は周期の呼び名の月（「10月分」）。cycleEnd は周期の最後の日（含む）。payday は給料日なしなら null
 struct KakeiboSummary: Codable, Hashable {
     static let file = "kakeibo-summary.json"
 
-    var month: Date             // 月の初日
-    var spent: Int              // その月の支出（円、プラス）
-    var income: Int = 0         // その月の収入（円。ファイルには書かない）
-    var budget: Int             // 1か月の予算（円。0 は予算なし）
-    var daysLeft: Int = 0       // 月末まであと何日（今日を含む。ファイルには書かない）
+    var cycle: KakeiboCycle.Period
+    var spent: Int              // その周期の支出（円、プラス）
+    var income: Int             // その周期の収入
+    var payday: Int?            // 給料日（ファイルに書く。ウィジェットが「あと何日」を出す）
+    var daysToPayday: Int? = nil    // 次の給料日まであと何日（いまの周期のときだけ。ファイルには書かない）
     var pendingCount: Int = 0   // 金額の入力待ち（ファイルには書かない）
-    var topCategories: [Slice]  // 支出の多い分類（多い順、最大3つ）
+    var categories: [Slice]     // 支出の分類（多い順。ファイルには上位3つ）
 
     struct Slice: Codable, Hashable {
         var name: String
         var amount: Int
     }
 
-    var remaining: Int { budget - spent }
-    /// 予算に対して使った割合（0〜1。予算なしは 0）
-    var progress: Double { budget > 0 ? min(1, Double(spent) / Double(budget)) : 0 }
-    var isOver: Bool { budget > 0 && spent > budget }
+    /// 残り（収入 − 支出）
+    var left: Int { income - spent }
+    var topCategories: [Slice] { Array(categories.prefix(3)) }
 
-    init(month: Date, spent: Int, income: Int = 0, budget: Int, daysLeft: Int = 0, pendingCount: Int = 0, topCategories: [Slice]) {
-        self.month = month
+    init(cycle: KakeiboCycle.Period, spent: Int, income: Int, payday: Int?, daysToPayday: Int? = nil,
+         pendingCount: Int = 0, categories: [Slice]) {
+        self.cycle = cycle
         self.spent = spent
         self.income = income
-        self.budget = budget
-        self.daysLeft = daysLeft
+        self.payday = payday
+        self.daysToPayday = daysToPayday
         self.pendingCount = pendingCount
-        self.topCategories = topCategories
+        self.categories = categories
     }
 
-    // MARK: ファイルの形（yyyy-MM の月、予算なしは null）
+    // MARK: ファイルの形
 
     enum CodingKeys: String, CodingKey {
-        case month, spent, budget, remaining, topCategories
+        case month, spent, income, cycleStart, cycleEnd, payday, topCategories
     }
 
-    private static let monthFormat: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM"
-        return f
-    }()
+    private static func formatter(_ f: String) -> DateFormatter {
+        let d = DateFormatter()
+        d.calendar = Calendar(identifier: .gregorian)
+        d.locale = Locale(identifier: "en_US_POSIX")
+        d.timeZone = TimeZone.current
+        d.dateFormat = f
+        return d
+    }
+
+    private static let monthFormat: DateFormatter = formatter("yyyy-MM")
+    private static let dayFormat: DateFormatter = formatter("yyyy-MM-dd")
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(Self.monthFormat.string(from: month), forKey: .month)
+        try c.encode(Self.monthFormat.string(from: cycle.label), forKey: .month)
         try c.encode(spent, forKey: .spent)
-        let b: Int? = budget > 0 ? budget : nil
-        try c.encode(b, forKey: .budget)
-        let r: Int? = budget > 0 ? remaining : nil
-        try c.encode(r, forKey: .remaining)
-        try c.encode(Array(topCategories.prefix(3)), forKey: .topCategories)
+        try c.encode(income, forKey: .income)
+        try c.encode(Self.dayFormat.string(from: cycle.start), forKey: .cycleStart)
+        try c.encode(Self.dayFormat.string(from: cycle.lastDay), forKey: .cycleEnd)
+        try c.encode(payday, forKey: .payday)
+        try c.encode(topCategories, forKey: .topCategories)
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        let m = try c.decode(String.self, forKey: .month)
-        month = Self.monthFormat.date(from: m) ?? KakeiboMonth.start(.now)
+        let cal = Calendar.current
+        let m: String = try c.decode(String.self, forKey: .month)
+        let label: Date = Self.monthFormat.date(from: m) ?? KakeiboMonth.start(.now)
+        let day: Int? = try c.decodeIfPresent(Int.self, forKey: .payday)
+        payday = KakeiboCycle.validDay(day)
+        let fallback: KakeiboCycle.Period = KakeiboCycle.period(label: label, payday: payday)
+        let startText: String? = try c.decodeIfPresent(String.self, forKey: .cycleStart)
+        let lastText: String? = try c.decodeIfPresent(String.self, forKey: .cycleEnd)
+        let start: Date = startText.flatMap { Self.dayFormat.date(from: $0) } ?? fallback.start
+        let last: Date? = lastText.flatMap { Self.dayFormat.date(from: $0) }
+        let end: Date = last.flatMap { cal.date(byAdding: .day, value: 1, to: $0) } ?? fallback.end
+        cycle = KakeiboCycle.Period(start: start, end: end, label: label, usesPayday: payday != nil)
         spent = try c.decode(Int.self, forKey: .spent)
-        budget = try c.decodeIfPresent(Int.self, forKey: .budget) ?? 0
-        topCategories = try c.decodeIfPresent([Slice].self, forKey: .topCategories) ?? []
-    }
-
-    /// 共有フォルダのファイルから今月のまとめを作る（アプリ用。ウィジェットは read() で書かれたものを読む）
-    static func current(now: Date = .now) -> KakeiboSummary {
-        make(entries: KakeiboData.entries(), budget: KakeiboData.settings().budget, month: now, now: now)
+        income = try c.decodeIfPresent(Int.self, forKey: .income) ?? 0
+        categories = try c.decodeIfPresent([Slice].self, forKey: .topCategories) ?? []
     }
 
     /// kakeibo-summary.json を読む（なければ nil）
@@ -409,33 +473,28 @@ struct KakeiboSummary: Codable, Hashable {
         return try? JSONDecoder().decode(KakeiboSummary.self, from: data)
     }
 
-    static func make(entries: [KakeiboEntry], budget: Int, month: Date, now: Date = .now) -> KakeiboSummary {
-        let m = KakeiboMonth.start(month)
-        let inMonth = entries.filter { KakeiboMonth.contains(m, $0.date) && $0.isTest != true }
-        let counted = inMonth.filter(\.counts)
-        let spent = counted.filter { $0.kind == .expense }.reduce(0) { $0 + $1.amount }
-        let income = counted.filter { $0.kind == .income }.reduce(0) { $0 + $1.amount }
-        var byCat: [String: Int] = [:]
-        for e in counted where e.kind == .expense { byCat[e.category, default: 0] += e.amount }
-        let top: [Slice] = byCat.sorted { $0.value > $1.value }.prefix(3).map { Slice(name: $0.key, amount: $0.value) }
-        let cal = Calendar.current
-        let days = cal.range(of: .day, in: .month, for: m)?.count ?? 30
-        let left: Int
-        if KakeiboMonth.contains(m, now) {
-            left = days - cal.component(.day, from: now) + 1
-        } else {
-            left = now < m ? days : 0
-        }
-        return KakeiboSummary(month: m, spent: spent, income: income, budget: budget, daysLeft: left,
-                              pendingCount: inMonth.filter(\.isPending).count, topCategories: top)
+    /// 周期の記録だけ
+    static func entries(_ list: [KakeiboEntry], in cycle: KakeiboCycle.Period) -> [KakeiboEntry] {
+        list.filter { cycle.contains($0.date) }
     }
 
-    static let placeholder = KakeiboSummary(month: KakeiboMonth.start(.now), spent: 12_345, budget: 50_000, daysLeft: 20,
-                                            topCategories: [Slice(name: "食費", amount: 4_938), Slice(name: "日用品", amount: 3_086)])
+    static func make(entries: [KakeiboEntry], cycle: KakeiboCycle.Period, payday: Int?, now: Date = .now) -> KakeiboSummary {
+        let inCycle: [KakeiboEntry] = Self.entries(entries, in: cycle).filter { $0.isTest != true }
+        let counted: [KakeiboEntry] = inCycle.filter(\.counts)
+        let spent: Int = counted.filter { $0.kind == .expense }.reduce(0) { $0 + $1.amount }
+        let income: Int = counted.filter { $0.kind == .income }.reduce(0) { $0 + $1.amount }
+        var byCat: [String: Int] = [:]
+        for e in counted where e.kind == .expense { byCat[e.category, default: 0] += e.amount }
+        let sorted = byCat.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+        let slices: [Slice] = sorted.map { Slice(name: $0.key, amount: $0.value) }
+        let days: Int? = cycle.contains(now) ? KakeiboCycle.daysToPayday(now: now, payday: payday) : nil
+        return KakeiboSummary(cycle: cycle, spent: spent, income: income, payday: payday, daysToPayday: days,
+                              pendingCount: inCycle.filter(\.isPending).count, categories: slices)
+    }
 }
 
 extension Notification.Name {
-    /// 家計簿の記録が変わった（同じアプリの中でショートカットから記録したときなど）
+    /// 家計簿の記録が変わった
     static let kakeiboDataChanged = Notification.Name("kakeiboDataChanged")
 }
 
@@ -450,42 +509,57 @@ enum KakeiboFormat {
 
     /// 12,345
     static func yen(_ v: Int) -> String { number.string(from: NSNumber(value: v)) ?? "\(v)" }
+
+    /// −12,345 / 12,345（マイナスは「−」）
+    static func signedYen(_ v: Int) -> String { v < 0 ? "−" + yen(-v) : yen(v) }
 }
 
 // MARK: - 目標貯金（期限つきの総額）
 
-/// 「2027年3月までに50万円」。数えはじめの月から、毎月の「収入 − 支出」を積み上げる
+/// 「2027年3月分までに50万円」。数えはじめの周期から、周期ごとの「収入 − 支出」を積み上げる
 struct KakeiboSavingsGoal: Codable, Hashable {
     var amount: Int         // 目標の総額（円）
-    var deadline: Date      // この月の末まで
-    var start: Date         // 数えはじめる月（ふつうは決めた月）
+    var deadline: Date      // この月分（周期の呼び名の月）の終わりまで
+    var start: Date         // 数えはじめる日（この日を含む周期から）
 }
 
 enum KakeiboSavings {
     struct Progress: Hashable {
-        var saved: Int          // いままでに残せた額（マイナスもある）
+        var saved: Int          // いままでに残せた額（今の周期の分も含む。マイナスもある）
+        var savedThisCycle: Int // 今の周期に残せた額（収入 − 支出）
+        var needThisCycle: Int  // 今の周期に残す必要がある額（前の周期までの分から割った、月あたりの額）
         var remaining: Int      // 目標まであと（0 以上）
-        var monthsLeft: Int     // 今月を含めて、期限の月まであと何か月（過ぎたら 0）
-        var perMonth: Int       // 月あたりあと何円残せばよいか
+        var monthsLeft: Int     // 今の周期を含めて、期限の周期まであといくつ（過ぎたら 0）
         var ratio: Double       // 0〜1
         var reached: Bool { remaining == 0 }
+        /// 月あたりあと何円残せばよいか（＝今の周期の必要額）
+        var perMonth: Int { needThisCycle }
+        /// 今の周期は目標どおりか（残せた額が必要額に届いている）
+        var onTrack: Bool { reached || savedThisCycle >= needThisCycle }
     }
 
-    static func progress(_ goal: KakeiboSavingsGoal, entries: [KakeiboEntry], now: Date = .now) -> Progress {
-        let cal = Calendar.current
-        let from: Date = KakeiboMonth.start(goal.start)
-        let end: Date = KakeiboMonth.start(goal.deadline, offset: 1)
-        var saved = 0
-        for e in entries where e.counts && e.isTest != true && e.date >= from && e.date < end {
-            saved += e.signed
+    static func progress(_ goal: KakeiboSavingsGoal, entries: [KakeiboEntry], payday: Int?, now: Date = .now) -> Progress {
+        let first: KakeiboCycle.Period = KakeiboCycle.period(containing: goal.start, payday: payday)
+        let last: KakeiboCycle.Period = KakeiboCycle.period(label: KakeiboMonth.start(goal.deadline), payday: payday)
+        let current: KakeiboCycle.Period = KakeiboCycle.period(containing: now, payday: payday)
+        var before = 0
+        var this = 0
+        for e in entries where e.counts && e.date >= first.start && e.date < last.end {
+            if current.contains(e.date) {
+                this += e.signed
+            } else if e.date < current.start {
+                before += e.signed
+            }
         }
+        let saved: Int = before + this
         let remaining: Int = max(0, goal.amount - saved)
-        let thisMonth: Date = KakeiboMonth.start(now)
-        let last: Date = KakeiboMonth.start(goal.deadline)
-        let diff: Int = cal.dateComponents([.month], from: thisMonth, to: last).month ?? 0
+        let diff: Int = KakeiboCycle.distance(from: current, to: last)
         let monthsLeft: Int = max(0, diff + 1)
-        let perMonth: Int = monthsLeft > 0 ? (remaining + monthsLeft - 1) / monthsLeft : remaining
+        // 今の周期の必要額は、前の周期までに残せた分から決める（今の周期の中で使っても、必要額は動かない）
+        let restAtStart: Int = max(0, goal.amount - before)
+        let need: Int = monthsLeft > 0 ? (restAtStart + monthsLeft - 1) / monthsLeft : remaining
         let ratio: Double = goal.amount > 0 ? min(1, max(0, Double(saved) / Double(goal.amount))) : 0
-        return Progress(saved: saved, remaining: remaining, monthsLeft: monthsLeft, perMonth: perMonth, ratio: ratio)
+        return Progress(saved: saved, savedThisCycle: this, needThisCycle: need, remaining: remaining,
+                        monthsLeft: monthsLeft, ratio: ratio)
     }
 }
