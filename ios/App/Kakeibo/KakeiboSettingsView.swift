@@ -9,10 +9,13 @@ struct KakeiboSettingsView: View {
     @State private var newKeyword = ""
     @State private var newRuleCategory = "食費"
     @FocusState private var budgetFocused: Bool
+    @State private var goalText = ""
+    @FocusState private var goalFocused: Bool
 
     var body: some View {
         List {
             budgetSection
+            goalSection
             categorySection
             ruleSection
             importSection
@@ -25,7 +28,10 @@ struct KakeiboSettingsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { EditButton() }
         }
-        .onAppear { budgetText = String(store.settings.budget) }
+        .onAppear {
+            budgetText = String(store.settings.budget)
+            goalText = store.settings.savingsGoal.map { String($0.amount) } ?? ""
+        }
     }
 
     // MARK: 予算
@@ -56,6 +62,70 @@ struct KakeiboSettingsView: View {
         let v = max(0, Int(budgetText.filter(\.isNumber)) ?? store.settings.budget)
         store.updateSettings { $0.budget = v }
         budgetText = String(v)
+    }
+
+    // MARK: 目標貯金
+
+    private var goalSection: some View {
+        let goal: KakeiboSavingsGoal? = store.settings.savingsGoal
+        return Section {
+            HStack {
+                Text("目標の総額").foregroundStyle(p.text)
+                Spacer()
+                TextField("500000", text: $goalText)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.trailing)
+                    .focused($goalFocused)
+                    .frame(maxWidth: 140)
+                    .onSubmit(saveGoal)
+                Text("円").foregroundStyle(p.sub)
+            }
+            .listRowBackground(p.card)
+            .onChange(of: goalFocused) { _, f in if !f { saveGoal() } }
+            if let goal {
+                DatePicker("期限（この月の末まで）", selection: goalBinding(\.deadline, goal), in: Date.now..., displayedComponents: .date)
+                    .foregroundStyle(p.text)
+                    .listRowBackground(p.card)
+                DatePicker("数えはじめ", selection: goalBinding(\.start, goal), in: ...Date.now, displayedComponents: .date)
+                    .foregroundStyle(p.text)
+                    .listRowBackground(p.card)
+                Button("目標をやめる", role: .destructive) {
+                    store.updateSettings { $0.savingsGoal = nil }
+                    goalText = ""
+                }
+                .listRowBackground(p.card)
+            }
+        } header: {
+            header("目標貯金")
+        } footer: {
+            Text("数えはじめの月から、毎月の「収入 − 支出」を積み上げます。収入は明細の取り込みか手入力で記録してください")
+                .font(.caption).foregroundStyle(p.sub)
+        }
+    }
+
+    private func goalBinding(_ key: WritableKeyPath<KakeiboSavingsGoal, Date>, _ goal: KakeiboSavingsGoal) -> Binding<Date> {
+        Binding(
+            get: { store.settings.savingsGoal?[keyPath: key] ?? goal[keyPath: key] },
+            set: { d in store.updateSettings { s in s.savingsGoal?[keyPath: key] = d } }
+        )
+    }
+
+    private func saveGoal() {
+        let v: Int = Int(goalText.filter(\.isNumber)) ?? 0
+        if v <= 0 {
+            goalText = store.settings.savingsGoal.map { String($0.amount) } ?? ""
+            return
+        }
+        store.updateSettings { s in
+            if s.savingsGoal != nil {
+                s.savingsGoal?.amount = v
+            } else {
+                // はじめて決めたとき：期限は半年後の月、数えはじめは今月
+                let deadline: Date = KakeiboMonth.start(.now, offset: 6)
+                s.savingsGoal = KakeiboSavingsGoal(amount: v, deadline: deadline, start: KakeiboMonth.start(.now))
+            }
+        }
+        goalText = String(v)
     }
 
     // MARK: 分類
