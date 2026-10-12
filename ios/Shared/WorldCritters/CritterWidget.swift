@@ -54,6 +54,8 @@ enum CritterWidgetArt {
                 C.whale(D.local(c, at: CritterDraw.cpt(s.width / 2, s.height / 2), scale: 0.32), t: k.progress * 30)
             })
         case .hinata: return AnyView(WidgetCat(size: size, k: k))
+        case .crystal: return crystalLane(size: size, k: k)
+        case .ink: return inkLane(size: size, k: k)
         case .brutal:
             return AnyView(Canvas { c, s in stickers(c, size: s, count: k.count) })
         case .aurora:

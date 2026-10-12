@@ -19,6 +19,8 @@ struct WidgetSceneBackground: View {
         case .sky: v = AnyView(SkyBackdrop(p: p, still: true, compact: true, stillT: stillT))
         case .mist: v = AnyView(MistBackdrop(p: p, still: true, compact: true))
         case .deepsea: v = AnyView(DeepSeaBackdrop(p: p, still: true, compact: true, stillT: stillT))
+        case .crystal: v = AnyView(CrystalBackdrop(p: p, still: true, compact: true, stillT: stillT))
+        case .ink: v = AnyView(InkBackdrop(p: p, still: true, compact: true, stillT: stillT))
         default: v = AnyView(p.background[0])
         }
         return v
@@ -38,6 +40,8 @@ struct WidgetSceneCard: View {
         case .sky: v = AnyView(SkyCloudCard(p: p, radius: radius, light: true))
         case .mist: v = AnyView(MistCard(p: p, radius: radius, light: true))
         case .deepsea: v = AnyView(DeepSeaGlass(p: p, radius: radius, light: true))
+        case .crystal: v = AnyView(CrystalCard(p: p, radius: radius, light: true))
+        case .ink: v = AnyView(InkCard(p: p, radius: radius, light: true))
         default: v = AnyView(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(p.card))
         }
         return v
@@ -87,6 +91,15 @@ extension World {
             return AnyTransition.asymmetric(
                 insertion: AnyTransition.offset(y: 12).combined(with: .opacity),
                 removal: AnyTransition.offset(y: -14).combined(with: .opacity))
+        case .crystal:
+            // 結晶：きらりと縮んで面にはまる
+            return AnyTransition.asymmetric(
+                insertion: AnyTransition.scale(scale: 0.9).combined(with: .opacity),
+                removal: AnyTransition.scale(scale: 0.5, anchor: .topTrailing).combined(with: .opacity))
+        case .ink:
+            // 墨流し：にじんで消える
+            let blur: BlurReplaceTransition = .blurReplace
+            return AnyTransition.asymmetric(insertion: AnyTransition.opacity, removal: AnyTransition(blur))
         default:
             return AnyTransition.opacity
         }
@@ -96,6 +109,7 @@ extension World {
     var isScene: Bool {
         switch self {
         case .strata, .galaxy, .sky, .mist, .deepsea: true
+        case .crystal, .ink: true
         default: false
         }
     }

@@ -24,6 +24,8 @@ enum World: String, CaseIterable, Identifiable {
     case sky        // 空：いまの時刻と天気の空に雲が流れる（WorldScenes/SkyScene.swift）
     case mist       // 霧：夜明けの湖と森。霧の層が流れる（WorldScenes/MistScene.swift）
     case deepsea    // 深海：浅瀬から深みへ。光がゆらぎマリンスノーが降る（WorldScenes/DeepSeaScene.swift）
+    case crystal    // 結晶：完了するたびに一日の結晶の面が育つ（WorldScenes/CrystalScene.swift）
+    case ink        // 墨流し：生成りの水面に藍と朱の墨の輪が広がる（WorldScenes/InkScene.swift）
 
     var id: String { rawValue }
     static func from(_ raw: String) -> World { World(rawValue: raw) ?? World.none }
@@ -45,6 +47,8 @@ enum World: String, CaseIterable, Identifiable {
         case .sky: "空"
         case .mist: "霧"
         case .deepsea: "深海"
+        case .crystal: "結晶"
+        case .ink: "墨流し"
         }
     }
 
@@ -62,6 +66,8 @@ enum World: String, CaseIterable, Identifiable {
         case .sky: "いまの時刻の空と雲"
         case .mist: "夜明けの湖に霧が流れる"
         case .deepsea: "光がゆらぐ深い海"
+        case .crystal: "片付けるたびに結晶が育つ"
+        case .ink: "墨の輪がゆっくり広がる"
         }
     }
 
@@ -80,6 +86,8 @@ enum World: String, CaseIterable, Identifiable {
         case .sky: .smooth         // 雲のようにふわりと
         case .mist: .gentle        // 霧のように控えめに
         case .deepsea: .smooth     // 水の中のようにゆったり
+        case .crystal: .crisp      // きらりと、くっきり
+        case .ink: .gentle         // 墨のようにゆっくりにじむ
         }
     }
 
@@ -144,6 +152,18 @@ enum World: String, CaseIterable, Identifiable {
                            text: wx(0xE8F8FF), sub: wx(0xC8EAF5), accent: wx(0x7DF9E6),
                            overdue: wx(0xFFC2A3), onAccent: wx(0x02213A),
                            fontDesign: .rounded, radius: 22, scheme: .dark, world: .deepsea)
+        case .crystal:
+            // 紺の夜（#1E2840〜#0F1420）に、本文 13・補足 10・強調（金）11 以上
+            return Palette(background: [wx(0x1E2840), wx(0x0F1420)], card: wx(0x18203A),
+                           text: wx(0xEAF2FF), sub: wx(0xC9D4EA), accent: wx(0xFFD27A),
+                           overdue: wx(0xFF9DB8), onAccent: wx(0x1A1406),
+                           fontDesign: .rounded, radius: 18, scheme: .dark, world: .crystal)
+        case .ink:
+            // 生成りの紙（#F5EEDF）に、藍の本文 11・補足 8・朱の強調 6 以上
+            return Palette(background: [wx(0xF5EEDF), wx(0xEFE5D0)], card: wx(0xFBF7EE),
+                           text: wx(0x1E2F57), sub: wx(0x4A4436), accent: wx(0xA2341F),
+                           overdue: wx(0x8F1F0B), onAccent: .white,
+                           fontDesign: .serif, radius: 8, scheme: .light, world: .ink)
         }
     }
 
@@ -208,6 +228,8 @@ struct WorldBackground: View {
                 }
             }
         case .strata, .galaxy, .sky, .mist, .deepsea:
+            SceneBackdrop(p: p)
+        case .crystal, .ink:
             SceneBackdrop(p: p)
         default:
             base
@@ -280,6 +302,8 @@ struct WorldCardSurface: View {
             shape.fill(p.card)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             SceneCardSurface(p: p)
+        case .crystal, .ink:
+            SceneCardSurface(p: p)
         case .none:
             let shadow: Color = .black.opacity(p.scheme == .dark || p.outline != nil ? 0 : 0.06)
             shape.fill(p.card).shadow(color: shadow, radius: 12, y: 4)
@@ -296,6 +320,7 @@ extension World {
         switch self {
         case .galaxy: return (wx(0xFFE4B8, 0.75), 6, 0, wx(0x8A6BFF, 0.65), 18)
         case .deepsea: return (wx(0x7DF9E6, 0.5), 10, 0, .clear, 0)
+        case .crystal: return (wx(0x9FE8FF, 0.55), 8, 0, wx(0x8F7BE8, 0.45), 16)
         case .strata: return (Color.white.opacity(0.6), 0, 1, .clear, 0)
         case .sky: return (Color.white.opacity(p.scheme == .dark ? 0.25 : 0.55), 10, 0, .clear, 0)
         case .mist: return (wx(0xFFE2BC, 0.7), 12, 0, .clear, 0)
@@ -326,6 +351,8 @@ struct SceneBackdrop: View {
         case .sky: v = AnyView(SkyBackdrop(p: p))
         case .mist: v = AnyView(MistBackdrop(p: p))
         case .deepsea: v = AnyView(DeepSeaBackdrop(p: p))
+        case .crystal: v = AnyView(CrystalBackdrop(p: p))
+        case .ink: v = AnyView(InkBackdrop(p: p))
         default: v = AnyView(p.background[0])
         }
         return v
@@ -344,6 +371,8 @@ struct SceneCardSurface: View {
         case .sky: v = AnyView(SkyCloudCard(p: p))
         case .mist: v = AnyView(MistCard(p: p))
         case .deepsea: v = AnyView(DeepSeaGlass(p: p))
+        case .crystal: v = AnyView(CrystalCard(p: p))
+        case .ink: v = AnyView(InkCard(p: p))
         default: v = AnyView(RoundedRectangle(cornerRadius: p.radius, style: .continuous).fill(p.card))
         }
         return v

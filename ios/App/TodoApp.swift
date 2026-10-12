@@ -74,6 +74,7 @@ struct RootView: View {
                 TabView(selection: $tab) {
                     HomeView().tabItem { Label("TODO", systemImage: "checklist") }.tag(0)
                     WakeRootView().tabItem { Label("起床", systemImage: "alarm") }.tag(1)
+                        .environment(\.worldWakeScene, true)   // 結晶・墨流しは起床の絵に描き替える
                     // 習慣・集中はタブから外した（コードと記録は残す。リリース4）
                     KakeiboRootView().tabItem { Label("家計簿", systemImage: "yensign.circle") }.tag(2)
                     ConsultRootView().tabItem { Label("相談", systemImage: "bubble.left.and.text.bubble.right") }.tag(3)

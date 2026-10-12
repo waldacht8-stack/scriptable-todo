@@ -31,6 +31,7 @@ enum CritterArt {
         switch w {
         case .sky: 6
         case .deepsea: 3.2
+        case .ink: 3.6
         case .galaxy: 1.6
         case .aurora: 2.6
         case .brutal: 2.2
@@ -48,6 +49,8 @@ enum CritterArt {
         case .sky: sky(ctx, size: size, k: k, layer: layer)
         case .mist: mist(ctx, size: size, k: k, layer: layer)
         case .deepsea: deepsea(ctx, size: size, k: k, layer: layer)
+        case .crystal: crystal(ctx, size: size, k: k, layer: layer)
+        case .ink: ink(ctx, size: size, k: k, layer: layer)
         case .hinata: hinata(ctx, size: size, k: k, layer: layer)
         case .brutal: brutal(ctx, size: size, k: k, layer: layer)
         case .aurora: aurora(ctx, size: size, k: k, layer: layer)

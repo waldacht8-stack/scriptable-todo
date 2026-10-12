@@ -43,6 +43,8 @@ struct WidgetWorldBackground: View {
             base
         case .strata, .galaxy, .sky, .mist, .deepsea:
             WidgetSceneBackground(p: p, stillT: phase.map { 1 + $0 * 2400 } ?? WorldMotion.sceneTime(date))
+        case .crystal, .ink:
+            WidgetSceneBackground(p: p, stillT: phase.map { 1 + $0 * 2400 } ?? WorldMotion.sceneTime(date))
         case .hinata:
             ZStack {
                 base
@@ -148,6 +150,8 @@ struct WidgetCardSurface: View {
             shape.fill(p.card)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             WidgetSceneCard(p: p, radius: r)
+        case .crystal, .ink:
+            WidgetSceneCard(p: p, radius: r)
         case .brutal:
             ZStack {
                 shape.fill(Color.black).offset(x: 2.5, y: 2.5)
@@ -211,6 +215,8 @@ struct WidgetButtonSurface: View {
         case .none, .bento, .swiss:
             shape.fill(p.accent)
         case .strata, .galaxy, .sky, .mist, .deepsea:
+            WidgetSceneButton(p: p, radius: r)
+        case .crystal, .ink:
             WidgetSceneButton(p: p, radius: r)
         }
     }
@@ -363,6 +369,8 @@ extension World {
             return AnyTransition.scale(scale: 0.88).combined(with: .opacity)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             return sceneRowTransition()
+        case .crystal, .ink:
+            return sceneRowTransition()
         }
     }
 
@@ -426,6 +434,10 @@ struct WidgetWorldRing: View {
         case .aurora:
             HabitRing(fraction: shown, color: p.accent, track: Color.white.opacity(0.12), lineWidth: lineWidth)
                 .shadow(color: p.accent.opacity(0.6), radius: 4)
+        case .crystal:
+            CrystalWakeRing(p: p, fraction: shown, lineWidth: lineWidth)
+        case .ink:
+            InkWakeRing(p: p, fraction: shown, lineWidth: lineWidth)
         default:
             HabitRing(fraction: shown, color: p.accent, lineWidth: lineWidth)
         }
@@ -443,6 +455,8 @@ extension World {
         case .brutal, .swiss, .bento: .default
         case .galaxy, .sky, .deepsea: .rounded
         case .strata, .mist: .default
+        case .crystal: .rounded
+        case .ink: .serif
         }
     }
 
