@@ -825,14 +825,17 @@ struct WakeBedtimeCard: View {
             WakeCardTitle(text: "就寝", icon: "bed.double.fill")
             Text(JP.time(bed)).font(Font.system(size: 64, weight: .heavy, design: p.fontDesign))
                 .monospacedDigit().foregroundStyle(p.text).lineLimit(1).minimumScaleFactor(0.6)
-            let status: String = bed > now ? "あと \(WakeLogic.duration(bed.timeIntervalSince(now)))" : "就寝の時刻を過ぎています"
-            let statusColor: Color = bed > now ? p.accent : p.overdue
-            Text(status).font(Font.headline).foregroundStyle(statusColor)
-            // 次の朝がお休み（土日・祝日など）なら、何十時間も眠れる表示は出さずに次の起床を出す
+            // 次の朝がお休み（土日・祝日など）なら、何十時間も先の「あと」「眠れます」は出さずに次の起床を出す
             let off: String? = WakeLogic.morningOffLine(next: plan, now: now)
+            if off == nil {
+                let status: String = bed > now ? "あと \(WakeLogic.duration(bed.timeIntervalSince(now)))" : "就寝の時刻を過ぎています"
+                let statusColor: Color = bed > now ? p.accent : p.overdue
+                Text(status).font(Font.headline).foregroundStyle(statusColor)
+            }
             let left: String = WakeLogic.duration(plan.first.timeIntervalSince(now))
             let sleep: String = off ?? "今寝ると \(left) 眠れます"
-            Text(sleep).font(Font.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+            let sleepColor: Color = off == nil ? p.sub : p.accent
+            Text(sleep).font(Font.subheadline.weight(.semibold)).foregroundStyle(sleepColor)
         }
         .paletteCard(p, padding: 22)
     }
