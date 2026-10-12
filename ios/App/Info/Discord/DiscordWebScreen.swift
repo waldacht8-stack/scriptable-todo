@@ -71,7 +71,7 @@ struct DiscordWebScreen: View {
     @State private var audio = DiscordAudioSession()
     /// ボットの画面（お知らせ・募集。DiscordHome）をシートで開く
     @State private var showBot = false
-    @Environment(.motion) private var motion
+    @Environment(\.motion) private var motion
 
     init(onClose: @escaping () -> Void) {
         self.onClose = onClose
@@ -103,8 +103,8 @@ struct DiscordWebScreen: View {
                         }
                     }
             }
-            .environment(.palette, p)
-            .environment(.motion, motion)
+            .environment(\.palette, p)
+            .environment(\.motion, motion)
         }
     }
 
