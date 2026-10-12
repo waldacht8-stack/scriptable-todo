@@ -828,7 +828,10 @@ struct WakeBedtimeCard: View {
             let status: String = bed > now ? "あと \(WakeLogic.duration(bed.timeIntervalSince(now)))" : "就寝の時刻を過ぎています"
             let statusColor: Color = bed > now ? p.accent : p.overdue
             Text(status).font(Font.headline).foregroundStyle(statusColor)
-            let sleep: String = "今寝ると \(WakeLogic.duration(plan.first.timeIntervalSince(now))) 眠れます"
+            // 次の朝がお休み（土日・祝日など）なら、何十時間も眠れる表示は出さずに次の起床を出す
+            let off: String? = WakeLogic.morningOffLine(next: plan, now: now)
+            let left: String = WakeLogic.duration(plan.first.timeIntervalSince(now))
+            let sleep: String = off ?? "今寝ると \(left) 眠れます"
             Text(sleep).font(Font.subheadline.weight(.semibold)).foregroundStyle(p.sub)
         }
         .paletteCard(p, padding: 22)

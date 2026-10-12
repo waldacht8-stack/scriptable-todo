@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 「情報」タブ：好きな話題の記事・投稿をカードの山で読む。ゲーム（スプラトゥーン3・Steam・Discord・第五人格）への入口。相談は独立したタブ
+/// 「情報」タブ：好きな話題の記事・投稿をカードの山で読む。ゲーム（スプラトゥーン3・Steam・第五人格）への入口。相談は独立したタブ
 struct InfoRootView: View {
     @StateObject private var model = InfoModel()
     @Environment(\.palette) private var p
@@ -12,6 +12,8 @@ struct InfoRootView: View {
     @State private var opening: InfoOpenTarget?
     @State private var lastOpened: InfoArticle?
     @State private var openedAt = Date()
+    /// ゲームの見出しの隠しコマンドで出した Discord の行。情報の画面を離れる（ほかのタブ・話題へ切り替える）と消す
+    @State private var discordRevealed = InfoDiscordReveal.launchRevealed
 
     var body: some View {
         NavigationStack {
@@ -28,7 +30,7 @@ struct InfoRootView: View {
                     InfoTopicsScreen(onOpen: open, onOpenURL: openURL)
                         .transition(motion.appear)
                 case .games:
-                    InfoGameSection()
+                    InfoGameSection(discordRevealed: $discordRevealed)
                         .transition(motion.appear)
                 }
             }
@@ -36,6 +38,8 @@ struct InfoRootView: View {
             .paletteBackground(p)
             .toolbar(.hidden, for: .navigationBar)
         }
+        .onDisappear { discordRevealed = false }
+        .onChange(of: section) { _, s in if s != .games { discordRevealed = false } }
         .environmentObject(model)
         .infoTranslation(model)
         .fullScreenCover(item: $opening, onDismiss: finishReading) { target in
@@ -287,9 +291,9 @@ struct InfoEmptyTopics: View {
     }
 }
 
-// MARK: - ゲーム：スプラトゥーン3・Steam・Discord・第五人格への入口
+// MARK: - ゲーム：スプラトゥーン3・Steam・第五人格への入口（並びと表示は GameOrderSheet で変える）
 
-/// ゲームのくわしく画面（Discord・第五人格はカードの中にボタンがあるので、NavigationLink ではなく行き先で開く）
+/// ゲームのくわしく画面（第五人格はカードの中にボタンがあるので、NavigationLink ではなく行き先で開く）
 enum InfoGameRoute: Hashable {
     case discord, identityV
 }
@@ -297,6 +301,9 @@ enum InfoGameRoute: Hashable {
 struct InfoGameSection: View {
     @Environment(\.palette) private var p
     @Environment(\.motion) private var motion
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 隠しの Discord の行を出しているか（InfoRootView が持つ。情報の画面を離れると消える）
+    @Binding var discordRevealed: Bool
     /// Web版 Discord（試作）。起動引数 -discordweb で最初から開く（画面写真用。-demo なら通信しない）
     @State private var showDiscord = ProcessInfo.processInfo.arguments.contains("-discordweb")
     /// 起動引数 -discorddemo で Discord、-idvdemo で第五人格のくわしく画面を開く（画面写真用）
@@ -306,33 +313,51 @@ struct InfoGameSection: View {
         if a.contains("-idvdemo") { return .identityV }
         return nil
     }()
+    /// 並びと表示のシート。起動引数 -gamesettings で開いた状態にする（画面写真用）
+    @State private var showOrder = ProcessInfo.processInfo.arguments.contains("-gamesettings")
+    @State private var games: [GameItem] = SettingsData.load().visibleGames
+    /// 見出しを続けて押した回数と、最後に押した時刻
+    @State private var headerTaps = 0
+    @State private var lastHeaderTap = Date.distantPast
 
     var body: some View {
         ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("ゲーム").font(.largeTitle.weight(.heavy)).foregroundStyle(p.text)
+                HStack(alignment: .center) {
+                    Text("ゲーム").font(.largeTitle.weight(.heavy)).foregroundStyle(p.text)
+                        .contentShape(Rectangle())
+                        .onTapGesture { headerTapped() }
+                    Spacer()
+                    Button { showOrder = true } label: {
+                        Image(systemName: "arrow.up.arrow.down").font(.body.weight(.bold)).foregroundStyle(p.text)
+                            .frame(width: 40, height: 40)
+                            .background(p.card, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("ゲームの並びと表示")
+                }
                 Text("戦績やゲームの情報を、日和のデザインで見られます。")
                     .font(.subheadline).foregroundStyle(p.sub)
-                NavigationLink { SplatoonHome() } label: { SplatoonEntryCard() }
-                    .buttonStyle(.plain)
-                NavigationLink { SteamHome() } label: { SteamEntryCard() }
-                    .buttonStyle(.plain)
-                DiscordServerCard { route = .discord }
-                    .id("discord")
-                Button { route = .identityV } label: { IdvEntryCard() }
-                    .buttonStyle(.plain)
-                Button { showDiscord = true } label: { DiscordEntryCard() }
-                    .buttonStyle(.plain)
+                ForEach(games) { g in
+                    card(g).id(g.rawValue)
+                }
+                if games.isEmpty { emptyNote }
+                if discordRevealed {
+                    InfoDiscordRow { route = .discord }
+                        .id("discord")
+                        .transition(floatUp)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
         .onAppear {
-            // 画面写真用：-gamesscroll で Discord・第五人格のカードまで下げる
+            // 画面写真用：-gamesscroll でいちばん下のカードまで下げる
             guard ProcessInfo.processInfo.arguments.contains("-gamesscroll") else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { proxy.scrollTo("discord", anchor: .top) }
+            let last: String = discordRevealed ? "discord" : (games.last?.rawValue ?? "")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { proxy.scrollTo(last, anchor: .top) }
         }
         }
         .navigationDestination(item: $route) { r in
@@ -346,5 +371,157 @@ struct InfoGameSection: View {
                 .environment(\.palette, p)
                 .environment(\.motion, motion)
         }
+        .sheet(isPresented: $showOrder, onDismiss: reloadGames) {
+            GameOrderSheet()
+                .environment(\.palette, p)
+                .presentationDetents([.medium, .large])
+        }
+        .onAppear(perform: reloadGames)
+    }
+
+    @ViewBuilder
+    private func card(_ g: GameItem) -> some View {
+        switch g {
+        case .splatoon:
+            NavigationLink { SplatoonHome() } label: { SplatoonEntryCard() }
+                .buttonStyle(.plain)
+        case .steam:
+            NavigationLink { SteamHome() } label: { SteamEntryCard() }
+                .buttonStyle(.plain)
+        case .identityV:
+            Button { route = .identityV } label: { IdvEntryCard() }
+                .buttonStyle(.plain)
+        }
+    }
+
+    private var emptyNote: some View {
+        Text("表示するゲームがありません。右上の ↑↓ から選べます。")
+            .font(.subheadline).foregroundStyle(p.sub)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .paletteCard(p, padding: 18)
+    }
+
+    /// 下からふわっと浮かび上がる（「視差効果を減らす」ではフェードだけ）
+    private var floatUp: AnyTransition {
+        if reduceMotion { return AnyTransition.opacity }
+        let rise: AnyTransition = AnyTransition.offset(y: 36).combined(with: .opacity)
+        let scale: AnyTransition = AnyTransition.scale(scale: 0.96, anchor: .bottom)
+        return rise.combined(with: scale)
+    }
+
+    private func reloadGames() {
+        let next: [GameItem] = SettingsData.load().visibleGames
+        if next != games { withAnimation(motion.change) { games = next } }
+    }
+
+    /// 見出しを 8 回すばやく押すと Discord の行が出る（押すあいだが 0.7 秒より空いたら数え直す）
+    private func headerTapped() {
+        let now = Date()
+        let gap: TimeInterval = now.timeIntervalSince(lastHeaderTap)
+        headerTaps = gap <= InfoDiscordReveal.maxGap ? headerTaps + 1 : 1
+        lastHeaderTap = now
+        guard headerTaps >= InfoDiscordReveal.taps, !discordRevealed else { return }
+        headerTaps = 0
+        let anim: Animation = reduceMotion ? Animation.easeOut(duration: 0.3) : Animation.easeOut(duration: 1.1)
+        withAnimation(anim) { discordRevealed = true }
+    }
+}
+
+/// 隠しコマンドの決まり（画面には何も出さない）
+enum InfoDiscordReveal {
+    /// 見出しを押す回数
+    static let taps = 8
+    /// 続けて押したとみなす間隔（秒）
+    static let maxGap: TimeInterval = 0.7
+    /// 画面写真用：起動引数 -discordreveal で最初から出しておく
+    static var launchRevealed: Bool { ProcessInfo.processInfo.arguments.contains("-discordreveal") }
+}
+
+/// 隠しの Discord の行（押すと Discord のくわしく画面へ）
+private struct InfoDiscordRow: View {
+    let onOpen: () -> Void
+
+    var body: some View {
+        let shape: RoundedRectangle = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        Button(action: onOpen) {
+            HStack(spacing: 12) {
+                DiscordBubbleIcon(size: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Discord").font(.headline.weight(.heavy)).foregroundStyle(DiscordInk.text)
+                    Text("サーバーの様子・お知らせ・募集").font(.caption).foregroundStyle(DiscordInk.sub).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(DiscordInk.sub)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DiscordInk.surface, in: shape)
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+// MARK: - ゲームの並びと表示（情報 › ゲームの右上 ↑↓ から開く。設定 settings.json に保存）
+
+struct GameOrderSheet: View {
+    @Environment(\.palette) private var p
+    @Environment(\.dismiss) private var dismiss
+    @State private var order: [GameItem] = SettingsData.load().gameOrderItems
+    @State private var hidden: Set<String> = Set(SettingsData.load().hiddenGames)
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(order) { g in
+                        row(g)
+                    }
+                    .onMove(perform: move)
+                } footer: {
+                    Text("右の ≡ をドラッグすると並びが変わります。オフにしたゲームは、一覧と情報のウィジェットに出ません。")
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .scrollContentBackground(.hidden)
+            .paletteBackground(p)
+            .navigationTitle("ゲームの並びと表示")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }.fontWeight(.semibold)
+                }
+            }
+        }
+        .tint(p.accent)
+    }
+
+    private func row(_ g: GameItem) -> some View {
+        let on: Binding<Bool> = Binding(
+            get: { !hidden.contains(g.rawValue) },
+            set: { v in
+                if v { hidden.remove(g.rawValue) } else { hidden.insert(g.rawValue) }
+                save()
+            })
+        return Toggle(isOn: on) {
+            Label(g.title, systemImage: g.symbol).foregroundStyle(p.text)
+        }
+        .listRowBackground(p.card)
+    }
+
+    private func move(_ from: IndexSet, _ to: Int) {
+        order.move(fromOffsets: from, toOffset: to)
+        save()
+    }
+
+    /// 並びと表示だけを書き戻す（ほかの設定を古い値で上書きしない）。情報のウィジェットにもすぐ反映する
+    private func save() {
+        var fresh = SettingsData.load()
+        let raw: [String] = order.map(\.rawValue)
+        fresh.gameOrder = raw
+        fresh.hiddenGames = raw.filter { hidden.contains($0) }
+        SettingsData.save(fresh)
+        InfoWidgetSync.update()
     }
 }

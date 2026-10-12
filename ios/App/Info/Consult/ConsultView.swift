@@ -102,9 +102,6 @@ struct ConsultContext: Equatable {
     var wakeAverage: Int?          // 直近7日の平均の起床時刻（0時からの分）
     var wakeOversleepDays = 0      // 直近7日で二度寝した日の数
     var wakeStreak = 0
-    var habitCount = 0
-    var habitDoneToday = 0
-    var habitBestStreak = 0
 
     @MainActor
     static func make(store: TodoStore, now: Date = .now) -> ConsultContext {
@@ -116,11 +113,6 @@ struct ConsultContext: Equatable {
         c.wakeAverage = WakeLogic.averageWakeMinutes(sessions, days: 7, now: now)
         c.wakeOversleepDays = WakeLogic.oversleepDays(sessions, days: 7, now: now)
         c.wakeStreak = WakeLogic.streak(sessions)
-        let habits = HabitData.habits()
-        let log = HabitData.log()
-        c.habitCount = habits.count
-        c.habitDoneToday = habits.filter { HabitData.isDone(log, $0, now) }.count
-        c.habitBestStreak = habits.map { HabitData.currentStreak($0, log, today: now) }.max() ?? 0
         return c
     }
 
@@ -128,7 +120,6 @@ struct ConsultContext: Equatable {
         var out: [String] = []
         if let a = wakeAverage { out.append("起床 7日の平均 \(WakeLogic.clock(a))") }
         out.append(overdueCount > 0 ? "TODO \(openCount)件・期限切れ \(overdueCount)" : "TODO \(openCount)件")
-        if habitCount > 0 { out.append("習慣 今日 \(habitDoneToday)/\(habitCount)") }
         return out
     }
 
@@ -140,7 +131,6 @@ struct ConsultContext: Equatable {
             let over: String = wakeOversleepDays > 0 ? "二度寝した日 \(wakeOversleepDays)日" : "二度寝した日なし"
             lines.append("起床: 直近7日の平均の起床時刻 \(WakeLogic.clock(a))、\(over)、連続 \(wakeStreak)日")
         }
-        if habitCount > 0 { lines.append("習慣: \(habitCount)個中 今日 \(habitDoneToday)個できた、最長の連続 \(habitBestStreak)日") }
         return lines.joined(separator: "\n")
     }
 }

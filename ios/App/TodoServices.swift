@@ -22,7 +22,7 @@ final class TodoNotifier: NSObject, UNUserNotificationCenterDelegate {
         _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
     }
 
-    /// TODO の通知を全部作り直す（todo- で始まるものだけ。起床・習慣・集中の通知には触らない）
+    /// TODO の通知を全部作り直す（todo- で始まるものだけ。起床などほかの通知には触らない）
     func reschedule(_ items: [TodoItem], settings s: AppSettings) async {
         let pending = await center.pendingNotificationRequests()
         center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix("todo-") })

@@ -2,7 +2,7 @@ import SwiftUI
 import WidgetKit
 
 /// ウィジェットの見本（起動引数 -widgetpreview のときだけ表示。スクリーンショット用）
-/// 色合いは -theme、世界観は -world に従う。-widgetsize large で大サイズ、-widgetsize other で起床・習慣、-widgetsize lock でロック画面を並べる
+/// 色合いは -theme、世界観は -world に従う。-widgetsize large で大サイズ、-widgetsize other で起床、-widgetsize lock でロック画面を並べる
 struct WidgetPreviewScreen: View {
     @Environment(\.palette) private var p
     private let size: String = {
@@ -15,7 +15,7 @@ struct WidgetPreviewScreen: View {
         let kind: String
         switch size {
         case "large": kind = "大"
-        case "other": kind = "起床・習慣"
+        case "other": kind = "起床"
         case "lock": kind = "ロック画面"
         case "r4": kind = "リリース4"
         case "review": kind = "見返し"
@@ -95,12 +95,11 @@ struct WidgetPreviewScreen: View {
         }
     }
 
-    // MARK: 起床・習慣・ロック画面
+    // MARK: 起床・ロック画面
 
     private var otherPage: some View {
         let before: WakeEntry = WakeEntry(date: Self.afternoon, snap: Self.wakeBefore(), palette: p)
         let after: WakeEntry = WakeEntry(date: .now, snap: Self.wakeAfter(), palette: p)
-        let habit: HabitWidgetData = Self.habitData(p)
         return VStack(alignment: .leading, spacing: 10) {
             caption("起床（起きる前）")
             HStack(alignment: .top, spacing: 6) {
@@ -112,27 +111,21 @@ struct WidgetPreviewScreen: View {
                 frame(WakeWidgetView(entry: after, familyOverride: .systemSmall), Self.small, scale: 0.55)
                 frame(WakeWidgetView(entry: after, familyOverride: .systemMedium), Self.medium, scale: 0.55)
             }
-            caption("習慣")
-            HStack(alignment: .top, spacing: 6) {
-                frame(HabitWidgetView(data: habit, familyOverride: .systemSmall), Self.small, scale: 0.55)
-                frame(HabitWidgetView(data: habit, familyOverride: .systemMedium), Self.medium, scale: 0.55)
-            }
         }
     }
 
     private var lockPage: some View {
         let before: WakeEntry = WakeEntry(date: Self.afternoon, snap: Self.wakeBefore(), palette: p)
         let after: WakeEntry = WakeEntry(date: .now, snap: Self.wakeAfter(), palette: p)
-        let habit: HabitWidgetData = Self.habitData(p)
         let todo: TodoWidgetData = Self.data(Self.sampleItems(), layout: .focus, palette: p)
         return VStack(alignment: .leading, spacing: 10) {
             caption("単色で表示されるので、世界観は形と文字だけで出す")
-            lockPanel(todo: todo, before: before, after: after, habit: habit)
+            lockPanel(todo: todo, before: before, after: after)
         }
     }
 
     /// ロック画面の見本（暗い面に白い文字。実機では壁紙の上に半透明で描かれる）
-    private func lockPanel(todo: TodoWidgetData, before: WakeEntry, after: WakeEntry, habit: HabitWidgetData) -> some View {
+    private func lockPanel(todo: TodoWidgetData, before: WakeEntry, after: WakeEntry) -> some View {
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
         let circle = CGSize(width: 68, height: 68)
         let rect = CGSize(width: 154, height: 72)
@@ -142,14 +135,12 @@ struct WidgetPreviewScreen: View {
                 accessory(TodoWidgetView(data: todo, familyOverride: .accessoryCircular), circle, round: true)
                 accessory(WakeWidgetView(entry: before, familyOverride: .accessoryCircular), circle, round: true)
                 accessory(WakeWidgetView(entry: after, familyOverride: .accessoryCircular), circle, round: true)
-                accessory(HabitWidgetView(data: habit, familyOverride: .accessoryCircular), circle, round: true)
             }
             HStack(spacing: 10) {
                 accessory(TodoWidgetView(data: todo, familyOverride: .accessoryRectangular), rect, round: false)
                 accessory(WakeWidgetView(entry: before, familyOverride: .accessoryRectangular), rect, round: false)
             }
             HStack(spacing: 10) {
-                accessory(HabitWidgetView(data: habit, familyOverride: .accessoryRectangular), rect, round: false)
                 accessory(WakeWidgetView(entry: after, familyOverride: .accessoryRectangular), rect, round: false)
             }
             TodoWidgetView(data: todo, familyOverride: .accessoryInline)
@@ -265,17 +256,6 @@ struct WidgetPreviewScreen: View {
                             session: WakeSession(day: "preview", checkInAt: now.addingTimeInterval(-20 * 60), stage: 1, oversleep: 0),
                             departure: now.addingTimeInterval(45 * 60), nextStep: step, stepsLeft: 2,
                             bedtime: nil, canCheckIn: false, checkInFrom: nil)
-    }
-
-    /// 習慣の見本：4つのうち2つ達成
-    private static func habitData(_ p: Palette) -> HabitWidgetData {
-        let rows: [HabitWidgetRow] = [
-            HabitWidgetRow(habit: Habit(name: "水を飲む", icon: "drop.fill", color: .sky, target: 8, unit: "杯"), count: 5),
-            HabitWidgetRow(habit: Habit(name: "散歩する", icon: "figure.walk", color: .green), count: 1),
-            HabitWidgetRow(habit: Habit(name: "本を読む", icon: "book.fill", color: .amber), count: 1),
-            HabitWidgetRow(habit: Habit(name: "早めに寝る", icon: "moon.fill", color: .indigo), count: 0),
-        ]
-        return HabitWidgetData(rows: rows, progress: 0.66, palette: p, motion: p.world.motion ?? .snappy)
     }
 }
 

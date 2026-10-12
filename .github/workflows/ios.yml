@@ -92,7 +92,7 @@ jobs:
           # 起動して撮る。真っ白（小さいファイル）なら、待って撮り直す（遅いシミュレーター対策）
           # 担当の枝では、SHOTS_ON_BRANCH に名前が合う写真だけ撮る（時間短縮）。main ではすべて撮る
           # 各担当は自分の枝でこの値に自分の写真の名前（正規表現）を足す。例："kakeibo|tab-2"
-          SHOTS_ON_BRANCH="tab-|home-focus"
+          SHOTS_ON_BRANCH="^shots/(wake-evening|wake-before|splatoon|info-games|game-|discord|idv.png|tab-|world-brutal-kakeibo|world-bento-consult|widgets-other|widgets-lock|widgets-r4-tabs.png|widgets-r4-wake.png)"
           shot() {
             out=$1; shift
             if [ "$GITHUB_REF_NAME" != "main" ] && ! echo "$out" | grep -qE "$SHOTS_ON_BRANCH"; then
@@ -144,7 +144,7 @@ jobs:
           shot shots/edit-paper.png -demo -layout checklist -theme paper -tab 0 -shotedit
           shot shots/todo-widgets.png -demo -theme focus -tab 0 -todowidgets
           shot shots/todo-widgets-night.png -demo -theme night -tab 0 -todowidgets
-          # 起床・習慣・集中・情報のタブ（見本データ）
+          # 起床・家計簿・相談・情報のタブ（見本データ）
           for tab in 1 2 3 4; do
             shot "shots/tab-$tab.png" -demo -theme focus -tab $tab
           done
@@ -152,6 +152,8 @@ jobs:
           shot shots/wake-before.png -demo -theme focus -tab 1 -wakePhase before
           shot shots/wake-window.png -demo -theme dawn -tab 1 -wakePhase window
           shot shots/wake-evening.png -demo -theme night -tab 1 -wakePhase evening
+          # 次の朝がお休みの夜：「今寝ると」を出さず、次の起床を出す
+          shot shots/wake-evening-dayoff.png -demo -theme night -tab 1 -wakePhase evening -wakedayoff
           shot shots/wake-settings.png -demo -theme paper -tab 1 -wakeShot settings
           shot shots/wake-records.png -demo -theme focus -tab 1 -wakeShot records
           # 家計簿（見本データ。お店・金額はすべて架空）：ホーム・取り込みの4段・列の対応・手入力・Apple Pay の案内・設定
@@ -193,6 +195,7 @@ jobs:
           # スプラトゥーン3（見本データ。RootView に .splatoonDemoLaunch() が入ると全画面で開く）
           shot shots/splatoon.png -demo -splatdemo
           shot shots/splatoon-records.png -demo -splatdemo -splatscroll records
+          shot shots/splatoon-salmon.png -demo -splatdemo -splatscroll salmon
           # Steam（見本データ）・相談（見本の会話）
           shot shots/steam.png -demo -steamdemo
           shot shots/info-games-steam.png -demo -theme night -tab 4 -infogames
@@ -215,15 +218,20 @@ jobs:
           shot shots/idv-schedule.png -demo -theme focus -tab 4 -infogames -idvdemo -idvscroll schedule
           shot shots/idv-deadlines.png -demo -theme focus -tab 4 -infogames -idvdemo -idvscroll deadlines
           shot shots/info-games-r4.png -demo -theme night -tab 4 -infogames -gamesscroll
+          # ゲームの並びと表示（右上の ↑↓）。-gameorder・-gamehide で見本の並びにする
+          shot shots/game-settings.png -demo -theme focus -tab 4 -infogames -gamesettings -gameorder steam,splatoon,identityV -gamehide identityV
+          shot shots/game-order-applied.png -demo -theme focus -tab 4 -infogames -gameorder steam,splatoon,identityV -gamehide identityV
+          # 隠しコマンド（見出しを8回）で出る Discord の行。-discordreveal で出した状態を撮る
+          shot shots/discord-reveal.png -demo -theme focus -tab 4 -infogames -discordreveal -gamesscroll
           # 世界観（-world。-demo のたびに「なし」へ戻る）
           for world in hinata brutal aurora bento clay swiss; do
             shot "shots/world-$world.png" -demo -layout focus -world $world -tab 0
           done
-          shot shots/world-brutal-habit.png -demo -world brutal -tab 2
+          shot shots/world-brutal-kakeibo.png -demo -world brutal -tab 2
           shot shots/world-swiss-wake.png -demo -world swiss -tab 1
           shot shots/world-aurora-info.png -demo -world aurora -tab 4
           shot shots/world-clay-checklist.png -demo -layout checklist -world clay -tab 0
-          shot shots/world-bento-focus.png -demo -world bento -tab 3
+          shot shots/world-bento-consult.png -demo -world bento -tab 3
           shot shots/settings-world.png -settings -demo -world hinata -settingsSection world
           # 新しい世界観（地層・銀河・空・霧・深海）：TODO・起床・ウィジェット
           for world in strata galaxy sky mist deepsea; do
@@ -237,7 +245,7 @@ jobs:
           shot shots/widgets-world-sky-night.png -demo -widgetpreview -world sky -skyhour 22
           shot shots/widgets-world-deepsea-other.png -demo -widgetpreview -widgetsize other -world deepsea
           shot shots/settings-world-new.png -settings -demo -world galaxy -settingsSection world
-          # ウィジェットの世界観（TODO の小・中・大、起床・習慣・ロック画面）
+          # ウィジェットの世界観（TODO の小・中・大、起床・ロック画面）
           for world in hinata brutal aurora bento clay swiss; do
             shot "shots/widgets-world-$world.png" -demo -widgetpreview -world $world
             shot "shots/widgets-world-$world-large.png" -demo -widgetpreview -widgetsize large -world $world
