@@ -42,8 +42,19 @@ jobs:
 
       - name: アイコンを描く
         run: |
-          swift Tools/MakeIcon.swift App/Assets.xcassets/AppIcon.appiconset/icon.png
-          swift Tools/MakeIcon.swift App/Assets.xcassets/AppIcon.appiconset/icon-dark.png dark
+          # 「日の窓」：ふだんは W2（珊瑚）。ほかは設定で選べるアイコン（AppIcon-W1 など。地の色と、あれば鳥の色）
+          swift Tools/MakeIcon.swift App/Assets.xcassets/AppIcon.appiconset/icon.png "#F08A6A"
+          while read -r id ground bird; do
+            swift Tools/MakeIcon.swift "App/Assets.xcassets/AppIcon-$id.appiconset/icon.png" "$ground" $bird
+          done <<'ICONS'
+          W6 #F3EBCF
+          W1 #D9482B
+          W3 #F2B33D
+          W4 #8CBF6A
+          W5 #5E8B5A #F3EBCF
+          W7 #FFFFFF
+          W8 #F2B8BE
+          ICONS
 
       - name: Xcode プロジェクトを作る
         run: xcodegen generate
@@ -85,7 +96,6 @@ jobs:
         run: |
           mkdir -p shots
           cp App/Assets.xcassets/AppIcon.appiconset/icon.png shots/icon.png
-          cp App/Assets.xcassets/AppIcon.appiconset/icon-dark.png shots/icon-dark.png
           UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print([x['udid'] for r,v in sorted(d.items()) if 'iOS' in r for x in v if x['name'].startswith('iPhone')][-1])")
           xcrun simctl boot "$UDID"
           xcrun simctl bootstatus "$UDID" -b
@@ -95,7 +105,7 @@ jobs:
           # 起動して撮る。真っ白（小さいファイル）なら、待って撮り直す（遅いシミュレーター対策）
           # 担当の枝では、SHOTS_ON_BRANCH に名前が合う写真だけ撮る（時間短縮）。main ではすべて撮る
           # 各担当は自分の枝でこの値に自分の写真の名前（正規表現）を足す。例："kakeibo|tab-2"
-          SHOTS_ON_BRANCH="tab-|home-focus"
+          SHOTS_ON_BRANCH="settings-icon"
           shot() {
             out=$1; shift
             if [ "$GITHUB_REF_NAME" != "main" ] && ! echo "$out" | grep -qE "$SHOTS_ON_BRANCH"; then
@@ -232,6 +242,7 @@ jobs:
           done
           shot shots/world-aurora-info.png -demo -world aurora -tab 4
           shot shots/settings-world.png -settings -demo -world aurora -settingsSection world
+          shot shots/settings-icon.png -settings -demo -theme focus -settingsSection icon
           # 新しい世界観（地層・銀河・空・霧・深海）：TODO・起床・ウィジェット
           for world in strata galaxy sky mist deepsea; do
             shot "shots/world-$world.png" -demo -world $world

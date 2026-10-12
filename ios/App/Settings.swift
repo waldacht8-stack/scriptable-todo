@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - 設定
 // 画面全体を、選んでいる色合い（＋カスタマイズ）で描く。見た目の項目は「デザインを変える」（App/Design/DesignView.swift）へ分けた。
 // 起動引数（スクリーンショット用）：
-//   -settingsSection <todo|notify|calendar|data|info> でその見出しまで送る。
+//   -settingsSection <icon|todo|notify|calendar|data|info> でその見出しまで送る。
 //   -settingsSection <design|world|theme|layout|custom> と -designpage <hub|world|theme|layout|tune> はデザインの画面を開く。
 //   -accent / -corner / -font / -density <値> でカスタマイズを設定する。
 
@@ -100,7 +100,7 @@ struct SettingsView: View {
     }
 }
 
-/// 設定の中身（デザインの入口 → 通知・カレンダー・データ → 情報）
+/// 設定の中身（デザインの入口 → アプリのアイコン → 通知・カレンダー・データ → 情報）
 private struct SettingsContent: View {
     @Environment(\.palette) private var p
 
@@ -111,6 +111,8 @@ private struct SettingsContent: View {
             }
             .buttonStyle(.plain)
             .id("design")
+
+            AppIconSection().id("icon")
 
             TodoSettingsSections()
 
