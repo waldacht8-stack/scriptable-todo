@@ -22,6 +22,8 @@ enum CritterArt {
         case .aurora: 15
         case .bento: 19.2
         case .swiss: 60
+        case .yohaku: 90
+        case .terminal: 24
         default: 30
         }
     }
@@ -35,6 +37,8 @@ enum CritterArt {
         case .aurora: 2.6
         case .brutal: 2.2
         case .hinata: 3
+        case .yohaku: 2.8
+        case .terminal: 3.2
         default: 2
         }
     }
@@ -53,6 +57,8 @@ enum CritterArt {
         case .aurora: aurora(ctx, size: size, k: k, layer: layer)
         case .bento: bento(ctx, size: size, k: k, layer: layer)
         case .swiss: swiss(ctx, size: size, k: k, layer: layer)
+        case .yohaku: yohaku(ctx, size: size, k: k, layer: layer)
+        case .terminal: terminal(ctx, size: size, k: k, layer: layer)
         case .none, .clay: break
         }
     }

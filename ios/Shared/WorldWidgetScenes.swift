@@ -19,6 +19,8 @@ struct WidgetSceneBackground: View {
         case .sky: v = AnyView(SkyBackdrop(p: p, still: true, compact: true, stillT: stillT))
         case .mist: v = AnyView(MistBackdrop(p: p, still: true, compact: true))
         case .deepsea: v = AnyView(DeepSeaBackdrop(p: p, still: true, compact: true, stillT: stillT))
+        case .yohaku: v = AnyView(YohakuBackdrop(p: p, still: true, compact: true, stillT: stillT))
+        case .terminal: v = AnyView(TerminalBackdrop(p: p, still: true, compact: true, stillT: stillT))
         default: v = AnyView(p.background[0])
         }
         return v
@@ -38,6 +40,8 @@ struct WidgetSceneCard: View {
         case .sky: v = AnyView(SkyCloudCard(p: p, radius: radius, light: true))
         case .mist: v = AnyView(MistCard(p: p, radius: radius, light: true))
         case .deepsea: v = AnyView(DeepSeaGlass(p: p, radius: radius, light: true))
+        case .yohaku: v = AnyView(YohakuSheet(p: p, radius: radius, light: true))
+        case .terminal: v = AnyView(TerminalPane(p: p, radius: radius, light: true))
         default: v = AnyView(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(p.card))
         }
         return v
@@ -87,6 +91,16 @@ extension World {
             return AnyTransition.asymmetric(
                 insertion: AnyTransition.offset(y: 12).combined(with: .opacity),
                 removal: AnyTransition.offset(y: -14).combined(with: .opacity))
+        case .yohaku:
+            // 上へ払うように薄れて消える
+            return AnyTransition.asymmetric(
+                insertion: AnyTransition.opacity,
+                removal: AnyTransition.offset(y: -10).combined(with: .opacity))
+        case .terminal:
+            // 1行ずつ打ち出され、消すときは左へ詰める
+            return AnyTransition.asymmetric(
+                insertion: AnyTransition.move(edge: .leading).combined(with: .opacity),
+                removal: AnyTransition.scale(scale: 0.98, anchor: .leading).combined(with: .opacity))
         default:
             return AnyTransition.opacity
         }
@@ -96,6 +110,7 @@ extension World {
     var isScene: Bool {
         switch self {
         case .strata, .galaxy, .sky, .mist, .deepsea: true
+        case .yohaku, .terminal: true
         default: false
         }
     }
