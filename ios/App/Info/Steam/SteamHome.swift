@@ -687,10 +687,16 @@ private struct SteamSaleLine {
 // MARK: - 画面写真用：起動引数 -steamdemo で Steam を全画面で開く（RootView に .steamDemoLaunch() を1行）
 
 struct SteamDemoLaunch: ViewModifier {
-    @State private var show = ProcessInfo.processInfo.arguments.contains("-steamdemo")
+    @State private var show = false
 
+    // 起動直後に isPresented を true にしておくと、遅いシミュレーターでは出ないことがある。描いたあと少し待って開く
     func body(content: Content) -> some View {
         content
+            .task {
+                guard ProcessInfo.processInfo.arguments.contains("-steamdemo") else { return }
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                show = true
+            }
             .fullScreenCover(isPresented: $show) {
                 NavigationStack {
                     SteamHome()
