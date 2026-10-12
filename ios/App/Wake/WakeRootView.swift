@@ -117,7 +117,8 @@ struct WakeHeader: View {
                     Text(title).font(Font.system(size: 34, weight: .heavy, design: p.fontDesign)).foregroundStyle(p.text)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
-                Spacer(minLength: 0)
+                // 残光・呼吸は見出しの横の空きに絵を置く（ほかの世界観ではただの空き）
+                WorldWakeHeaderArt(p: p, alarm: model.nextPlan?.first)
                 SettingsButton()   // アプリ全体の設定（歯車）
             }
             // 起床だけの設定と記録（アプリの設定の歯車と区別するため、文字つきのボタンにする）

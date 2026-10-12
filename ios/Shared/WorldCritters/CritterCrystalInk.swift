@@ -1,7 +1,7 @@
 import SwiftUI
 
 // MARK: - 結晶・墨流しの住人の層（完了の反応・ウィジェットの下の余白の小さな絵・起床の輪）
-// 結晶：完了すると、かけらが下から飛んで結晶の次の面にはまり、きらりと光る（星が散る）。
+// 結晶：完了すると、かけらが下から飛んで結晶の次の面にはまり、角が鋭くきらりと光る。
 // 墨流し：完了すると、しずくが水面に落ちて藍と朱の輪に広がる。
 // ウィジェットは下の余白（16pt）だけを通る：結晶は小さな宝石と星、墨流しは小さな墨の輪。位置は entry.date で決まる。
 
@@ -43,35 +43,31 @@ extension CritterArt {
         // 飛ぶ（0〜0.55）
         let u: Double = D.ease(D.span(r, 0, 0.55))
         if r < 0.56 {
-            for j in stride(from: 7, through: 1, by: -1) {
-                let v: Double = max(0, u - Double(j) * 0.035)
+            for j in stride(from: 4, through: 1, by: -1) {
+                let v: Double = max(0, u - Double(j) * 0.05)
                 let px: Double = bez(sx, mx, tx, v)
                 let py: Double = bez(sy, my, ty, v)
-                let fade: Double = 1 - Double(j) / 8
-                D.glow(ctx, px, py, 10 * fade + 3, sceneColor(0xBFE6FF), 0.55 * fade)
+                let fade: Double = 1 - Double(j) / 5
+                D.glow(ctx, px, py, 7 * fade + 2, sceneColor(0xBFE6FF), 0.35 * fade)
                 brightShard(ctx, px, py, 7 * fade + 2, v * 7, alpha: 0.35 * fade)
             }
             let x: Double = bez(sx, mx, tx, u)
             let y: Double = bez(sy, my, ty, u)
-            D.glow(ctx, x, y, 30, sceneColor(0xE9F7FF), 0.85)
+            D.glow(ctx, x, y, 18, sceneColor(0xE9F7FF), 0.6)
             brightShard(ctx, x, y, 13 - u * 4, u * 7, alpha: 1)
-            CrystalScene.star(ctx, x + 9, y - 9, 6, Color.white.opacity(0.9))
+            CrystalScene.glint(ctx, x, y, 12, 0.9)
         }
         // はまって光る（0.5〜1）
         let fl: Double = D.span(r, 0.5, 1)
         if fl > 0 && fl < 1 {
             let flash: Double = sin(fl * Double.pi) * (1 - fl * 0.4)
             let facet: Path = CrystalScene.facetPath(i, c: c, s: s)
-            ctx.fill(facet, with: .color(Color.white.opacity(0.75 * flash)))
-            ctx.stroke(facet, with: .color(sceneColor(0xFFD27A, flash)), lineWidth: 2)
-            D.glow(ctx, tx, ty, s * 0.9, sceneColor(0xE9F7FF), 0.6 * flash)
-            for j in 0..<7 {
-                let ang: Double = Double(j) / 7 * 2 * Double.pi + 0.4
-                let dist: Double = 10 + fl * s * 0.8
-                let px: Double = tx + cos(ang) * dist
-                let py: Double = ty + sin(ang) * dist
-                CrystalScene.star(ctx, px, py, 5 * (1 - fl) + 1.5, sceneColor(j % 2 == 0 ? 0xFFFFFF : 0xD9CCFF, 1 - fl))
-            }
+            ctx.fill(facet, with: .color(Color.white.opacity(0.6 * flash)))
+            ctx.stroke(facet, with: .color(sceneColor(0xFFD27A, flash)), lineWidth: 1.2)
+            D.glow(ctx, tx, ty, s * 0.7, sceneColor(0xE9F7FF), 0.45 * flash)
+            // はまった面の角に、鋭いきらめきを2つだけ
+            CrystalScene.glint(ctx, Double(a.x), Double(a.y), 14 * (1 - fl * 0.5), flash)
+            CrystalScene.glint(ctx, Double(b.x), Double(b.y), 9 * (1 - fl * 0.5), flash * 0.7)
         }
     }
 
@@ -107,10 +103,10 @@ extension CritterArt {
         let grow: Double = 1 - pow(1 - u, 2.4)
         let fade: Double = u < 0.75 ? 1 : 1 - (u - 0.75) / 0.25 * 0.6
         let t: Double = k.t
-        let core: Double = 3 + 6 * grow
+        let core: Double = 2 + 4 * grow
         ctx.fill(Path(ellipseIn: CGRect(x: cx - core, y: cy - core, width: core * 2, height: core * 2)),
                  with: .color(sceneColor(indigo, 0.8 * fade)))
-        let widths: [Double] = [4, 2, 2.5, 3.5, 1.5, 2]
+        let widths: [Double] = [1.6, 0.9, 1.2, 1.4, 0.8, 1.0]
         for j in 0..<6 {
             let lag: Double = Double(j) * 0.07
             let g: Double = max(0, grow - lag) / (1 - lag)
