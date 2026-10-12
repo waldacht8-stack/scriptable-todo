@@ -249,8 +249,7 @@ struct WorldBackground: View {
             }
         case .strata, .galaxy, .sky, .mist, .deepsea:
             SceneBackdrop(p: p)
-        case .yohaku, .terminal:
-        case .zankou, .breath:
+        case .yohaku, .terminal, .zankou, .breath:
             SceneBackdrop(p: p)
         default:
             base
@@ -323,8 +322,7 @@ struct WorldCardSurface: View {
             shape.fill(p.card)
         case .strata, .galaxy, .sky, .mist, .deepsea:
             SceneCardSurface(p: p)
-        case .yohaku, .terminal:
-        case .zankou, .breath:
+        case .yohaku, .terminal, .zankou, .breath:
             SceneCardSurface(p: p)
         case .none:
             let shadow: Color = .black.opacity(p.scheme == .dark || p.outline != nil ? 0 : 0.06)
