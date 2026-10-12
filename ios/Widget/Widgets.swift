@@ -8,7 +8,7 @@ struct AppWidgets: WidgetBundle {
     var body: some Widget {
         TodoWidget()
         WakeWidget()
-        WakeLiveActivity()
+        WakeActivityBundle().body   // 出発のカウントダウンと、起床アラームが鳴るときの表示（Widget/WakeAlarmActivity.swift）
         // リリース4：太陽と月の一日・見返し・今日のまとめ・ロック画面（Widget/DayWidgets.swift）
         SunMoonWidget()
         ReviewWidget()

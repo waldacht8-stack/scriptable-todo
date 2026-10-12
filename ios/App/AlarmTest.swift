@@ -32,14 +32,20 @@ enum AlarmTest {
                 title: "テストアラーム",
                 stopButton: AlarmButton(text: "止める", textColor: .white, systemImageName: "stop.circle")
             )
-            let attributes = AlarmAttributes<WakeMetadata>(presentation: AlarmPresentation(alert: alert), tintColor: .blue)
+            // 起床アラームと同じ種類にする（ウィジェットの鳴る画面 WakeAlarmActivity が使われる）
+            let attributes = AlarmAttributes<WakeAlarmMetadata>(presentation: AlarmPresentation(alert: alert),
+                                                                metadata: WakeAlarmMetadata(stage: 1), tintColor: .blue)
             let at = Date().addingTimeInterval(60)
-            let config = AlarmManager.AlarmConfiguration<WakeMetadata>.alarm(schedule: .fixed(at), attributes: attributes)
+            let config = AlarmManager.AlarmConfiguration<WakeAlarmMetadata>.alarm(schedule: .fixed(at), attributes: attributes)
             let id = UUID()
             // 起床アラームの予約し直しで消されないよう、テストの1件として覚えておく
             WakeTestAlarms.remember(id)
             _ = try await manager.schedule(id: id, configuration: config)
-            return "\(at.formatted(date: .omitted, time: .standard)) に鳴ります。画面をロックして待ってください"
+            // 確かめ：iOS に入ったアラームの数と、この1件の状態（鳴らないときの手がかり）
+            let all: [Alarm] = (try? manager.alarms) ?? []
+            let mine: String = all.first(where: { $0.id == id }).map { "\($0.state)" } ?? "見つからない"
+            let time: String = at.formatted(date: .omitted, time: .standard)
+            return "\(time) に鳴ります。画面をロックして待ってください（登録 \(all.count)件・この1件：\(mine)）"
         } catch {
             return "アラームを設定できませんでした：\(error.localizedDescription)"
         }
