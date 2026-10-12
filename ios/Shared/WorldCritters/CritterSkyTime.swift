@@ -151,7 +151,7 @@ extension CritterArt {
             // カラスの V の字：右から左へ、ねぐらへ帰る
             let cp: Double = (k.progress * 26 / 40 + 0.1).truncatingRemainder(dividingBy: 1)
             let cx: Double = w + 60 - cp * (w + 160)
-            let cy: Double = lane - 26 + sin(k.t * 0.4) * 5
+            let cy: Double = lane - 12 + sin(k.t * 0.4) * 4
             let crowColor: Color = sceneColor(0x2A2030, 0.82)
             let v: [(Double, Double, Double)] = [(0, 0, 0), (16, -9, 0.8), (16, 9, 1.6), (33, -17, 2.2), (31, 18, 0.4), (50, -25, 1.1)]
             for item in v {
@@ -164,8 +164,8 @@ extension CritterArt {
             // 鳥はいない。灯りを点滅させた飛行機がゆっくり横切る
             let pp: Double = (k.progress * 26 / 60).truncatingRemainder(dividingBy: 1)
             let px: Double = -40 + pp * (w + 80)
-            let py: Double = lane - 30 - pp * 14
-            Critters.nightPlane(D.local(ctx, at: D.pt(px, py), scale: 1, angle: -0.05), t: k.t)
+            let py: Double = lane + 8 - pp * 10
+            Critters.nightPlane(D.local(ctx, at: D.pt(px, py), scale: 1.25, angle: -0.05), t: k.t)
             skyShootingStar(ctx, w: w, lane: lane, t: k.t)
         }
     }
@@ -229,10 +229,10 @@ extension CritterArt {
             let burst: Double = D.span(r, 0.1, 0.6)
             if burst > 0 && burst < 1 {
                 for i in 0..<5 {
-                    let a: Double = 3.6 + Double(i) * 0.32
-                    let len: Double = 30 + burst * 90
-                    let ox: Double = w * 0.62
-                    let oy: Double = h * 0.2
+                    let a: Double = 0.3 + Double(i) * 1.256
+                    let len: Double = 14 + burst * 46
+                    let ox: Double = x
+                    let oy: Double = y - 4
                     let head = D.pt(ox + cos(a) * len, oy - sin(a) * len * 0.6)
                     let alpha: Double = (1 - burst) * 0.9
                     Critters.shootingStar(ctx, head: head, dirX: cos(a), dirY: -sin(a) * 0.6, length: 26, alpha: alpha)

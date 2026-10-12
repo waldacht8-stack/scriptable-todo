@@ -243,15 +243,8 @@ private struct WidgetSky: View {
             CritterWidgetArt.sprite(sh * 2, sh, x: sx, y: top.mid, angle: 0) { c, s in
                 let cx: Double = Double(s.width) / 2
                 let cy: Double = Double(s.height) / 2
-                if slot == .night {
-                    Fantasy.softEllipse(c, cx, cy, cx, cy, sceneColor(0xDDE4FF), 0.35)
-                    let r: Double = cy * 0.55
-                    let disc = Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
-                    let bite = Path(ellipseIn: CGRect(x: cx - r * 0.3, y: cy - r * 1.15, width: r * 1.7, height: r * 1.7))
-                    var mc: GraphicsContext = c
-                    mc.clip(to: bite, options: .inverse)
-                    mc.fill(disc, with: .color(sceneColor(0xF4F1E4)))
-                } else {
+                // 夜の月は背景（止まった空）が描くので、ここでは昼の太陽だけ
+                if slot != .night {
                     Fantasy.softEllipse(c, cx, cy, cx, cy, sceneColor(0xFFF1B8), 0.8)
                     CritterDraw.circle(c, cx, cy, cy * 0.55, sceneColor(0xFFE9A0))
                 }
