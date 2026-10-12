@@ -318,6 +318,10 @@ jobs:
           shot shots/design-theme.png -settings -demo -theme dawn -layout focus -designpage theme
           shot shots/design-layout.png -settings -demo -theme focus -layout kanban -designpage layout
           shot shots/design-tune.png -settings -demo -theme forest -designpage tune
+          # 最後に開いたアプリ（世界観の背景は動き続ける）とシミュレーターを止める。動いたままだと CPU を取り合い、
+          # 次の実機用ビルド（Release）が何倍も遅くなって時間切れになる
+          xcrun simctl terminate "$UDID" com.todoapp.TodoApp 2>/dev/null || true
+          xcrun simctl shutdown "$UDID" 2>/dev/null || true
 
       - name: 実機用にビルド（署名なし）して IPA を作る
         run: |
