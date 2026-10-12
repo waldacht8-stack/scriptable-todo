@@ -328,6 +328,8 @@ struct IdvSettingsSheet: View {
                 }
             }
         }
+        // 見出しの文字も暗い地に合わせる（シートの外側のナビゲーションバーにも効くように）
+        .environment(\.colorScheme, .dark)
         .presentationDetents([.medium, .large])
     }
 }
