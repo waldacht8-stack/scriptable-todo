@@ -53,6 +53,7 @@ enum CritterArt {
         case .aurora: aurora(ctx, size: size, k: k, layer: layer)
         case .bento: bento(ctx, size: size, k: k, layer: layer)
         case .swiss: swiss(ctx, size: size, k: k, layer: layer)
+        case .zankou, .breath: break   // 背景そのものが反応する（ZankouScene・BreathScene）
         case .none, .clay: break
         }
     }

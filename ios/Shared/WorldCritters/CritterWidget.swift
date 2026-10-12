@@ -60,6 +60,7 @@ enum CritterWidgetArt {
             return AnyView(Canvas { c, s in curtains(c, size: s, day: k.day) })
         case .bento: return AnyView(WidgetBento(size: size, k: k))
         case .swiss: return AnyView(WidgetSwiss(size: size, k: k))
+        case .zankou, .breath: return AnyView(EmptyView())
         case .none, .clay: return AnyView(EmptyView())
         }
     }

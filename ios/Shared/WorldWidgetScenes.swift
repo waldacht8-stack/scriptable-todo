@@ -19,6 +19,8 @@ struct WidgetSceneBackground: View {
         case .sky: v = AnyView(SkyBackdrop(p: p, still: true, compact: true, stillT: stillT))
         case .mist: v = AnyView(MistBackdrop(p: p, still: true, compact: true))
         case .deepsea: v = AnyView(DeepSeaBackdrop(p: p, still: true, compact: true, stillT: stillT))
+        case .zankou: v = AnyView(ZankouWidgetBackdrop(p: p, stillT: stillT))
+        case .breath: v = AnyView(BreathBackdrop(p: p, still: true, compact: true, stillT: stillT))
         default: v = AnyView(p.background[0])
         }
         return v
@@ -38,6 +40,8 @@ struct WidgetSceneCard: View {
         case .sky: v = AnyView(SkyCloudCard(p: p, radius: radius, light: true))
         case .mist: v = AnyView(MistCard(p: p, radius: radius, light: true))
         case .deepsea: v = AnyView(DeepSeaGlass(p: p, radius: radius, light: true))
+        case .zankou: v = AnyView(ZankouCard(p: p, radius: radius, light: true))
+        case .breath: v = AnyView(BreathCard(p: p, radius: radius, light: true))
         default: v = AnyView(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(p.card))
         }
         return v
@@ -87,6 +91,16 @@ extension World {
             return AnyTransition.asymmetric(
                 insertion: AnyTransition.offset(y: 12).combined(with: .opacity),
                 removal: AnyTransition.offset(y: -14).combined(with: .opacity))
+        case .zankou:
+            // 残光：光の筋のように右へ流れて消える
+            return AnyTransition.asymmetric(
+                insertion: AnyTransition.opacity,
+                removal: AnyTransition.offset(x: 50).combined(with: .opacity))
+        case .breath:
+            // 呼吸：ふくらんで、ひと息で消える
+            return AnyTransition.asymmetric(
+                insertion: AnyTransition.scale(scale: 0.9).combined(with: .opacity),
+                removal: AnyTransition.scale(scale: 1.08).combined(with: .opacity))
         default:
             return AnyTransition.opacity
         }
@@ -96,6 +110,7 @@ extension World {
     var isScene: Bool {
         switch self {
         case .strata, .galaxy, .sky, .mist, .deepsea: true
+        case .zankou, .breath: true
         default: false
         }
     }

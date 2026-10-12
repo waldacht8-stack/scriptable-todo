@@ -52,6 +52,7 @@ enum WorldMotion {
     static func hasCritters(_ w: World) -> Bool {
         switch w {
         case .none, .clay: false
+        case .zankou, .breath: false   // 住人はいない。背景の光の筋・かたまりが完了に反応する
         default: true
         }
     }
