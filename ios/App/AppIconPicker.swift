@@ -153,13 +153,11 @@ struct AppIconSection: View {
         SettingsSection("アプリのアイコン", icon: "app.fill",
                         footer: "変えると、iPhone が「アイコンを変更しました」と知らせます。") {
             SettingsCard {
-                LazyVGrid(columns: columns, spacing: 14 * p.density.scale) {
-                    ForEach(AppIconOption.allCases) { option in
-                        cell(option)
-                    }
+                // 一覧で選ぶ（左に見本、右に選んでいる印）
+                ForEach(Array(AppIconOption.allCases.enumerated()), id: \.element.id) { i, option in
+                    if i > 0 { RowDivider() }
+                    row(option)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 16 * p.density.scale)
                 if let error {
                     RowDivider()
                     Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -173,6 +171,36 @@ struct AppIconSection: View {
             }
         }
         .onAppear { current = AppIconOption.from(alternateName: UIApplication.shared.alternateIconName) }
+    }
+
+    private func row(_ option: AppIconOption) -> some View {
+        let selected: Bool = option == current
+        return Button {
+            choose(option)
+        } label: {
+            HStack(spacing: 14) {
+                HiyoriIconMark(option: option)
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                Text(option.label)
+                    .font(.body.weight(selected ? .bold : .regular))
+                    .foregroundStyle(p.text)
+                Spacer(minLength: 8)
+                if selected {
+                    Image(systemName: "checkmark")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(p.accent)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8 * p.density.scale)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+        .accessibilityLabel("アイコン \(option.label)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func cell(_ option: AppIconOption) -> some View {

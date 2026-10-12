@@ -63,6 +63,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.todoapp.TodoApp
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # 設定で選べるアイコン（App/AppIconPicker.swift の AppIconOption と合わせる）
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-W6 AppIcon-W1 AppIcon-W3 AppIcon-W4 AppIcon-W5 AppIcon-W7 AppIcon-W8"
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         TARGETED_DEVICE_FAMILY: "1"
     dependencies:
       - target: TodoWidget
