@@ -9,6 +9,7 @@ enum Fantasy {
 
     // MARK: 道具
 
+    @_optimize(none)
     static func P(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: x, y: y) }
 
     /// 点の列をなめらかにつなぐ（closed なら閉じる）
@@ -38,6 +39,7 @@ enum Fantasy {
     }
 
     /// 点を c のまわりに a ラジアン回す
+    @_optimize(none)
     static func rot(_ p: CGPoint, about c: CGPoint, by a: Double) -> CGPoint {
         let dx: Double = Double(p.x - c.x)
         let dy: Double = Double(p.y - c.y)
@@ -48,14 +50,17 @@ enum Fantasy {
         return P(x, y)
     }
 
+    @_optimize(none)
     static func rotAll(_ pts: [CGPoint], about c: CGPoint, by a: Double) -> [CGPoint] {
         pts.map { (p: CGPoint) -> CGPoint in rot(p, about: c, by: a) }
     }
 
+    @_optimize(none)
     static func shift(_ pts: [CGPoint], _ dx: Double, _ dy: Double) -> [CGPoint] {
         pts.map { (p: CGPoint) -> CGPoint in P(Double(p.x) + dx, Double(p.y) + dy) }
     }
 
+    @_optimize(none)
     static func seg(_ a: CGPoint, _ b: CGPoint) -> Path {
         var p = Path()
         p.move(to: a)
@@ -63,6 +68,7 @@ enum Fantasy {
         return p
     }
 
+    @_optimize(none)
     static func line3(_ a: CGPoint, _ b: CGPoint, _ c: CGPoint) -> Path {
         var p = Path()
         p.move(to: a)
@@ -71,6 +77,7 @@ enum Fantasy {
         return p
     }
 
+    @_optimize(none)
     static func tri(_ a: CGPoint, _ b: CGPoint, _ c: CGPoint) -> Path {
         var p = Path()
         p.move(to: a)
@@ -80,17 +87,20 @@ enum Fantasy {
         return p
     }
 
+    @_optimize(none)
     static func stroke(_ c: GraphicsContext, _ path: Path, _ color: Color, _ width: Double) {
         c.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
     }
 
     /// 上から下へのグラデーションで塗る
+    @_optimize(none)
     static func vfill(_ c: GraphicsContext, _ path: Path, _ colors: [Color], _ y0: Double, _ y1: Double) {
         let g = Gradient(colors: colors)
         c.fill(path, with: .linearGradient(g, startPoint: P(0, y0), endPoint: P(0, y1)))
     }
 
     /// 横長のやわらかい光（楕円の放射グラデーション）
+    @_optimize(none)
     static func softEllipse(_ c: GraphicsContext, _ cx: Double, _ cy: Double, _ rx: Double, _ ry: Double, _ color: Color, _ alpha: Double) {
         guard rx > 0.1 && ry > 0.1 else { return }
         var e: GraphicsContext = c
@@ -102,6 +112,7 @@ enum Fantasy {
     /// 2つの節（肩→ひじ→手、腰→ひざ→足）。角度は真下から（正は +x の向き）
     struct Joint { let a: CGPoint; let b: CGPoint; let c: CGPoint }
 
+    @_optimize(none)
     static func joint(_ base: CGPoint, _ a1: Double, _ l1: Double, _ a2: Double, _ l2: Double) -> Joint {
         let bx: Double = Double(base.x)
         let by: Double = Double(base.y)
@@ -113,6 +124,7 @@ enum Fantasy {
     }
 
     /// 管のような手足（地の色の太い線＋光の側の細い線）
+    @_optimize(none)
     static func tube(_ c: GraphicsContext, _ j: Joint, _ width: Double, _ base: Color, _ light: Color, _ dx: Double, _ dy: Double) {
         let path: Path = line3(j.a, j.b, j.c)
         stroke(c, path, base, width)
@@ -120,12 +132,14 @@ enum Fantasy {
     }
 
     /// 先が細くなる脚（上の節は太く、下の節は細い）
+    @_optimize(none)
     static func leg(_ c: GraphicsContext, _ j: Joint, _ w1: Double, _ w2: Double, _ upper: Color, _ lower: Color) {
         stroke(c, seg(j.a, j.b), upper, w1)
         stroke(c, seg(j.b, j.c), lower, w2)
     }
 
     /// a→b に直角な向き（長さ 1）
+    @_optimize(none)
     static func normal(_ a: CGPoint, _ b: CGPoint) -> CGPoint {
         let dx: Double = Double(b.x - a.x)
         let dy: Double = Double(b.y - a.y)
@@ -133,6 +147,7 @@ enum Fantasy {
         return P(-dy / len, dx / len)
     }
 
+    @_optimize(none)
     static func quad(_ a: CGPoint, _ n1: CGPoint, _ w1: Double, _ b: CGPoint, _ n2: CGPoint, _ w2: Double) -> Path {
         let ax: Double = Double(a.x)
         let ay: Double = Double(a.y)
@@ -152,6 +167,7 @@ enum Fantasy {
     }
 
     /// 付け根が太く先が細い脚（塗りの台形を2つ。ひざは丸くつなぐ）
+    @_optimize(none)
     static func taperLeg(_ c: GraphicsContext, _ j: Joint, _ wTop: Double, _ wKnee: Double, _ wFoot: Double,
                          _ upper: Color, _ lower: Color) {
         let n1: CGPoint = normal(j.a, j.b)
@@ -184,6 +200,7 @@ enum Fantasy {
     }
 
     /// 0〜1 の中の a〜b で、ふわっと上がって下がる山（外は 0）
+    @_optimize(none)
     static func bump(_ u: Double, _ a: Double, _ b: Double) -> Double {
         let k: Double = D.span(u, a, b)
         guard k > 0 && k < 1 else { return 0 }
@@ -240,6 +257,7 @@ enum Fantasy {
         helmet(c, t: t, blink: blink)
     }
 
+    @_optimize(none)
     static func boot(_ c: GraphicsContext, _ at: CGPoint, _ color: Color) {
         let x: Double = Double(at.x)
         let y: Double = Double(at.y)
@@ -247,6 +265,7 @@ enum Fantasy {
         D.ellipse(c, x - 1, y - 0.2, 3.2, 1.6, Color.white.opacity(0.35))
     }
 
+    @_optimize(none)
     static func glove(_ c: GraphicsContext, _ at: CGPoint) {
         let x: Double = Double(at.x)
         let y: Double = Double(at.y)
@@ -416,6 +435,7 @@ enum Fantasy {
     }
 
     /// 鹿の1本の脚（phase で振る。前脚はひざを後ろへ、後ろ脚はかかとを前へたたむ）
+    @_optimize(none)
     static func deerLeg(_ hip: CGPoint, phase: Double, front: Bool, bob: Double) -> Joint {
         let swing: Double = -0.3 * sin(phase)
         let lift: Double = max(0, cos(phase))
@@ -430,6 +450,7 @@ enum Fantasy {
     }
 
     /// 白い息（u は 0〜1 の進み。dir は吐く向き -1 = 左）
+    @_optimize(none)
     static func breath(_ c: GraphicsContext, from p: CGPoint, u: Double, dir: Double) {
         let px: Double = Double(p.x)
         let py: Double = Double(p.y)
@@ -445,6 +466,7 @@ enum Fantasy {
 
     // MARK: 霧：吊るし灯籠（原点は柱の根もと。height は柱の高さ。灯りの中心を返す）
 
+    @_optimize(none)
     static func lanternLamp(height H: Double, swing: Double) -> CGPoint {
         let hx: Double = 12.5
         let hy: Double = -H

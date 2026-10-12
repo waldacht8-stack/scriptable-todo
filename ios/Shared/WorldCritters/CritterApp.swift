@@ -11,6 +11,7 @@ enum CritterArt {
     typealias C = Critters
 
     /// 一巡の秒数（横切る速さ。止まった絵では -motionphase × この秒数の時刻で描く）
+    @_optimize(none)
     static func period(_ w: World) -> Double {
         switch w {
         case .strata: 46
@@ -24,6 +25,7 @@ enum CritterArt {
     }
 
     /// 完了の反応の長さ（秒）
+    @_optimize(none)
     static func reactionDuration(_ w: World) -> Double {
         switch w {
         case .sky: 6
@@ -34,8 +36,10 @@ enum CritterArt {
         }
     }
 
+    @_optimize(none)
     static func laneY(_ size: CGSize) -> Double { Double(size.height) * 0.81 }
 
+    @_optimize(none)
     static func drawApp(_ world: World, _ ctx: GraphicsContext, size: CGSize, k: CritterKnobs, layer: Layer) {
         switch world {
         case .strata: strata(ctx, size: size, k: k, layer: layer)
@@ -50,11 +54,13 @@ enum CritterArt {
 
     // MARK: 地層：モグラがトンネルを掘り進む。完了で顔を出し、土がこぼれる
 
+    @_optimize(none)
     static func tunnelY(_ x: Double, w: Double, lane: Double) -> Double {
         lane + sin(x / max(w, 1) * Double.pi * 3) * 4
     }
 
     /// モグラが掘り進む右の端（右下の＋ボタンと親指にかからないよう、画面の 6 割まで）
+    @_optimize(none)
     static func moleReach(_ w: Double) -> Double { w * 0.6 }
 
     @_optimize(none)
@@ -254,9 +260,11 @@ enum CritterArt {
     // MARK: 霧：霧の奥を鹿が歩き、灯りが揺れる。完了で灯りがふっと明るく
     // 奥の霧 → 鹿 → 足もとの霧 → 灯り → 手前の霧、の順に重ねて、霧の中の奥行きを出す
 
+    @_optimize(none)
     static func mistLantern(_ w: Double) -> Double { w * 0.09 }
     static let mistLanternHeight: Double = 46
 
+    @_optimize(none)
     static func mistSwing(_ t: Double) -> Double { sin(t * 1.1) * 0.2 }
 
     @_optimize(none)
@@ -333,6 +341,7 @@ enum CritterArt {
         return out
     }()
 
+    @_optimize(none)
     static func anglerSpot(_ w: Double, lane: Double, t: Double) -> CGPoint {
         D.pt(w * 0.3, lane + 28 + sin(t * 0.9) * 2)
     }

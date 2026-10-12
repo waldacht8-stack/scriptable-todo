@@ -8,6 +8,7 @@ enum SkyPhase: String {
     case dawn, day, dusk, night
 
     /// いまの時刻の空
+    @_optimize(none)
     static func current(_ date: Date = .now) -> SkyPhase {
         let args: [String] = ProcessInfo.processInfo.arguments
         if let i = args.firstIndex(of: "-skyhour"), i + 1 < args.count, let h = Int(args[i + 1]) {
@@ -17,6 +18,7 @@ enum SkyPhase: String {
         return at(minutes: (c.hour ?? 12) * 60 + (c.minute ?? 0))
     }
 
+    @_optimize(none)
     static func at(minutes m: Int) -> SkyPhase {
         switch m {
         case (4 * 60 + 30)..<(7 * 60): return .dawn
@@ -29,6 +31,7 @@ enum SkyPhase: String {
     var isNight: Bool { self == .night }
 
     /// 一日の中の分（0〜1440。-skyhour があればその時刻の 10 分）
+    @_optimize(none)
     static func minuteOfDay(_ date: Date = .now) -> Double {
         let args: [String] = ProcessInfo.processInfo.arguments
         if let i = args.firstIndex(of: "-skyhour"), i + 1 < args.count, let h = Int(args[i + 1]) {
@@ -56,6 +59,7 @@ enum SkyPhase: String {
 
     /// 時刻でゆっくり移り変わる空の色。昼は朝の色から昼の青へ、午後は夕方の色へ少しずつ寄る。
     /// 明け方と夕方も、その時間の中で少しずつ明るさが変わる。夜との境は文字の色が変わるので混ぜない
+    @_optimize(none)
     static func blendedColors(minutes m: Double) -> [Color] {
         let phase: SkyPhase = at(minutes: Int(m))
         let a: [UInt32]
@@ -82,6 +86,7 @@ enum SkyPhase: String {
         }
     }
 
+    @_optimize(none)
     static func mix(_ a: [UInt32], _ b: [UInt32], _ k: Double) -> [Color] {
         var out: [Color] = []
         let kk: Double = max(0, min(1, k))
@@ -91,6 +96,7 @@ enum SkyPhase: String {
         return out
     }
 
+    @_optimize(none)
     static func mixColor(_ a: UInt32, _ b: UInt32, _ k: Double) -> Color {
         let ar: Double = Double((a >> 16) & 0xFF)
         let ag: Double = Double((a >> 8) & 0xFF)
@@ -138,6 +144,7 @@ enum SkyWeather {
 
     private static var cached: (at: Date, mood: Mood)?
 
+    @_optimize(none)
     static func current(_ now: Date = .now) -> Mood {
         if let c = cached, now.timeIntervalSince(c.at) < 600 { return c.mood }
         var mood = Mood(clouds: 0.25, rain: false)
@@ -150,6 +157,7 @@ enum SkyWeather {
         return mood
     }
 
+    @_optimize(none)
     static func moodFor(code: Int) -> Mood {
         switch code {
         case 0: return Mood(clouds: 0.1, rain: false)
@@ -270,6 +278,7 @@ enum SkyScene {
         }
     }
 
+    @_optimize(none)
     static func wrapX(_ x0: Double, t: Double, speed: Double, w: Double, cw: Double) -> Double {
         let span: Double = w + cw
         let raw: Double = (x0 * span + t * speed * w).truncatingRemainder(dividingBy: span)

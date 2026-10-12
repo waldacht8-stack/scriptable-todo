@@ -20,19 +20,23 @@ enum CritterWidgetArt {
     typealias F = Fantasy
 
     /// 余白（WidgetKit の widgetContentMargins。アプリの中の見本では 0 なので 16 とみなす）
+    @_optimize(none)
     static func margin(_ m: CGFloat) -> CGFloat { m < 8 ? 16 : m }
 
     /// 下の余白の帯（文字との間を 2.5pt あける）
+    @_optimize(none)
     static func bottomBand(_ h: CGFloat, margin m: CGFloat) -> CritterBand {
         CritterBand(top: h - margin(m) + 2.5, bottom: h - 0.5)
     }
 
     /// 上の余白の帯（空の太陽）
+    @_optimize(none)
     static func topBand(margin m: CGFloat) -> CritterBand {
         CritterBand(top: 0.5, bottom: margin(m) - 2.5)
     }
 
     /// 一巡の秒数（15分ごとの絵で、どれだけ進むか）
+    @_optimize(none)
     static func period(_ w: World) -> Double {
         switch w {
         case .galaxy, .sky: 2 * 3600
@@ -41,6 +45,7 @@ enum CritterWidgetArt {
         }
     }
 
+    @_optimize(none)
     static func view(_ p: Palette, size: CGSize, knobs k: CritterKnobs, margins: EdgeInsets) -> AnyView {
         let w: CGFloat = size.width
         let h: CGFloat = size.height
@@ -58,6 +63,7 @@ enum CritterWidgetArt {
     }
 
     /// 小さな絵を1枚、決まった位置に置く（位置と向きは WidgetKit が描き直しの間でつなぐ）
+    @_optimize(none)
     static func sprite(_ sw: CGFloat, _ sh: CGFloat, x: CGFloat, y: CGFloat, angle: Double,
                        draw: @escaping (GraphicsContext, CGSize) -> Void) -> some View {
         Canvas { c, s in draw(c, s) }
@@ -67,6 +73,7 @@ enum CritterWidgetArt {
     }
 
     /// 帯の高さに収まるように縮めた絵（box は絵の元の大きさ、origin は box の中の原点）
+    @_optimize(none)
     static func fitted(box: CGSize, origin: CGPoint, band: CritterBand, x: CGFloat, maxScale: CGFloat,
                        draw: @escaping (GraphicsContext) -> Void) -> some View {
         let scale: CGFloat = min(maxScale, band.height / box.height)
@@ -80,6 +87,7 @@ enum CritterWidgetArt {
     }
 
     /// 銀河：寝そべるように漂う宇宙飛行士（左から右へ）
+    @_optimize(none)
     static func galaxy(w: CGFloat, band: CritterBand, k: CritterKnobs) -> AnyView {
         let x: CGFloat = w * CGFloat(0.14 + 0.72 * k.progress)
         let tilt: Double = sin(k.progress * 4 * Double.pi) * 0.12
@@ -93,6 +101,7 @@ enum CritterWidgetArt {
     }
 
     /// 霧：左端の灯りと、草をはみながら右から左へ進む鹿
+    @_optimize(none)
     static func mist(w: CGFloat, band: CritterBand, k: CritterKnobs) -> AnyView {
         let x: CGFloat = w * CGFloat(0.86 - 0.66 * k.progress)
         let walk: Double = k.progress * 40
@@ -113,6 +122,7 @@ enum CritterWidgetArt {
     }
 
     /// 深海：右から左へゆっくり泳ぐクジラ
+    @_optimize(none)
     static func deepsea(w: CGFloat, band: CritterBand, k: CritterKnobs) -> AnyView {
         let x: CGFloat = w * CGFloat(0.84 - 0.68 * k.progress)
         let t: Double = 2.6 + k.progress * 40
@@ -123,6 +133,7 @@ enum CritterWidgetArt {
     }
 
     /// オーロラ：15分ごとに形の変わるカーテン（上の方にうっすら。背景の光）と、雪の上を駆ける狐
+    @_optimize(none)
     static func aurora(w: CGFloat, band: CritterBand, k: CritterKnobs) -> AnyView {
         let x: CGFloat = w * CGFloat(0.14 + 0.72 * k.progress)
         let run: Double = k.progress * 90
@@ -190,6 +201,7 @@ private struct WidgetMole: View {
 private struct WidgetTunnel: Shape {
     let y: CGFloat
 
+    @_optimize(none)
     static func wave(_ x: Double, w: Double, y: Double) -> CGFloat {
         CGFloat(y + sin(x / max(w, 1) * Double.pi * 3) * 1.5)
     }
