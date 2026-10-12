@@ -11,7 +11,7 @@ enum InfoWidgetSync {
         if let headlines { feed.headlines = Array(headlines.prefix(3)) }
         // 情報 › ゲームでオフにしたゲームは、ウィジェットにも出さない
         let s: AppSettings = SettingsData.load()
-        feed.splat = s.isGameShown(.splatoon) ? splat(SplatStore.shared.schedule, now: now) : nil
+        feed.splat = nil   // スプラトゥーンは情報ウィジェットに出さない（アプリの情報タブだけ）
         feed.steamSale = s.isGameShown(.steam) ? steam(SteamStore.shared.snapshot) : nil
         InfoWidgetStore.writeIfChanged(feed)
     }
