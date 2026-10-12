@@ -75,8 +75,14 @@ struct KakeiboWidgetView: View {
                     .font(.caption.weight(.bold)).foregroundStyle(left < 0 ? p.overdue : p.text).lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .contentTransition(.numericText())
-                Text(k.paydayText(entry.date)).font(.caption2.weight(.bold)).foregroundStyle(p.accent).lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                if k.importOverdue(entry.date) {
+                    // 期限を過ぎた明細があるとき（取り込み忘れの注意）
+                    Label("明細の取り込みがまだです", systemImage: "exclamationmark.circle.fill")
+                        .font(.caption2.weight(.bold)).foregroundStyle(p.overdue).lineLimit(1).minimumScaleFactor(0.6)
+                } else {
+                    Text(k.paydayText(entry.date)).font(.caption2.weight(.bold)).foregroundStyle(p.accent).lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
             }
         }
     }
@@ -151,7 +157,7 @@ struct KakeiboWidgetView: View {
                 .tracking(w.accessoryTracking).lineLimit(1)
                 .contentTransition(.numericText(value: Double(spent)))
             HStack(spacing: 6) {
-                Text(k.paydayText(entry.date)).font(lockFont(w, .caption, .semibold)).lineLimit(1)
+                Text(k.importOverdue(entry.date) ? "明細の取り込みがまだです" : k.paydayText(entry.date)).font(lockFont(w, .caption, .semibold)).lineLimit(1)
                     .minimumScaleFactor(0.7)
                 LockBar(fraction: k.elapsedFraction(entry.date)).frame(height: 4)
             }

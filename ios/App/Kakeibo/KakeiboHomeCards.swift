@@ -256,3 +256,58 @@ struct KakeiboDonut: View {
         }
     }
 }
+
+// MARK: - 最後の取り込み（取り込み忘れを防ぐ1行）
+
+/// 「十六銀行 3日前・JCB 28日前」。期限を過ぎた銀行・カードは注意の色と「取り込む」
+struct KakeiboImportStatus: View {
+    let dues: [KakeiboReminders.Due]
+    let onImport: (KakeiboInstitution) -> Void
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        if !dues.isEmpty {
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: "clock.arrow.circlepath").font(.footnote.weight(.bold)).foregroundStyle(p.sub)
+                KakeiboFlowLayout(spacing: 6) {
+                    ForEach(dues) { d in item(d) }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(p.card.opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("最後の取り込み")
+        }
+    }
+
+    private func ago(_ d: KakeiboReminders.Due) -> String {
+        let n: Int = d.daysSince()
+        return n == 0 ? "今日" : "\(n)日前"
+    }
+
+    @ViewBuilder private func item(_ d: KakeiboReminders.Due) -> some View {
+        let late: Bool = d.isOverdue()
+        if late {
+            Button { onImport(d.institution) } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                    Text("\(d.institution.name) \(ago(d))")
+                    Text("取り込む").foregroundStyle(p.onAccent)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(p.overdue, in: Capsule())
+                }
+                .font(.caption.weight(.heavy)).foregroundStyle(p.overdue)
+                .frame(minHeight: 32)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(d.institution.name) \(ago(d))。明細の取り込みがまだです。取り込む")
+        } else {
+            Text("\(d.institution.name) \(ago(d))").font(.caption.weight(.bold)).foregroundStyle(p.sub)
+                .frame(minHeight: 32)
+        }
+    }
+}

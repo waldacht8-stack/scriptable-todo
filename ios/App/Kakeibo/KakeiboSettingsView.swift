@@ -13,6 +13,7 @@ struct KakeiboSettingsView: View {
         List {
             paySection
             goalSection
+            reminderSection
             learnedSection
             importSection
         }
@@ -137,6 +138,64 @@ struct KakeiboSettingsView: View {
             }
         }
         goalText = String(v)
+    }
+
+    // MARK: 取り込みのお知らせ
+
+    private var reminderSection: some View {
+        let r: KakeiboReminderSettings = store.settings.reminder
+        let cards: [KakeiboInstitution] = KakeiboInstitution.allCases.filter(KakeiboReminders.isCard)
+        return Section {
+            Toggle(isOn: Binding(get: { store.settings.reminder.enabled },
+                                 set: { v in store.updateSettings { $0.reminder.enabled = v } })) {
+                Text("取り込みのお知らせ").foregroundStyle(p.text)
+            }
+            .tint(p.accent)
+            .listRowBackground(p.card)
+            if r.enabled {
+                DatePicker("お知らせの時刻", selection: reminderTime, displayedComponents: .hourAndMinute)
+                    .foregroundStyle(p.text)
+                    .listRowBackground(p.card)
+                ForEach(cards) { i in
+                    Stepper(value: cardDayBinding(i), in: 1...28) {
+                        HStack {
+                            Text("\(i.name) の明細の確定日").foregroundStyle(p.text)
+                            Spacer()
+                            Text("\(r.cardDay(i))日ごろ").foregroundStyle(p.sub).monospacedDigit()
+                        }
+                    }
+                    .listRowBackground(p.card)
+                }
+            }
+        } header: {
+            header("取り込みのお知らせ")
+        } footer: {
+            Text("銀行は給料日の次の日、カードは明細の確定日にお知らせします。どちらも \(KakeiboReminders.fallbackDays) 日取り込んでいなければお知らせします。お知らせを押すと、その明細の取り込みを開きます")
+                .font(.caption).foregroundStyle(p.sub)
+        }
+    }
+
+    private var reminderTime: Binding<Date> {
+        Binding(
+            get: {
+                let r = store.settings.reminder
+                return Calendar.current.date(bySettingHour: r.hour, minute: r.minute, second: 0, of: .now) ?? .now
+            },
+            set: { d in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+                store.updateSettings { s in
+                    s.reminder.hour = c.hour ?? 20
+                    s.reminder.minute = c.minute ?? 0
+                }
+            }
+        )
+    }
+
+    private func cardDayBinding(_ i: KakeiboInstitution) -> Binding<Int> {
+        Binding(
+            get: { store.settings.reminder.cardDay(i) },
+            set: { v in store.updateSettings { $0.reminder.cardDays[i.rawValue] = v } }
+        )
     }
 
     // MARK: 覚えた分類（記録の分類を直したもの）

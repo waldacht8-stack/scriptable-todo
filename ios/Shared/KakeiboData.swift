@@ -136,6 +136,8 @@ struct KakeiboSettings: Codable {
     var mappings: [String: KakeiboColumnMapping] = [:]   // 銀行・カードごとの列の対応
     var excludeTransfers: Bool = true   // カードの引き落とし・口座間の振替を合計に入れない
     var savingsGoal: KakeiboSavingsGoal? = nil   // 目標貯金（期限つきの総額）
+    var lastImports: [String: Date] = [:]        // 銀行・カードごとの最後の取り込み（KakeiboInstitution.rawValue → 日時）
+    var reminder = KakeiboReminderSettings()     // 取り込みのお知らせ
 
     init() {}
 
@@ -151,10 +153,12 @@ struct KakeiboSettings: Codable {
         mappings = ((try? c.decodeIfPresent([String: KakeiboColumnMapping].self, forKey: .mappings)) ?? nil) ?? d.mappings
         excludeTransfers = ((try? c.decodeIfPresent(Bool.self, forKey: .excludeTransfers)) ?? nil) ?? d.excludeTransfers
         savingsGoal = (try? c.decodeIfPresent(KakeiboSavingsGoal.self, forKey: .savingsGoal)) ?? nil
+        lastImports = ((try? c.decodeIfPresent([String: Date].self, forKey: .lastImports)) ?? nil) ?? d.lastImports
+        reminder = ((try? c.decodeIfPresent(KakeiboReminderSettings.self, forKey: .reminder)) ?? nil) ?? d.reminder
     }
 
     enum CodingKeys: String, CodingKey {
-        case payday, employer, rules, mappings, excludeTransfers, savingsGoal
+        case payday, employer, rules, mappings, excludeTransfers, savingsGoal, lastImports, reminder
     }
 
     /// d を含む周期（offset で前後へ）
@@ -201,7 +205,9 @@ enum KakeiboData {
 
     /// ウィジェット用のいまの周期のまとめ（kakeibo-summary.json）を書き、ウィジェットを更新する
     static func writeSummary(entries list: [KakeiboEntry], settings s: KakeiboSettings, now: Date = .now) {
-        write(KakeiboSummary.make(entries: list, cycle: s.cycle(now), payday: s.payday, now: now), KakeiboSummary.file)
+        var sum = KakeiboSummary.make(entries: list, cycle: s.cycle(now), payday: s.payday, now: now)
+        sum.importDue = s.reminder.enabled ? KakeiboReminders.dues(settings: s, entries: list).map { $0.due }.min() : nil
+        write(sum, KakeiboSummary.file)
         WidgetCenter.shared.reloadAllTimelines()
     }
 
@@ -385,9 +391,10 @@ enum KakeiboMonth {
 /// 家計簿の周期のまとめ。ウィジェットは共有フォルダの kakeibo-summary.json を読むだけにする。
 /// ファイルの形（名前は固定）：
 /// { "month": "2026-10", "spent": 12345, "income": 210000,
-///   "cycleStart": "2026-09-25", "cycleEnd": "2026-10-22", "payday": 25,
+///   "cycleStart": "2026-09-25", "cycleEnd": "2026-10-22", "payday": 25, "importDue": "2026-10-24",
 ///   "topCategories": [ { "name": "食費", "amount": 4938 }, … 最大3つ ] }
-/// month は周期の呼び名の月（「10月分」）。cycleEnd は周期の最後の日（含む）。payday は給料日なしなら null
+/// month は周期の呼び名の月（「10月分」）。cycleEnd は周期の最後の日（含む）。payday は給料日なしなら null。
+/// importDue はいちばん早い明細の取り込みの期限（この日から「明細の取り込みがまだです」。お知らせを切っていれば null）
 struct KakeiboSummary: Codable, Hashable {
     static let file = "kakeibo-summary.json"
 
@@ -398,6 +405,7 @@ struct KakeiboSummary: Codable, Hashable {
     var daysToPayday: Int? = nil    // 次の給料日まであと何日（いまの周期のときだけ。ファイルには書かない）
     var pendingCount: Int = 0   // 金額の入力待ち（ファイルには書かない）
     var categories: [Slice]     // 支出の分類（多い順。ファイルには上位3つ）
+    var importDue: Date? = nil  // いちばん早い取り込みの期限（お知らせを切っていれば nil。ファイルに書く）
 
     struct Slice: Codable, Hashable {
         var name: String
@@ -422,7 +430,7 @@ struct KakeiboSummary: Codable, Hashable {
     // MARK: ファイルの形
 
     enum CodingKeys: String, CodingKey {
-        case month, spent, income, cycleStart, cycleEnd, payday, topCategories
+        case month, spent, income, cycleStart, cycleEnd, payday, topCategories, importDue
     }
 
     private static func formatter(_ f: String) -> DateFormatter {
@@ -446,6 +454,7 @@ struct KakeiboSummary: Codable, Hashable {
         try c.encode(Self.dayFormat.string(from: cycle.lastDay), forKey: .cycleEnd)
         try c.encode(payday, forKey: .payday)
         try c.encode(topCategories, forKey: .topCategories)
+        try c.encode(importDue.map { Self.dayFormat.string(from: $0) }, forKey: .importDue)
     }
 
     init(from decoder: Decoder) throws {
@@ -465,6 +474,8 @@ struct KakeiboSummary: Codable, Hashable {
         spent = try c.decode(Int.self, forKey: .spent)
         income = try c.decodeIfPresent(Int.self, forKey: .income) ?? 0
         categories = try c.decodeIfPresent([Slice].self, forKey: .topCategories) ?? []
+        let dueText: String? = try c.decodeIfPresent(String.self, forKey: .importDue)
+        importDue = dueText.flatMap { Self.dayFormat.date(from: $0) }
     }
 
     /// kakeibo-summary.json を読む（なければ nil）

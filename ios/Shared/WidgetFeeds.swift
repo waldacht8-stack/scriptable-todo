@@ -42,6 +42,7 @@ import Foundation
 //   "cycleStart": "2026-09-25",       // 周期の最初の日（給料日。土日・祝日なら前の営業日）
 //   "cycleEnd": "2026-10-22",         // 周期の最後の日（含む）。今日がこの外なら支出・収入 0 として扱う
 //   "payday": 25,                     // 給料日（1〜31。なしは null で暦の月）。「給料日まであと◯日」に使う
+//   "importDue": "2026-10-24",        // 明細の取り込みの期限（この日から「明細の取り込みがまだです」。なしは null）
 //   "topCategories": [                // 周期の支出の多い分類（多い順。中サイズに上位3つ。任意）
 //     { "name": "食費", "amount": 12800 }
 //   ]
@@ -186,6 +187,7 @@ struct KakeiboFeed: Codable, Equatable {
     var cycleStart: String? = nil       // yyyy-MM-dd
     var cycleEnd: String? = nil         // yyyy-MM-dd（最後の日を含む）
     var payday: Int? = nil              // 給料日（なしは暦の月）
+    var importDue: String? = nil        // 明細の取り込みの期限（yyyy-MM-dd）
     var topCategories: [Category]? = nil
     var isSample: Bool = false
 
@@ -197,7 +199,7 @@ struct KakeiboFeed: Codable, Equatable {
     static let file = "kakeibo-summary.json"
 
     private enum CodingKeys: String, CodingKey {
-        case month, spent, income, cycleStart, cycleEnd, payday, topCategories
+        case month, spent, income, cycleStart, cycleEnd, payday, topCategories, importDue
     }
 
     /// ファイルの周期が、いまの周期か（前の版のファイル＝周期の日付なし、は暦の月で比べる）
@@ -256,6 +258,12 @@ struct KakeiboFeed: Codable, Equatable {
         let total: Double = c.end.timeIntervalSince(c.start)
         guard total > 0 else { return 0 }
         return min(1, max(0, now.timeIntervalSince(c.start) / total))
+    }
+
+    /// 明細の取り込みが期限を過ぎたか（期限の日を含む）
+    func importOverdue(_ now: Date) -> Bool {
+        guard let d = importDue, !isSample else { return false }
+        return d <= WidgetFeedDay.key(now)
     }
 
     /// 「給料日まであと3日」「今日は給料日」（給料日なしは「月末まであと◯日」）

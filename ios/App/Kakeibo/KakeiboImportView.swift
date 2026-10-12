@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 enum KakeiboImportStart {
     case fresh                          // ① から
     case file(name: String, data: Data) // 共有で受け取った（③ から）
+    case preset(KakeiboInstitution)     // 銀行・カードを決めて ① から（取り込みのお知らせ・ホームの「取り込む」）
     case demo(String)                   // 画面写真用（source / pick / mapping / preview / done / help / jcb / mufg）
 }
 
@@ -436,6 +437,8 @@ struct KakeiboImportView: View {
         switch start {
         case .fresh:
             break
+        case .preset(let i):
+            institution = i
         case .file(let name, let data):
             step = 2
             await load(name: name, data: data, detect: true)

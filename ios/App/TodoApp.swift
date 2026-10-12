@@ -22,6 +22,7 @@ struct HiyoriApp: App {
                     store.reload() // ウィジェット・通知で変えた内容を反映
                     if !ProcessInfo.processInfo.arguments.contains("-demo") { Task { await store.refreshServices() } }
                     if !ProcessInfo.processInfo.arguments.contains("-demo") { Task { await DayCardReminder.reschedule() } } // 1日1枚の通知を切らさない
+                    Task { await KakeiboReminderScheduler.reschedule() } // 明細の取り込みのお知らせ（見本のときは何もしない）
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .todoDataChanged)) { _ in store.reload() }
         }
@@ -83,6 +84,8 @@ struct RootView: View {
                 // 家計簿のファイル（CSV・PDF）とウィジェットの hiyori:// は openWidgetLink がまとめて受け取る
                 .onOpenURL { url in openWidgetLink(url) }
                 .onReceive(NotificationCenter.default.publisher(for: .openConsultTab)) { _ in tab = 3 }
+                .onReceive(NotificationCenter.default.publisher(for: .openKakeiboTab)) { _ in tab = 2 }
+                .onAppear { if KakeiboImportLink.shared.pending != nil { tab = 2 } }
                 .onAppear { if ConsultDeepLink.consumePending() { tab = 3 } }
                 // 世界観の住人（モグラ・猫など）はタブの画面の背景にだけ出す。設定には出さない
                 .environment(\.worldCritters, true)
@@ -114,7 +117,9 @@ struct RootView: View {
         switch url.host?.lowercased() ?? "" {
         case "todo": tab = 0
         case "wake": tab = 1
-        case "kakeibo": tab = 2
+        case "kakeibo":
+            tab = 2
+            KakeiboImportLink.shared.receive(url)   // hiyori://kakeibo?import=jcb なら取り込みを開く
         case "consult": tab = 3
         case "info": tab = 4
         case "review":

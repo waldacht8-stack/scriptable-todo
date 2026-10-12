@@ -53,6 +53,7 @@ final class KakeiboStore: ObservableObject {
         KakeiboData.saveSettings(s)
         settings = s
         WidgetCenter.shared.reloadAllTimelines()
+        Task { await KakeiboReminderScheduler.reschedule() }   // 給料日・お知らせの設定・取り込んだ日が変わったら予約し直す
     }
 
     func learn(_ text: String, category: String) {
@@ -104,6 +105,9 @@ final class KakeiboStore: ObservableObject {
     func summary(_ cycle: KakeiboCycle.Period, now: Date = .now) -> KakeiboSummary {
         KakeiboSummary.make(entries: entries, cycle: cycle, payday: settings.payday, now: now)
     }
+
+    /// 取り込んだことのある銀行・カードの、次に取り込むとよい日
+    var importDues: [KakeiboReminders.Due] { KakeiboReminders.dues(settings: settings, entries: entries) }
 
     /// 目標貯金の進み具合（決めていなければ nil）
     var savingsProgress: KakeiboSavings.Progress? {
@@ -164,6 +168,9 @@ final class KakeiboStore: ObservableObject {
             return n
         }
         reload()
+        // 取り込んだ日を覚える（重複ばかりで1件も入らなかったときも、取り込んだことにする）
+        let key: String = institution.rawValue
+        updateSettings { $0.lastImports[key] = .now }
         let dates: [Date] = rows.map(\.date)
         return ImportResult(batch: batch, added: new.filter { !$0.isExcluded }.count,
                             duplicates: rows.filter { $0.flag == .duplicate && !$0.include }.count,

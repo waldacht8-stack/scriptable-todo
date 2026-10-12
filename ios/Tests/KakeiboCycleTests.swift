@@ -183,7 +183,7 @@ final class KakeiboCycleTests: TokyoTestCase {
         // ファイルの形
         let data = try JSONEncoder().encode(s)
         let obj = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(Set(obj.keys), ["month", "spent", "income", "cycleStart", "cycleEnd", "payday", "topCategories"])
+        XCTAssertEqual(Set(obj.keys), ["month", "spent", "income", "cycleStart", "cycleEnd", "payday", "topCategories", "importDue"])
         XCTAssertEqual(obj["month"] as? String, "2026-10")
         XCTAssertEqual(obj["cycleStart"] as? String, "2026-09-25")
         XCTAssertEqual(obj["cycleEnd"] as? String, "2026-10-22")

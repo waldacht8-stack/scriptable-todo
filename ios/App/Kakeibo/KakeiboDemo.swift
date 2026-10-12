@@ -14,6 +14,10 @@ enum KakeiboDemo {
         let prev = KakeiboCycle.period(containing: now, payday: payday, offset: -1)
         // 目標貯金の見本（前の周期から数えて、5か月後の月分までに 30 万円）
         s.savingsGoal = KakeiboSavingsGoal(amount: 300_000, deadline: KakeiboMonth.start(cycle.label, offset: 5), start: prev.start)
+        // 最後の取り込みの見本：十六銀行は2日前、JCB は 40 日前（35 日を過ぎて「取り込む」が出る）
+        let day: TimeInterval = 86_400
+        s.lastImports = [KakeiboInstitution.juroku.rawValue: now.addingTimeInterval(-2 * day),
+                         KakeiboInstitution.jcb.rawValue: now.addingTimeInterval(-40 * day)]
         // 覚えた分類の見本
         s.rules = [KakeiboRule(keyword: "ミホンジム", category: "娯楽", learned: true)]
         // 見本の CSV は列の対応を覚えた状態にする（-kakeiboimport mapping のときは覚えていない状態）

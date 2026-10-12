@@ -6,6 +6,7 @@ import SwiftUI
 struct KakeiboRootView: View {
     @StateObject private var store = KakeiboStore()
     @ObservedObject private var inbox = KakeiboInbox.shared
+    @ObservedObject private var importLink = KakeiboImportLink.shared
     @Environment(\.palette) private var p
     @Environment(\.motion) private var motion
     @Environment(\.scenePhase) private var scene
@@ -23,6 +24,7 @@ struct KakeiboRootView: View {
                     let summary: KakeiboSummary = store.summary(cycle)
                     KakeiboSummaryCard(summary: summary, offset: $cycleOffset,
                                        onOpen: { open(.records) }, onSettings: { path.append(.settings) })
+                    KakeiboImportStatus(dues: store.importDues) { sheet = .importer(.preset($0)) }
                     goalCard
                     KakeiboCategoryCard(summary: summary) { open(.categories) }
                     KakeiboLinkRow(icon: "list.bullet.rectangle", title: "記録を見る", detail: recordsDetail(summary)) {
@@ -51,7 +53,11 @@ struct KakeiboRootView: View {
             }
         }
         .sheet(item: $sheet) { s in sheetContent(s) }
-        .onAppear { store.reload() }
+        .onAppear {
+            store.reload()
+            openPendingImport()
+        }
+        .onChange(of: importLink.pending) { _, _ in openPendingImport() }
         .onChange(of: scene) { _, s in if s == .active { store.reload() } }
         .onReceive(NotificationCenter.default.publisher(for: .kakeiboDataChanged)) { _ in store.reload() }
         .onOpenURL { url in inbox.receive(url) }
@@ -61,6 +67,14 @@ struct KakeiboRootView: View {
             sheet = .importer(.file(name: f.name, data: f.data))
         }
         .task { await openForScreenshot() }
+    }
+
+    /// 取り込みのお知らせ・hiyori://kakeibo?import=… で来たら、その銀行・カードの取り込みを開く
+    private func openPendingImport() {
+        guard let i = importLink.pending else { return }
+        importLink.pending = nil
+        path = []
+        sheet = .importer(.preset(i))
     }
 
     private func open(_ focus: KakeiboDetailFocus) {
