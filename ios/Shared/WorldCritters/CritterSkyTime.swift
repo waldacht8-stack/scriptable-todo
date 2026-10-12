@@ -119,7 +119,8 @@ extension CritterArt {
     static func skyFlyers(_ ctx: GraphicsContext, size: CGSize, k: CritterKnobs) {
         let w: Double = Double(size.width)
         let lane: Double = laneY(size)
-        let slot: SkySlot = SkySlot.at(day: k.day)
+        // 画面の空の色はいまの時刻（と -skyhour）で決まるので、飛ぶものも同じ時刻で選ぶ（-motionphase の位相では選ばない）
+        let slot: SkySlot = SkySlot.at(minutes: SkyPhase.minuteOfDay())
         switch slot {
         case .morning:
             // スズメの小さな群れ：上下にはずみながら左から右へ
@@ -193,7 +194,8 @@ extension CritterArt {
     static func skyReaction(_ ctx: GraphicsContext, size: CGSize, k: CritterKnobs, r: Double) {
         let w: Double = Double(size.width)
         let h: Double = Double(size.height)
-        let slot: SkySlot = SkySlot.at(day: k.day)
+        // 画面の空の色はいまの時刻（と -skyhour）で決まるので、飛ぶものも同じ時刻で選ぶ（-motionphase の位相では選ばない）
+        let slot: SkySlot = SkySlot.at(minutes: SkyPhase.minuteOfDay())
         switch slot {
         case .morning:
             // スズメが右下からぱっと飛び立つ

@@ -44,7 +44,7 @@ enum DeepSeaScene {
         let steps: Int = 16
         let drift: Double = t * 0.3
         for layer in 0..<2 {
-            let alpha: Double = layer == 0 ? 0.2 : 0.1
+            let alpha: Double = layer == 0 ? 0.13 : 0.06
             let width: Double = layer == 0 ? 1.6 : 0.9
             let speed: Double = layer == 0 ? 1 : -0.7
             // 横の波線
