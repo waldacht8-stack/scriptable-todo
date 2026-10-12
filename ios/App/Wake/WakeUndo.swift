@@ -20,12 +20,9 @@ struct WakeLockedCheckIn: View {
                     .padding(.horizontal, 14).padding(.vertical, 9)
                     .foregroundStyle(p.sub)
                     .overlay(Capsule().strokeBorder(p.sub.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])))
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(reason).font(Font.footnote.weight(.bold)).foregroundStyle(p.text)
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                        Text("押し間違い防止のため、最初のアラームの2時間前から").font(Font.caption2).foregroundStyle(p.sub)
-                            .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    }
+                    // 押し間違い防止のため、最初のアラームの2時間前から（説明は「アラームの詳細」に）
+                    Text(reason).font(Font.footnote.weight(.bold)).foregroundStyle(p.text)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 0)
                 }
             }
@@ -35,28 +32,16 @@ struct WakeLockedCheckIn: View {
     }
 }
 
-/// チェックイン後、その日のあいだ出す「起きたを取り消す」（確認つき）。控えめな1行
-struct WakeUndoCard: View {
+/// チェックイン後、その日のあいだ出す「起きたを取り消す」（確認つき）。起床タブのホームの行の1つ
+struct WakeUndoRow: View {
     @ObservedObject var model: WakeViewModel
     @Environment(\.palette) private var p
     @State private var confirm = false
 
     var body: some View {
         Button { confirm = true } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "arrow.uturn.backward").font(Font.headline.weight(.bold))
-                    .foregroundStyle(p.overdue)
-                    .frame(width: 40, height: 40)
-                    .background(p.overdue.opacity(0.12), in: Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("起きたを取り消す").font(Font.headline).foregroundStyle(p.text)
-                    Text("押し間違えたときに。今日のアラームを予約し直します").font(Font.caption).foregroundStyle(p.sub)
-                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(Font.footnote.weight(.bold)).foregroundStyle(p.sub)
-            }
-            .paletteCard(p, padding: 16)
+            WakeRowLabel(icon: "arrow.uturn.backward", title: "起きたを取り消す",
+                         detail: "押し間違えたときに。今日のアラームを予約し直します", tint: p.overdue)
         }
         .buttonStyle(.plain)
         .confirmationDialog("起きたを取り消しますか？", isPresented: $confirm, titleVisibility: .visible) {

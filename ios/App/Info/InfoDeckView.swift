@@ -147,7 +147,7 @@ struct InfoDeckCard: View {
         let shape = RoundedRectangle(cornerRadius: p.radius + 4, style: .continuous)
         let shadow: Color = .black.opacity(p.scheme == .dark ? 0.3 : 0.12)
         return cardContent
-            .frame(maxWidth: .infinity, maxHeight: 460, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: 520, alignment: .top)
             .background(p.card)
             .clipShape(shape)
             .shadow(color: shadow, radius: 18, y: 8)
@@ -354,7 +354,7 @@ struct InfoDeckEndCard: View {
             .buttonStyle(.plain)
         }
         .padding(26)
-        .frame(maxWidth: .infinity, maxHeight: 460)
+        .frame(maxWidth: .infinity, maxHeight: 520)
         .background(p.card, in: shape)
         .shadow(color: .black.opacity(p.scheme == .dark ? 0.3 : 0.12), radius: 18, y: 8)
         .padding(.horizontal, 20)
