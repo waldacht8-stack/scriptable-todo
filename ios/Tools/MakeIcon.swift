@@ -1,11 +1,13 @@
 // アプリのアイコン「日和」を描いて PNG にする（GitHub Actions の macOS で実行）。
-// 使い方: swift Tools/MakeIcon.swift <出力先.png>
-// 絵柄：朝焼けの空に、地平線から昇る朝日。朝日の上に、光の筋のようなチェックマーク。
+// 使い方: swift Tools/MakeIcon.swift <出力先.png> [dark]
+// 絵柄：地平線から昇る朝日（ふつうの表示）。dark を付けると、同じ地平線から昇る三日月と星（ダークモード）。
+// iPhone のダークモードを「自動」にしていれば、日没で月、日の出で太陽に切り替わる
 import AppKit
 import CoreGraphics
 
 let size = 1024
 let out = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "icon.png"
+let dark = CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "dark"
 
 let cs = CGColorSpaceCreateDeviceRGB()
 guard let ctx = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
@@ -16,50 +18,53 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
 }
 
 let s = CGFloat(size)
-// CoreGraphics は下が y=0。地平線は下から 34% の高さ
-let horizon = s * 0.34
-
-// 空：上の藍色から地平線の朝焼け色へ
-let sky = CGGradient(colorsSpace: cs, colors: [rgb(0xF6A27A), rgb(0xE9767A), rgb(0x5A4A9C), rgb(0x2A2E6E)] as CFArray,
-                     locations: [0, 0.22, 0.62, 1])!
-ctx.drawLinearGradient(sky, start: CGPoint(x: 0, y: horizon), end: CGPoint(x: 0, y: s), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
-
-// 朝日（地平線の上に半分出ている）とまわりの光
-let sunCenter = CGPoint(x: s / 2, y: horizon)
-let glow = CGGradient(colorsSpace: cs, colors: [rgb(0xFFE7A0, 0.85), rgb(0xFFC97A, 0)] as CFArray, locations: [0, 1])!
-ctx.drawRadialGradient(glow, startCenter: sunCenter, startRadius: 0, endCenter: sunCenter, endRadius: s * 0.48, options: [])
-ctx.setFillColor(rgb(0xFFD65C))
-ctx.fillEllipse(in: CGRect(x: sunCenter.x - s * 0.22, y: sunCenter.y - s * 0.22, width: s * 0.44, height: s * 0.44))
-
-// 光の筋（左右に短い線）
-ctx.setStrokeColor(rgb(0xFFE9B0, 0.9))
-ctx.setLineCap(.round)
-ctx.setLineWidth(s * 0.028)
-for angle in [168.0, 145.0, 35.0, 12.0] {
-    let a = angle * .pi / 180
-    let r1 = s * 0.28, r2 = s * 0.36
-    ctx.move(to: CGPoint(x: sunCenter.x + cos(a) * r1, y: sunCenter.y + sin(a) * r1))
-    ctx.addLine(to: CGPoint(x: sunCenter.x + cos(a) * r2, y: sunCenter.y + sin(a) * r2))
+// 下書きは 180 四方・上が y=0。CoreGraphics は下が y=0 なので変換する
+let k = s / 180
+func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * k, y: s - y * k) }
+func circle(_ x: CGFloat, _ y: CGFloat, _ r: CGFloat, _ c: CGColor) {
+    let c0 = p(x, y)
+    ctx.setFillColor(c)
+    ctx.fillEllipse(in: CGRect(x: c0.x - r * k, y: c0.y - r * k, width: r * 2 * k, height: r * 2 * k))
 }
-ctx.strokePath()
+/// 角の丸い横線（水面の光）
+func bar(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ c: CGColor) {
+    let r = CGRect(x: x * k, y: s - (y + 6) * k, width: w * k, height: 6 * k)
+    ctx.addPath(CGPath(roundedRect: r, cornerWidth: 3 * k, cornerHeight: 3 * k, transform: nil))
+    ctx.setFillColor(c)
+    ctx.fillPath()
+}
 
-// 大地（地平線から下）：やわらかいクリーム色の丘
-ctx.setFillColor(rgb(0xFFF3E2))
-ctx.move(to: CGPoint(x: 0, y: horizon + s * 0.02))
-ctx.addQuadCurve(to: CGPoint(x: s, y: horizon + s * 0.02), control: CGPoint(x: s / 2, y: horizon - s * 0.05))
-ctx.addLine(to: CGPoint(x: s, y: 0))
-ctx.addLine(to: CGPoint(x: 0, y: 0))
-ctx.closePath()
-ctx.fillPath()
+let horizon: CGFloat = 112   // 地平線（下書きの y）
 
-// チェックマーク（朝日の上に、光の筋のように）
-ctx.setStrokeColor(rgb(0xFFFFFF))
-ctx.setLineWidth(s * 0.075)
-ctx.setLineJoin(.round)
-ctx.move(to: CGPoint(x: s * 0.33, y: s * 0.64))
-ctx.addLine(to: CGPoint(x: s * 0.45, y: s * 0.52))
-ctx.addLine(to: CGPoint(x: s * 0.70, y: s * 0.80))
-ctx.strokePath()
+// 空
+let skyColors: [CGColor] = dark ? [rgb(0x2A2F5E), rgb(0x151832)] : [rgb(0xFFB25B), rgb(0xF0603A)]
+let sky = CGGradient(colorsSpace: cs, colors: skyColors as CFArray, locations: [0, 1])!
+ctx.drawLinearGradient(sky, start: CGPoint(x: 0, y: s), end: CGPoint(x: 0, y: 0), options: [])
+
+if dark {
+    // 星
+    for (x, y, r) in [(40.0, 44.0, 2.5), (138.0, 36.0, 2.0), (150.0, 70.0, 1.6), (62.0, 24.0, 1.4), (24.0, 84.0, 1.4)] as [(CGFloat, CGFloat, CGFloat)] {
+        circle(x, y, r, rgb(0xFFFFFF, 0.9))
+    }
+    // 月のまわりの淡い光
+    let glow = CGGradient(colorsSpace: cs, colors: [rgb(0xF3EBCF, 0.28), rgb(0xF3EBCF, 0)] as CFArray, locations: [0, 1])!
+    ctx.drawRadialGradient(glow, startCenter: p(90, horizon), startRadius: 0, endCenter: p(90, horizon), endRadius: 70 * k, options: [])
+    // 三日月：満月から、空の色の円で右上を欠く
+    circle(90, horizon, 40, rgb(0xF3EBCF))
+    circle(106, 100, 34, rgb(0x22274F))
+} else {
+    // 朝日のまわりの光
+    let glow = CGGradient(colorsSpace: cs, colors: [rgb(0xFFF4E0, 0.45), rgb(0xFFF4E0, 0)] as CFArray, locations: [0, 1])!
+    ctx.drawRadialGradient(glow, startCenter: p(90, horizon), startRadius: 0, endCenter: p(90, horizon), endRadius: 72 * k, options: [])
+    circle(90, horizon, 40, rgb(0xFFF4E0))
+}
+
+// 地平線から下（水面）
+ctx.setFillColor(dark ? rgb(0x0E1026) : rgb(0xC9402A))
+ctx.fill(CGRect(x: 0, y: 0, width: s, height: s - horizon * k))
+let shine: UInt32 = dark ? 0xF3EBCF : 0xFFF4E0
+bar(28, 124, 124, rgb(shine, dark ? 0.35 : 0.55))
+bar(48, 140, 84, rgb(shine, dark ? 0.2 : 0.35))
 
 guard let image = ctx.makeImage() else { fatalError("image") }
 let rep = NSBitmapImageRep(cgImage: image)
