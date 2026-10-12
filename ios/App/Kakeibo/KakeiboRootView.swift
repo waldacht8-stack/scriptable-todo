@@ -142,7 +142,8 @@ struct KakeiboRootView: View {
                 Label("金額の入力待ち \(pending.count)件", systemImage: "exclamationmark.circle.fill")
                     .font(.subheadline.weight(.heavy)).foregroundStyle(p.overdue)
                 ForEach(pending.prefix(3)) { e in
-                    Button { sheet = .entry(e) } label: { KakeiboEntryRow(entry: e) }.buttonStyle(.plain)
+                    // 右下の ＋ ボタンに「金額を入力」が隠れないよう、右を空ける
+                    Button { sheet = .entry(e) } label: { KakeiboEntryRow(entry: e).padding(.trailing, 52) }.buttonStyle(.plain)
                 }
             }
             .paletteCard(p, padding: 14)
