@@ -17,7 +17,7 @@ struct InfoRootView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 HStack {
                     InfoSegmented(selection: $section)
                     Spacer()
@@ -97,10 +97,10 @@ struct InfoTopicsScreen: View {
     private var showList: Bool { listMode || filter == .saved }
 
     var body: some View {
-        VStack(spacing: 10) {
+        // 見出しは小さめにまとめ、空いた高さを記事（一覧・カード）に回す
+        VStack(spacing: 8) {
             header
             chips
-            statusLine
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -116,12 +116,16 @@ struct InfoTopicsScreen: View {
         }
     }
 
-    // 「未読 12 件」・一覧の切り替え・メニュー
+    // 「未読 12 件」と更新の状態（2行で小さく）・一覧の切り替え・メニュー
     private var header: some View {
         let isSaved: Bool = filter == .saved
         let count: Int = model.deck(filter).count
         return HStack(alignment: .center, spacing: 8) {
-            BigCount(prefix: isSaved ? "保存" : "未読", value: count, suffix: "件")
+            VStack(alignment: .leading, spacing: 0) {
+                countLine(prefix: isSaved ? "保存" : "未読", value: count)
+                statusLine
+            }
+            Spacer(minLength: 0)
             if !isSaved {
                 Button {
                     withAnimation(reduceMotion ? nil : motion.change) { listMode.toggle() }
@@ -204,25 +208,33 @@ struct InfoTopicsScreen: View {
             }
     }
 
-    // 更新の状態（オフラインのときは前回の記事を出していることを伝える）
+    /// 「未読 12 件」。世界観の大きな数字（BigCount）の字詰め・色・光はそのままに、大きさを半分ほどに
+    private func countLine(prefix: String, value: Int) -> some View {
+        let size: CGFloat = (p.world.bigNumberSize * 0.54).rounded()
+        return HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(prefix).font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+            Text("\(value)").font(.system(size: size, weight: .heavy, design: p.fontDesign))
+                .tracking(p.world.bigNumberTracking * 0.54)
+                .foregroundStyle(p.world.bigNumberAccent ? p.accent : p.text)
+                .worldNumberGlow(p)
+                .contentTransition(.numericText())
+                .monospacedDigit()
+            Text("件").font(.subheadline.weight(.semibold)).foregroundStyle(p.sub)
+        }
+        .lineLimit(1)
+        .accessibilityElement(children: .combine)
+    }
+
+    // 更新の状態（オフラインのときは前回の記事を出していることを伝える）。
+    // 取り直しは一覧を下に引っぱるか、右のメニューの「今すぐ更新」で（小さな更新ボタンは44pt未満なので置かない）
     private var statusLine: some View {
         HStack(spacing: 6) {
             statusText
-            Spacer()
-            if model.loading {
-                ProgressView().controlSize(.small)
-            } else if !model.isDemo {
-                Button { Task { await model.refresh() } } label: {
-                    Image(systemName: "arrow.clockwise").font(.footnote.weight(.semibold))
-                }
-                .foregroundStyle(p.accent)
-                .accessibilityLabel("更新")
-            }
+            if model.loading { ProgressView().controlSize(.mini) }
         }
         .font(.caption)
         .foregroundStyle(p.sub)
-        .padding(.horizontal, 24)
-        .frame(height: 20)
+        .lineLimit(1)
     }
 
     @ViewBuilder

@@ -305,6 +305,8 @@ struct WakeWatchCard: View {
 
 struct WakeEveningCheck: View {
     @ObservedObject var model: WakeViewModel
+    /// 次のアラームのカードの中に1行で出す（時刻はカードの大きな数字にあるので、回数と状態だけ）
+    var inline: Bool = false
     @Environment(\.palette) private var p
 
     var body: some View {
@@ -312,32 +314,50 @@ struct WakeEveningCheck: View {
         let scheduled: Int = plan.map { pl in model.liveAlarmCount ?? model.state.alarms.filter { $0.day == pl.day }.count } ?? 0
         let ok: Bool = plan != nil && scheduled > 0
         let tint: Color = ok ? p.accent : p.overdue
-        HStack(spacing: 12) {
+        let row = HStack(spacing: inline ? 8 : 12) {
             Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .font(Font.title2.weight(.bold)).foregroundStyle(tint)
+                .font(inline ? Font.headline : Font.title2.weight(.bold)).foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title(plan, scheduled: scheduled)).font(Font.headline).foregroundStyle(ok ? p.text : p.overdue)
+                Text(inline ? inlineTitle(plan, scheduled: scheduled) : title(plan, scheduled: scheduled))
+                    .font(inline ? Font.subheadline.weight(.bold) : Font.headline).foregroundStyle(ok ? p.text : p.overdue)
                     .lineLimit(2).minimumScaleFactor(0.8).fixedSize(horizontal: false, vertical: true)
-                Text(detail(plan, ok: ok)).font(Font.caption).foregroundStyle(p.sub)
-                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                if !inline || !ok {
+                    Text(detail(plan, ok: ok)).font(Font.caption).foregroundStyle(p.sub)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: 0)
             if !ok && plan != nil {
                 Button { model.scheduleAll() } label: {
                     Text("入れ直す").font(Font.subheadline.weight(.heavy)).foregroundStyle(p.onAccent)
-                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 44)
                         .background(p.overdue, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .paletteCard(p, padding: 16)
-        .overlay {
-            if !ok {
-                RoundedRectangle(cornerRadius: p.radius, style: .continuous).strokeBorder(p.overdue, lineWidth: 2)
+        Group {
+            if inline {
+                row
+            } else {
+                row
+                    .paletteCard(p, padding: 16)
+                    .overlay {
+                        if !ok {
+                            RoundedRectangle(cornerRadius: p.radius, style: .continuous).strokeBorder(p.overdue, lineWidth: 2)
+                        }
+                    }
             }
         }
         .onAppear { model.checkAlarms() }
+    }
+
+    /// 1行のとき：「アラーム4回 入っています」
+    private func inlineTitle(_ plan: WakePlan?, scheduled: Int) -> String {
+        guard plan != nil else { return "次のアラームが入っていません" }
+        if scheduled > 0 { return "アラーム\(scheduled)回 入っています" }
+        return "アラームが入っていません"
     }
 
     private func title(_ plan: WakePlan?, scheduled: Int) -> String {

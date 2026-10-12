@@ -274,8 +274,9 @@ enum WakeDemo {
             if i == 4 { sessions[i].oversleep = 12 }
             if i == 1 { sessions[i].oversleep = 0; sessions[i].watchedBy = "steps" }
         }
-        let alarmDays: Int = ProcessInfo.processInfo.arguments.contains("-wakedayoff") ? 3 : 1
-        if phase == "evening", let tomorrow = cal.date(byAdding: .day, value: alarmDays, to: today) {
+        // 明け方（起床前）の次の起床日は今日
+        let alarmDays: Int = phase == "before" ? 0 : (ProcessInfo.processInfo.arguments.contains("-wakedayoff") ? 3 : 1)
+        if phase == "evening" || phase == "before", let tomorrow = cal.date(byAdding: .day, value: alarmDays, to: today) {
             // 夜の確認の見本：次の起床日（ふつうは明日）の4回が入っている
             for (n, off) in [0, 10, 20, 30].enumerated() {
                 let at = cal.date(byAdding: .minute, value: 420 + off, to: tomorrow) ?? tomorrow

@@ -105,7 +105,7 @@ jobs:
           # 起動して撮る。真っ白（小さいファイル）なら、待って撮り直す（遅いシミュレーター対策）
           # 担当の枝では、SHOTS_ON_BRANCH に名前が合う写真だけ撮る（時間短縮）。main ではすべて撮る
           # 各担当は自分の枝でこの値に自分の写真の名前（正規表現）を足す。例："kakeibo|tab-2"
-          SHOTS_ON_BRANCH="tab-|home-focus"
+          SHOTS_ON_BRANCH="wake|info-list|info-deck|info-night|tab-1|tab-4"
           shot() {
             out=$1; shift
             if [ "$GITHUB_REF_NAME" != "main" ] && ! echo "$out" | grep -qE "$SHOTS_ON_BRANCH"; then
@@ -169,6 +169,10 @@ jobs:
           shot shots/wake-evening-dayoff.png -demo -theme night -tab 1 -wakePhase evening -wakedayoff
           shot shots/wake-settings.png -demo -theme paper -tab 1 -wakeShot settings
           shot shots/wake-records.png -demo -theme focus -tab 1 -wakeShot records
+          # 起床のホームの行から開くシート（アラームの詳細・出発の準備・天気）
+          shot shots/wake-detail-alarm.png -demo -theme focus -tab 1 -wakePhase before -wakeShot alarm
+          shot shots/wake-detail-prep.png -demo -theme dawn -tab 1 -wakePhase after -wakeShot prep
+          shot shots/wake-detail-weather.png -demo -theme night -tab 1 -wakePhase after -wakeShot weather
           # 家計簿（見本データ。お店・金額はすべて架空）：ホーム・取り込みの4段・列の対応・手入力・Apple Pay の案内・設定
           shot shots/kakeibo.png -demo -theme focus -tab 2
           shot shots/kakeibo-night.png -demo -theme night -tab 2
