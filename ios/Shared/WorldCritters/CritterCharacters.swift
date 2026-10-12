@@ -120,38 +120,6 @@ enum Critters {
         let start = CGPoint(x: 0, y: top - amp * 1.4)
         let end = CGPoint(x: 0, y: top + amp + thick * 1.2)
         ctx.fill(path, with: .linearGradient(g, startPoint: start, endPoint: end))
-        auroraRays(ctx, width: w, top: top, amp: amp, thick: thick, wave: wave, phase: phase, color: color, alpha: alpha)
     }
 
-    /// カーテンのひだ（縦に走る光の筋。長さと明るさが少しずつ揺らぐ）と、上のふちの桃色
-    @_optimize(none)
-    static func auroraRays(_ ctx: GraphicsContext, width w: Double, top: Double, amp: Double, thick: Double,
-                           wave: Double, phase: Double, color: Color, alpha: Double) {
-        let rays: Int = 34
-        let rayW: Double = max(1, w / Double(rays) * 0.5)
-        let fringe: Color = sceneColor(0xF09AFF)
-        for i in 0..<rays {
-            let fi: Double = Double(i)
-            let fx: Double = (fi + 0.5) / Double(rays)
-            let a: Double = sin(fx * wave * 2 * Double.pi + phase) * amp
-            let b: Double = sin(fx * wave * 4.6 * Double.pi - phase * 1.3) * amp * 0.35
-            let y0: Double = top + a + b
-            let flick: Double = 0.5 + 0.5 * sin(fi * 1.7 + phase * 2.3) * sin(fi * 0.6 - phase * 1.1)
-            let len: Double = thick * (0.55 + 0.75 * flick)
-            let x: Double = fx * w + sin(phase * 0.8 + fi) * 2
-            let p0 = CGPoint(x: x, y: y0 + thick * 0.04)
-            let p1 = CGPoint(x: x, y: y0 + len)
-            var ray = Path()
-            ray.move(to: p0)
-            ray.addLine(to: p1)
-            let ra: Double = alpha * (0.45 + 0.9 * flick)
-            let rg = Gradient(stops: [
-                Gradient.Stop(color: fringe.opacity(ra * 0.5), location: 0),
-                Gradient.Stop(color: color.opacity(min(1, ra * 1.3)), location: 0.12),
-                Gradient.Stop(color: color.opacity(ra * 0.4), location: 0.55),
-                Gradient.Stop(color: color.opacity(0), location: 1),
-            ])
-            ctx.stroke(ray, with: .linearGradient(rg, startPoint: p0, endPoint: p1), style: StrokeStyle(lineWidth: rayW, lineCap: .round))
-        }
-    }
 }

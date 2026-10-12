@@ -447,7 +447,6 @@ enum CritterArt {
         let t: Double = k.t
         switch layer {
         case .idle:
-            auroraStars(ctx, w: w, h: h, t: t)
             let colors: [UInt32] = [0x5CF2C8, 0x9EF0E6, 0xB28CFF]
             for i in 0..<3 {
                 let fi: Double = Double(i)
@@ -457,7 +456,6 @@ enum CritterArt {
                                 phase: phase, color: sceneColor(colors[i]), alpha: 0.24)
             }
             snowfall(ctx, w: w, h: h, t: t)
-            treeline(ctx, w: w, ground: ground, rim: rim)
             snowDrift(ctx, w: w, h: h, ground: ground, t: t)
             guard k.react == nil else { return }
             let look: Double = 0.5 + 0.5 * sin(t * 0.3)
@@ -480,47 +478,6 @@ enum CritterArt {
                 D.glow(ctx, px, py, 3 + fi * 1.4, Color.white, 0.4 * (1 - fi / 5))
             }
             Fantasy.foxRun(D.local(ctx, at: D.pt(fx, ground + 1 - hop), scale: 1.1), run: run, rim: rim)
-        }
-    }
-
-    /// 北の空の星（上のほうだけ。ゆっくりまたたく）
-    static let auroraStarList: [Mote] = {
-        var rnd = SceneRandom(5150)
-        var out: [Mote] = []
-        for _ in 0..<40 {
-            out.append(Mote(x: rnd.next(), y: rnd.range(0, 0.5), r: rnd.range(0.4, 1.1), speed: rnd.range(0.8, 2), phase: rnd.range(0, 6.28)))
-        }
-        return out
-    }()
-
-    @_optimize(none)
-    static func auroraStars(_ ctx: GraphicsContext, w: Double, h: Double, t: Double) {
-        for m in auroraStarList {
-            let tw: Double = 0.45 + 0.55 * (0.5 + 0.5 * sin(t * m.speed + m.phase))
-            D.circle(ctx, m.x * w, m.y * h, m.r, Color.white.opacity(0.75 * tw))
-        }
-    }
-
-    /// 地平の針葉樹の影（吹きだまりの奥。上のふちにオーロラの光）
-    @_optimize(none)
-    static func treeline(_ ctx: GraphicsContext, w: Double, ground: Double, rim: Color) {
-        var rnd = SceneRandom(808)
-        var x: Double = -6
-        let dark: Color = sceneColor(0x0D0A20, 0.88)
-        while x < w + 6 {
-            let tw: Double = rnd.range(7, 13)
-            let th: Double = rnd.range(10, 30) * (x > w * 0.3 && x < w * 0.7 ? 0.55 : 1)
-            let cx: Double = x + tw / 2
-            let base: Double = ground + 2
-            let tree: Path = Fantasy.smooth([D.pt(cx, base - th), D.pt(cx + tw * 0.28, base - th * 0.55), D.pt(cx + tw / 2, base),
-                                             D.pt(cx - tw / 2, base), D.pt(cx - tw * 0.28, base - th * 0.55)], closed: true)
-            ctx.fill(tree, with: .color(dark))
-            var top = Path()
-            top.move(to: D.pt(cx - tw * 0.2, base - th * 0.7))
-            top.addLine(to: D.pt(cx, base - th))
-            top.addLine(to: D.pt(cx + tw * 0.2, base - th * 0.7))
-            ctx.stroke(top, with: .color(rim.opacity(0.35)), lineWidth: 0.8)
-            x += tw * rnd.range(0.55, 0.9)
         }
     }
 

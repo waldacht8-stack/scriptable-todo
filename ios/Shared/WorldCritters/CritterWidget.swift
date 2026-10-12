@@ -153,14 +153,6 @@ enum CritterWidgetArt {
         let h: Double = Double(size.height)
         let slot: Int = Int(day * 96)
         var rnd = SceneRandom(UInt64(slot + 11))
-        // 星（決まった並び）
-        var srnd = SceneRandom(5150)
-        for _ in 0..<18 {
-            let sx: Double = srnd.next() * w
-            let sy: Double = srnd.range(0, 0.55) * h
-            let sr: Double = srnd.range(0.4, 0.9)
-            D.circle(ctx, sx, sy, sr, Color.white.opacity(srnd.range(0.35, 0.8)))
-        }
         let colors: [UInt32] = [0x5CF2C8, 0xB28CFF]
         for i in 0..<2 {
             let top: Double = h * rnd.range(0.02, 0.16) + Double(i) * h * 0.08
