@@ -112,8 +112,6 @@ private struct SettingsContent: View {
             .buttonStyle(.plain)
             .id("design")
 
-            AppIconSection().id("icon")
-
             TodoSettingsSections()
 
             AppInfoSection().id("info")

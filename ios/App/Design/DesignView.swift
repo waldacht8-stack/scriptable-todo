@@ -102,6 +102,9 @@ struct DesignView: View {
                     }
                 }
 
+                // アプリのアイコン（ホーム画面の「日の窓」の色）
+                AppIconSection()
+
                 UpcomingDesignSection()
             }
             .padding(.horizontal, 16)
