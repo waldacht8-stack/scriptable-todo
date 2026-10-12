@@ -105,7 +105,7 @@ jobs:
           # 起動して撮る。真っ白（小さいファイル）なら、待って撮り直す（遅いシミュレーター対策）
           # 担当の枝では、SHOTS_ON_BRANCH に名前が合う写真だけ撮る（時間短縮）。main ではすべて撮る
           # 各担当は自分の枝でこの値に自分の写真の名前（正規表現）を足す。例："kakeibo|tab-2"
-          SHOTS_ON_BRANCH="tab-|home-focus"
+          SHOTS_ON_BRANCH="steam"
           shot() {
             out=$1; shift
             if [ "$GITHUB_REF_NAME" != "main" ] && ! echo "$out" | grep -qE "$SHOTS_ON_BRANCH"; then
@@ -211,6 +211,10 @@ jobs:
           shot shots/splatoon-salmon.png -demo -splatdemo -splatscroll salmon
           # Steam（見本データ）・相談（見本の会話）
           shot shots/steam.png -demo -steamdemo
+          # キーなし（SteamID だけ）：プロフィール・ウィッシュリスト・ストアのセール・ニュース。非公開の案内も
+          shot shots/steam-nokey.png -demo -steamdemo -steamnokey
+          shot shots/steam-nokey-sales.png -demo -steamdemo -steamnokey -steamscroll sales
+          shot shots/steam-private.png -demo -steamdemo -steamprivate
           shot shots/info-games-steam.png -demo -theme night -tab 4 -infogames
           # Web版 Discord（試作）。-demo では通信せず見本のページを出す
           shot shots/discord-web.png -demo -tab 4 -infogames -discordweb
