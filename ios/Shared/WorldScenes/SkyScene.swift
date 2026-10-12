@@ -351,23 +351,24 @@ enum SkyScene {
         // 飛行機雲：機体のうしろへ、古いほど太くうすく
         let fade: Double = ph > dur ? 1 - (ph - dur) / 6 : 1
         let trailA: Double = (night ? 0.16 : 0.55) * fade
-        let segs: Int = 6
-        let segLen: Double = 26
-        for i in 0..<segs {
-            let fi: Double = Double(i)
-            let ax: Double = px - dir * (6 + fi * segLen)
-            let bx: Double = px - dir * (6 + (fi + 1) * segLen)
-            let ay: Double = py + (fi * segLen) * 10 / (w + 60)
-            let by: Double = py + ((fi + 1) * segLen) * 10 / (w + 60)
-            guard (dir > 0 && bx > x0) || (dir < 0 && bx < x0) else { break }
-            let a: Double = trailA * (1 - fi / Double(segs))
-            let width: Double = 1.1 + fi * 0.9
-            for off in [-1.2, 1.2] {
-                var p = Path()
-                p.move(to: CGPoint(x: ax, y: ay + off))
-                p.addLine(to: CGPoint(x: bx, y: by + off))
-                ctx.stroke(p, with: .color(Color.white.opacity(a)), style: StrokeStyle(lineWidth: width, lineCap: .round))
-            }
+        let len: Double = min(170, abs(px - x0))
+        let headX: Double = px - dir * 5
+        let tailX: Double = px - dir * len
+        let tailY: Double = py + len * 10 / (w + 60)
+        let head: CGPoint = CGPoint(x: headX, y: py)
+        let tail: CGPoint = CGPoint(x: tailX, y: tailY)
+        let thin = Gradient(colors: [Color.white.opacity(trailA), Color.white.opacity(0)])
+        let wide = Gradient(colors: [Color.white.opacity(trailA * 0.25), Color.white.opacity(trailA * 0.18), Color.white.opacity(0)])
+        // 広がったうすい帯と、2本の細い線（エンジンの数）
+        var spread = Path()
+        spread.move(to: head)
+        spread.addLine(to: tail)
+        ctx.stroke(spread, with: .linearGradient(wide, startPoint: head, endPoint: tail), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+        for off in [-1.1, 1.1] {
+            var p = Path()
+            p.move(to: CGPoint(x: headX, y: py + off))
+            p.addLine(to: CGPoint(x: tailX, y: tailY + off * 1.8))
+            ctx.stroke(p, with: .linearGradient(thin, startPoint: head, endPoint: tail), style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
         }
         guard ph < dur else { return }
         // 機体（小さく）

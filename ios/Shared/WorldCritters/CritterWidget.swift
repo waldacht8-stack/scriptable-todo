@@ -101,12 +101,12 @@ enum CritterWidgetArt {
     static func mist(w: CGFloat, band: CritterBand, k: CritterKnobs) -> AnyView {
         let x: CGFloat = w * CGFloat(0.86 - 0.66 * k.progress)
         let walk: Double = k.progress * 40
-        let lampBox = CGSize(width: 30, height: 58)
+        let lampBox = CGSize(width: 26, height: 40)
         let lampScale: CGFloat = band.height / lampBox.height
         let lampX: CGFloat = 4 + lampBox.width * lampScale / 2
         return AnyView(ZStack {
-            fitted(box: lampBox, origin: CGPoint(x: 8, y: 57), band: band, x: lampX, maxScale: 1) { c in
-                D.glow(c, 12.5, -36, 13, sceneColor(0xFFC77A), 0.55)
+            fitted(box: lampBox, origin: CGPoint(x: 5, y: 56), band: band, x: lampX, maxScale: 1) { c in
+                D.glow(c, 11.7, -35.5, 11, sceneColor(0xFFC77A), 0.6)
                 Fantasy.lantern(c, height: 46, swing: 0.08, flicker: 0.6, t: 0, halo: false)
             }
             fitted(box: CGSize(width: 92, height: 56), origin: CGPoint(x: 62, y: 55), band: band, x: x, maxScale: 0.4) { c in

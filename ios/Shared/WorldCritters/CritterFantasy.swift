@@ -125,6 +125,43 @@ enum Fantasy {
         stroke(c, seg(j.b, j.c), lower, w2)
     }
 
+    /// a→b に直角な向き（長さ 1）
+    static func normal(_ a: CGPoint, _ b: CGPoint) -> CGPoint {
+        let dx: Double = Double(b.x - a.x)
+        let dy: Double = Double(b.y - a.y)
+        let len: Double = max(0.001, sqrt(dx * dx + dy * dy))
+        return P(-dy / len, dx / len)
+    }
+
+    static func quad(_ a: CGPoint, _ n1: CGPoint, _ w1: Double, _ b: CGPoint, _ n2: CGPoint, _ w2: Double) -> Path {
+        let ax: Double = Double(a.x)
+        let ay: Double = Double(a.y)
+        let bx: Double = Double(b.x)
+        let by: Double = Double(b.y)
+        let h1x: Double = Double(n1.x) * w1 / 2
+        let h1y: Double = Double(n1.y) * w1 / 2
+        let h2x: Double = Double(n2.x) * w2 / 2
+        let h2y: Double = Double(n2.y) * w2 / 2
+        var p = Path()
+        p.move(to: P(ax + h1x, ay + h1y))
+        p.addLine(to: P(bx + h2x, by + h2y))
+        p.addLine(to: P(bx - h2x, by - h2y))
+        p.addLine(to: P(ax - h1x, ay - h1y))
+        p.closeSubpath()
+        return p
+    }
+
+    /// 付け根が太く先が細い脚（塗りの台形を2つ。ひざは丸くつなぐ）
+    static func taperLeg(_ c: GraphicsContext, _ j: Joint, _ wTop: Double, _ wKnee: Double, _ wFoot: Double,
+                         _ upper: Color, _ lower: Color) {
+        let n1: CGPoint = normal(j.a, j.b)
+        let n2: CGPoint = normal(j.b, j.c)
+        c.fill(quad(j.a, n1, wTop, j.b, n1, wKnee), with: .color(upper))
+        D.circle(c, Double(j.a.x), Double(j.a.y), wTop / 2, upper)
+        c.fill(quad(j.b, n2, wKnee, j.c, n2, wFoot), with: .color(lower))
+        D.circle(c, Double(j.b.x), Double(j.b.y), wKnee / 2, lower)
+    }
+
     /// 霧やもやの帯：やわらかい楕円のかたまりを横に並べ、t とともに流す（speed は 1秒あたりの pt。負なら左へ）
     @_optimize(none)
     static func fogBank(_ c: GraphicsContext, width w: Double, y: Double, height: Double, t: Double, speed: Double,
@@ -321,7 +358,7 @@ enum Fantasy {
         let legsNear: [(CGPoint, Double, Bool)] = [(P(18, -27), 0, false), (P(-12.5, -26), Double.pi * 0.5, true)]
         for item in legsFar {
             let j: Joint = deerLeg(item.0, phase: pose.walk + item.1, front: item.2, bob: bob)
-            leg(c, j, item.2 ? 3.4 : 4.4, 2.0, far, far)
+            taperLeg(c, j, item.2 ? 5.4 : 8, 2.6, 1.8, far, far)
             D.ellipse(c, Double(j.c.x), Double(j.c.y) - 0.6, 2.6, 1.6, far)
         }
         // 遠い側の角と耳
@@ -346,12 +383,14 @@ enum Fantasy {
         let rimEnd: CGPoint = P(side < 0 ? -2 : -8, -30)
         let rimG = Gradient(colors: [rim.opacity(0.8 * pose.light), rim.opacity(0)])
         let rimShade = GraphicsContext.Shading.linearGradient(rimG, startPoint: rimStart, endPoint: rimEnd)
-        c.stroke(neck, with: rimShade, lineWidth: 1.1)
+        var outside: GraphicsContext = c
+        outside.clip(to: torso, options: .inverse)
+        outside.stroke(neck, with: rimShade, lineWidth: 1.1)
         c.stroke(torso, with: rimShade, lineWidth: 1.1)
-        // 近い側の脚
+        // 近い側の脚（付け根はおなかの色に溶けこむ）
         for item in legsNear {
             let j: Joint = deerLeg(item.0, phase: pose.walk + item.1, front: item.2, bob: bob)
-            leg(c, j, item.2 ? 3.8 : 5, 2.2, near, belly)
+            taperLeg(c, j, item.2 ? 6 : 9, 2.9, 2, belly, belly)
             D.ellipse(c, Double(j.c.x), Double(j.c.y) - 0.6, 2.8, 1.7, sceneColor(0x22292F, 0.9))
         }
         // 耳（ぴくっと動く）と近い側の角
@@ -526,8 +565,8 @@ enum Fantasy {
         let water: Color = sceneColor(0x0A3556)
         // 遠い側の胸びれ（からだの後ろ）
         let finBase: CGPoint = P(f.x(0.27), f.y(0.27) + 0.07 * L)
-        let finA: Double = 1.0 - finSweep + 0.2 * sin(t * 0.7 + 0.6)
-        pectoral(c, at: P(Double(finBase.x) + 0.03 * L, Double(finBase.y) - 0.02 * L), angle: finA + 0.28, length: 0.22 * L,
+        let finA: Double = 0.86 - finSweep + 0.18 * sin(t * 0.7 + 0.6)
+        pectoral(c, at: P(Double(finBase.x) + 0.03 * L, Double(finBase.y) - 0.02 * L), angle: finA + 0.28, length: 0.19 * L,
                  colors: [sceneColor(0x2A5672), sceneColor(0x143149)])
         // 尾びれ
         let tailEnd: CGPoint = P(f.x(1), f.y(1))
@@ -590,12 +629,12 @@ enum Fantasy {
         c.fill(dorsal, with: .color(back))
         if haze > 0 { c.fill(dorsal, with: .color(water.opacity(haze))) }
         // 近い側の胸びれ（長い。ゆっくりあおぐ）
-        pectoral(c, at: finBase, angle: finA, length: 0.27 * L,
-                 colors: [sceneColor(0xA9CFDC), sceneColor(0x3A6E8C)])
+        pectoral(c, at: finBase, angle: finA, length: 0.23 * L,
+                 colors: [sceneColor(0x86B0C2), sceneColor(0x2C5F7E)])
         if haze > 0 {
             var hc: GraphicsContext = c
             hc.opacity = haze
-            pectoral(hc, at: finBase, angle: finA, length: 0.27 * L, colors: [water, water])
+            pectoral(hc, at: finBase, angle: finA, length: 0.23 * L, colors: [water, water])
         }
     }
 
@@ -703,7 +742,8 @@ enum Fantasy {
     // MARK: オーロラ：狐（右向き。足元が原点）
 
     static let foxRunBody: [CGPoint] = [
-        P(14, -16), P(8, -21.5), P(-4, -21), P(-14, -20), P(-18.5, -16), P(-12.5, -11), P(0, -11.5), P(12, -12),
+        P(15, -15.5), P(9, -21.5), P(-4, -20.5), P(-14, -20.5), P(-18.5, -16.5), P(-15, -12), P(-6, -12.8), P(4, -11),
+        P(12, -10.6),
     ]
     static let foxRunHead: [CGPoint] = [
         P(10, -21), P(16.5, -25), P(21, -24.4), P(26.4, -21.2), P(29.4, -19.6), P(24.6, -17), P(18.6, -15.4), P(13.4, -14),
@@ -729,8 +769,8 @@ enum Fantasy {
             let base: CGPoint = P(Double(item.0.x) * (1 + stretch), Double(item.0.y) + bob)
             let j: Joint = joint(base, a1, 7.6, a1 + bend, 8)
             let nearLeg: Bool = item.3
-            stroke(c, seg(j.a, j.b), nearLeg ? fur : furDark, nearLeg ? 3.6 : 3.2)
-            stroke(c, seg(j.b, j.c), nearLeg ? sock : sock.opacity(0.8), nearLeg ? 2.2 : 2)
+            let top: Double = item.2 ? 5.6 : 7.4
+            taperLeg(c, j, nearLeg ? top : top * 0.9, 2.6, 2, nearLeg ? fur : furDark, nearLeg ? sock : sceneColor(0x2A1810))
         }
         // しっぽ（ふさふさ。先は白）
         let sw: Double = sin(run * 0.5) * 2
@@ -766,8 +806,10 @@ enum Fantasy {
         let rimG = Gradient(colors: [rim.opacity(0.75), rim.opacity(0)])
         let rimS = GraphicsContext.Shading.linearGradient(rimG, startPoint: P(0, -26), endPoint: P(0, -17))
         c.stroke(body, with: rimS, lineWidth: 1)
-        c.stroke(head, with: rimS, lineWidth: 1)
-        c.stroke(tail, with: rimS, lineWidth: 1)
+        var outside: GraphicsContext = c
+        outside.clip(to: body, options: .inverse)
+        outside.stroke(head, with: rimS, lineWidth: 1)
+        outside.stroke(tail, with: rimS, lineWidth: 1)
     }
 
     static let foxSitBody: [CGPoint] = [
@@ -820,7 +862,9 @@ enum Fantasy {
         // オーロラの縁の光
         let rimG = Gradient(colors: [rim.opacity(0.8), rim.opacity(0)])
         let rimS = GraphicsContext.Shading.linearGradient(rimG, startPoint: P(-6, -32), endPoint: P(4, -12))
-        c.stroke(body, with: rimS, lineWidth: 1)
+        var outside: GraphicsContext = c
+        outside.clip(to: head, options: .inverse)
+        outside.stroke(body, with: rimS, lineWidth: 1)
         c.stroke(head, with: rimS, lineWidth: 1)
         if let b = puff {
             breath(c, from: P(Double(nose.x) + 0.6, Double(nose.y) + 0.4), u: b, dir: 1)

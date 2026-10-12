@@ -360,7 +360,7 @@ enum CritterArt {
             seaShafts(ctx, w: w, h: h, lane: lane, t: t)
             let L: Double = min(200, w * 0.5)
             let wx: Double = w + L * 0.7 - k.progress * (w + L * 1.4)
-            let wy: Double = lane - 34 + sin(t * 0.4) * 5
+            let wy: Double = lane - 28 + sin(t * 0.4) * 5
             seaMotes(ctx, w: w, lane: lane, t: t, wakeX: wx + L * 0.45, wakeY: wy)
             let pitch: Double = sin(t * 0.4 + 1.2) * 0.04
             Fantasy.whale(D.local(ctx, at: D.pt(wx, wy), scale: 1, angle: pitch), t: t, length: L, haze: 0.22)
