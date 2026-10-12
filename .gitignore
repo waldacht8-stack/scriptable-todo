@@ -12,6 +12,5 @@ ios/App/Info.plist
 ios/App/*.entitlements
 ios/Widget/Info.plist
 ios/Widget/*.entitlements
-ios/App/Assets.xcassets/AppIcon.appiconset/icon.png
-ios/App/Assets.xcassets/AppIcon.appiconset/icon-dark.png
+ios/App/Assets.xcassets/AppIcon*.appiconset/icon.png
 .claude/worktrees/
