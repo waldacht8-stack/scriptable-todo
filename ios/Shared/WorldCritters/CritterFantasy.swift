@@ -893,3 +893,88 @@ enum Fantasy {
         }
     }
 }
+
+// MARK: - 銀河：ロケット（右向き。原点は胴の真ん中。長さ 44 くらい。boost 0〜1 で炎が明るく長くなる）
+
+extension Fantasy {
+    static let rocketBody: [CGPoint] = [
+        P(22, 0), P(14, -5.2), P(2, -7), P(-12, -6.6), P(-16, -5.6), P(-16, 5.6), P(-12, 6.6), P(2, 7), P(14, 5.2),
+    ]
+
+    @_optimize(none)
+    static func rocket(_ c: GraphicsContext, t: Double, boost: Double, halo: Bool = true) {
+        let flicker: Double = 0.5 + 0.25 * sin(t * 23) + 0.25 * sin(t * 37 + 1.3)
+        let plumeLen: Double = 14 + 6 * flicker + boost * 22
+        rocketExhaust(c, t: t, boost: boost)
+        rocketPlume(c, length: plumeLen, flicker: flicker, boost: boost, halo: halo)
+        // 尾の翼（上下）と真ん中の翼
+        let finColor: Color = sceneColor(0xB8475C)
+        let finShade: Color = sceneColor(0x7E2E44)
+        let topFin: Path = smooth([P(-6, -6.4), P(-15, -12.5), P(-19, -12), P(-16, -5.4)], closed: true)
+        let botFin: Path = smooth([P(-6, 6.4), P(-15, 12.5), P(-19, 12), P(-16, 5.4)], closed: true)
+        vfill(c, topFin, [finColor, finShade], -12.5, -5.4)
+        vfill(c, botFin, [finShade, sceneColor(0x5A2032)], 5.4, 12.5)
+        // ノズル
+        let nozzle: Path = tri(P(-16, -3.8), P(-20.5, -4.8), P(-20.5, 4.8))
+        c.fill(nozzle, with: .color(sceneColor(0x3E4260)))
+        c.fill(tri(P(-16, -3.8), P(-20.5, 4.8), P(-16, 3.8)), with: .color(sceneColor(0x2E3150)))
+        // 胴（上が明るく下が暗い。上のふちに星雲の桃色の光）
+        let body: Path = smooth(rocketBody, closed: true)
+        let hull = Gradient(stops: [
+            Gradient.Stop(color: sceneColor(0xF2F2FA), location: 0),
+            Gradient.Stop(color: sceneColor(0xC4C7DE), location: 0.55),
+            Gradient.Stop(color: sceneColor(0x6F7399), location: 1),
+        ])
+        c.fill(body, with: .linearGradient(hull, startPoint: P(0, -7), endPoint: P(0, 7)))
+        var bc: GraphicsContext = c
+        bc.clip(to: body)
+        // 先の赤い円すいと、胴の帯
+        let cone = Gradient(colors: [sceneColor(0xE0667A), sceneColor(0x8E3048)])
+        bc.fill(Path(CGRect(x: 13, y: -8, width: 10, height: 16)), with: .linearGradient(cone, startPoint: P(0, -6), endPoint: P(0, 6)))
+        bc.fill(Path(CGRect(x: -9, y: -8, width: 2.2, height: 16)), with: .color(sceneColor(0x8A8FB8, 0.55)))
+        // 下の影（からだの丸み）
+        let under = Gradient(colors: [Color.black.opacity(0), Color.black.opacity(0.22)])
+        bc.fill(body, with: .linearGradient(under, startPoint: P(0, 1), endPoint: P(0, 7)))
+        let rim = Gradient(colors: [sceneColor(0xFF9AD5, 0.85), sceneColor(0xFF9AD5, 0)])
+        c.stroke(body, with: .linearGradient(rim, startPoint: P(0, -7), endPoint: P(0, -1)), lineWidth: 1)
+        // 窓
+        let win = Path(ellipseIn: CGRect(x: 1.6, y: -3.6, width: 6.8, height: 6.8))
+        let glass = Gradient(colors: [sceneColor(0x6E8CFF), sceneColor(0x1A1F55)])
+        c.fill(win, with: .radialGradient(glass, center: P(4, -1.8), startRadius: 0, endRadius: 4.6))
+        c.stroke(win, with: .color(sceneColor(0x8A8FB8)), lineWidth: 1)
+        D.circle(c, 3.6, -1.8, 0.9, Color.white.opacity(0.8))
+    }
+
+    /// 炎（やわらかくゆらぐ。根もとは白く、先は橙で消える）
+    @_optimize(none)
+    static func rocketPlume(_ c: GraphicsContext, length L: Double, flicker: Double, boost: Double, halo: Bool) {
+        let x0: Double = -20.5
+        if halo {
+            D.glow(c, x0 - L * 0.35, 0, 12 + L * 0.5, sceneColor(0xFFB060), 0.22 + 0.12 * flicker + boost * 0.25)
+        }
+        let outer: Path = smooth([P(x0, -3.6), P(x0 - L * 0.45, -3), P(x0 - L, 0), P(x0 - L * 0.45, 3), P(x0, 3.6)], closed: true)
+        let og = Gradient(stops: [
+            Gradient.Stop(color: sceneColor(0xFFE2A0, 0.95), location: 0),
+            Gradient.Stop(color: sceneColor(0xFF9A4A, 0.7), location: 0.45),
+            Gradient.Stop(color: sceneColor(0xFF6A5A, 0), location: 1),
+        ])
+        c.fill(outer, with: .linearGradient(og, startPoint: P(x0, 0), endPoint: P(x0 - L, 0)))
+        let coreL: Double = L * 0.5
+        let core: Path = smooth([P(x0, -1.8), P(x0 - coreL * 0.5, -1.4), P(x0 - coreL, 0), P(x0 - coreL * 0.5, 1.4), P(x0, 1.8)], closed: true)
+        let cg = Gradient(colors: [Color.white.opacity(0.95), sceneColor(0xFFF0C8, 0)])
+        c.fill(core, with: .linearGradient(cg, startPoint: P(x0, 0), endPoint: P(x0 - coreL, 0)))
+    }
+
+    /// うすい排気の粒（うしろへ流れて広がり、消える）
+    @_optimize(none)
+    static func rocketExhaust(_ c: GraphicsContext, t: Double, boost: Double) {
+        for i in 0..<6 {
+            let fi: Double = Double(i)
+            let u: Double = (t * 0.8 + fi / 6).truncatingRemainder(dividingBy: 1)
+            let x: Double = -26 - u * (34 + boost * 20)
+            let y: Double = sin(fi * 2.3 + u * 4) * (1 + u * 5)
+            let r: Double = 1.2 + u * 4
+            D.glow(c, x, y, r, sceneColor(0xD8D2F0), 0.32 * (1 - u))
+        }
+    }
+}

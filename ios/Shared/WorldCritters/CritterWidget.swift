@@ -94,16 +94,18 @@ enum CritterWidgetArt {
         }
     }
 
-    /// 銀河：寝そべるように漂う宇宙飛行士（左から右へ）
+    /// 銀河：小さなロケットが下の余白を左から右へ
     @_optimize(none)
     static func galaxy(w: CGFloat, band: CritterBand, k: CritterKnobs) -> AnyView {
-        let x: CGFloat = w * CGFloat(0.14 + 0.72 * k.progress)
-        let tilt: Double = sin(k.progress * 4 * Double.pi) * 0.12
+        // 左の外から右の外へ（一巡して戻るのは画面の外だけ）
+        let margin: CGFloat = 30
+        let x: CGFloat = -margin + CGFloat(k.progress) * (w + margin * 2)
         let t: Double = k.progress * 600
-        let v = fitted(box: CGSize(width: 64, height: 40), origin: CGPoint(x: 33, y: 23), band: band, x: x, maxScale: 0.5) { c in
+        let v = fitted(box: CGSize(width: 84, height: 32), origin: CGPoint(x: 58, y: 16), band: band, x: x, maxScale: 0.5) { c in
             var a: GraphicsContext = c
-            a.rotate(by: Angle.radians(-1.35 + tilt))
-            Fantasy.astronaut(a, t: t, halo: false)
+            a.rotate(by: Angle.radians(-0.08))
+            D.glow(a, -30, 0, 12, sceneColor(0xFFB060), 0.3)
+            Fantasy.rocket(a, t: t, boost: 0, halo: false)
         }
         return AnyView(v)
     }
