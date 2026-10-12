@@ -435,6 +435,8 @@ enum KakeiboPDF {
                    let v = KakeiboAmountParser.parse(tokens[i]) {
                     nums = [v]
                     tokens = Array(tokens[..<i])
+                    // 店名のあとの支払回数（「1」）は内容に入れない
+                    if tokens.count > 1, let l = tokens.last, KakeiboRegex.matches(#"^d{1,2}$"#, l) { tokens.removeLast() }
                 }
             } else {
                 let tail = trailingAmounts(rest)
