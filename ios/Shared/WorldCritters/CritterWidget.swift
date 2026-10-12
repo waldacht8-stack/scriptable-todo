@@ -253,19 +253,25 @@ private struct WidgetSky: View {
         }
     }
 
+
+    /// 飛ぶものの横の位置。左の外（-26）から右の外（w + 26）まで進むので、一巡して戻るときは必ず画面の外にいる
+    private func edgeX(_ f: Double, w: CGFloat) -> CGFloat {
+        let margin: CGFloat = 26
+        return -margin + CGFloat(f) * (w + margin * 2)
+    }
     @ViewBuilder
     private func flyer(_ slot: SkySlot, w: CGFloat) -> some View {
         let p: Double = k.progress
         switch slot {
         case .morning:
-            let x: CGFloat = w * CGFloat(0.1 + 0.8 * p)
+            let x: CGFloat = edgeX(p, w: w)
             let flapA: Double = sin(p * 400)
             CritterWidgetArt.fitted(box: CGSize(width: 50, height: 22), origin: CGPoint(x: 25, y: 12), band: band, x: x, maxScale: 0.7) { c in
                 Critters.sparrow(CritterDraw.local(c, at: CritterDraw.pt(10, 1), scale: 1), flap: flapA)
                 Critters.sparrow(CritterDraw.local(c, at: CritterDraw.pt(-12, -2), scale: 0.9), flap: -flapA)
             }
         case .day:
-            let px: CGFloat = w * CGFloat(0.08 + 0.84 * p)
+            let px: CGFloat = edgeX(p, w: w)
             let py: CGFloat = band.mid + CGFloat(sin(p * 4 * Double.pi)) * 0.8
             let tilt: Double = -cos(p * 4 * Double.pi) * 0.12
             let planeScale: Double = min(0.65, Double(band.height) / 14)
@@ -273,7 +279,7 @@ private struct WidgetSky: View {
                 Critters.paperPlane(CritterDraw.local(c, at: CritterDraw.cpt(s.width / 2, s.height / 2), scale: planeScale), dark: k.dark)
             }
         case .evening:
-            let x: CGFloat = w * CGFloat(0.9 - 0.8 * p)
+            let x: CGFloat = edgeX(1 - p, w: w)
             let crowColor: Color = sceneColor(0x2A2030, 0.85)
             CritterWidgetArt.fitted(box: CGSize(width: 70, height: 40), origin: CGPoint(x: 30, y: 20), band: band, x: x, maxScale: 0.5) { c in
                 Critters.crow(CritterDraw.local(c, at: CritterDraw.pt(-14, 0), scale: 1, flip: true), flap: 0.8, color: crowColor)
@@ -281,7 +287,7 @@ private struct WidgetSky: View {
                 Critters.crow(CritterDraw.local(c, at: CritterDraw.pt(8, 11), scale: 0.9, flip: true), flap: 0.2, color: crowColor)
             }
         case .night:
-            let x: CGFloat = w * CGFloat(0.1 + 0.8 * p)
+            let x: CGFloat = edgeX(p, w: w)
             CritterWidgetArt.fitted(box: CGSize(width: 40, height: 26), origin: CGPoint(x: 20, y: 14), band: band, x: x, maxScale: 0.6) { c in
                 Critters.nightPlane(c, t: 0)
             }

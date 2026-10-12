@@ -123,8 +123,8 @@ extension CritterArt {
         switch slot {
         case .morning:
             // スズメの小さな群れ：上下にはずみながら左から右へ
-            let bp: Double = (k.progress * 26 / 30 + 0.2).truncatingRemainder(dividingBy: 1)
-            let bx: Double = -40 + bp * (w + 80)
+            let bp: Double = (k.t / 30 + 0.2).truncatingRemainder(dividingBy: 1)
+            let bx: Double = -40 + bp * (w + 130)   // 群れのいちばん後ろ（-44）まで画面の外へ出てから戻る
             let flock: [(Double, Double, Double)] = [(0, 0, 0), (-18, 8, 1.3), (-30, -6, 2.1), (-44, 4, 0.7)]
             for item in flock {
                 let hop: Double = -abs(sin(k.t * 3.2 + item.2)) * 7
@@ -135,7 +135,7 @@ extension CritterArt {
             }
         case .day:
             let birdColor: Color = k.dark ? sceneColor(0xBAC3E8, 0.6) : sceneColor(0x2B4560, 0.55)
-            let bp: Double = (k.progress * 26 / 34 + 0.3).truncatingRemainder(dividingBy: 1)
+            let bp: Double = (k.t / 34 + 0.3).truncatingRemainder(dividingBy: 1)
             let bx: Double = -40 + bp * (w + 80)
             let by: Double = lane - 22 + sin(k.t * 0.5) * 4
             let flock: [(Double, Double)] = [(0, 0), (-10, -5), (-10, 6), (-20, -10), (-19, 11)]
@@ -149,7 +149,7 @@ extension CritterArt {
             Critters.paperPlane(D.local(ctx, at: D.pt(px, py), scale: 1.05, angle: -tilt, flip: true), dark: k.dark)
         case .evening:
             // カラスの V の字：右から左へ、ねぐらへ帰る
-            let cp: Double = (k.progress * 26 / 40 + 0.1).truncatingRemainder(dividingBy: 1)
+            let cp: Double = (k.t / 40 + 0.1).truncatingRemainder(dividingBy: 1)
             let cx: Double = w + 60 - cp * (w + 160)
             let cy: Double = lane - 12 + sin(k.t * 0.4) * 4
             let crowColor: Color = sceneColor(0x2A2030, 0.82)
@@ -162,7 +162,7 @@ extension CritterArt {
             }
         case .night:
             // 鳥はいない。灯りを点滅させた飛行機がゆっくり横切る
-            let pp: Double = (k.progress * 26 / 60).truncatingRemainder(dividingBy: 1)
+            let pp: Double = (k.t / 60).truncatingRemainder(dividingBy: 1)
             let px: Double = -40 + pp * (w + 80)
             let py: Double = lane + 8 - pp * 10
             Critters.nightPlane(D.local(ctx, at: D.pt(px, py), scale: 1.25, angle: -0.05), t: k.t)
