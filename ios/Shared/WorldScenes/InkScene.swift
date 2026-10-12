@@ -38,8 +38,8 @@ enum InkScene {
 
     /// 画面の模様（下絵の2つと、今日片付けた数だけ増える小さなしずく）。文字の多い真ん中を避けて、左下と右の端に
     static let base: [Drop] = [
-        Drop(x: 0.16, y: 0.74, scale: 1.0, reverse: false, delay: 0, rings: rings(11, count: 13, withRed: true)),
-        Drop(x: 0.9, y: 0.46, scale: 0.8, reverse: true, delay: 40, rings: rings(23, count: 11, withRed: false)),
+        Drop(x: 0.08, y: 0.84, scale: 1.0, reverse: false, delay: 0, rings: rings(11, count: 9, withRed: true)),
+        Drop(x: 0.97, y: 0.44, scale: 0.75, reverse: true, delay: 40, rings: rings(23, count: 8, withRed: false)),
     ]
 
     static let extra: [Drop] = {
@@ -131,7 +131,7 @@ enum InkScene {
     /// 画面の模様（count.done だけ小さなしずくを足す）
     @_optimize(none)
     static func drawPattern(_ ctx: GraphicsContext, size: CGSize, t: Double, compact: Bool, done: Int) {
-        let alpha: Double = compact ? 0.26 : 0.3   // 文字が読みやすいよう淡く
+        let alpha: Double = compact ? 0.15 : 0.24   // 文字が読みやすいよう淡く（ウィジェットは文字が多いのでさらに淡く）
         for d in base {
             drawDrop(ctx, d, size: size, t: t, alpha: alpha, compact: compact)
         }
@@ -192,13 +192,13 @@ enum InkScene {
         let twist: Double = t * 2 * Double.pi / 360
         var rnd = SceneRandom(1201)
         var r: Double = inner
-        for i in 0..<16 {
+        for i in 0..<11 {
             r += gap * rnd.range(0.7, 1.3)
             let tone: Tone = i % 6 == 4 ? .red : (rnd.next() < 0.55 ? .sumi : .indigo)
             let ring = Ring(r: r, width: rnd.range(0.7, 1.6), tone: tone, phase: rnd.range(0, 6.28), wob: rnd.range(0.02, 0.05))
             let path: Path = ringPath(cx: cx, cy: cy, r: r, twist: twist + Double(i) * 0.3, t: t, amp: 6 + 3 * m,
                                       wob: ring.wob, phase: ring.phase)
-            strokeRing(layer, path, ring: ring, alpha: 0.42 * (1 - Double(i) * 0.025), scale: 1)
+            strokeRing(layer, path, ring: ring, alpha: 0.32 * (1 - Double(i) * 0.03), scale: 1)
         }
     }
 }

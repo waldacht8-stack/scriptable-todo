@@ -107,7 +107,7 @@ enum YohakuScene {
         let cx: Double = Double(center.x)
         let cy: Double = Double(center.y)
         let sweep: Double = Double.pi * 1.84
-        let maxHalf: Double = radius * 0.06
+        let maxHalf: Double = radius * 0.04
         let steps: Int = 120
         let bristles: Int = 22
         var rnd = SceneRandom(808)
@@ -118,7 +118,7 @@ enum YohakuScene {
             let freq: Double = rnd.range(18, 46)
             let phase: Double = rnd.range(0, 6.28)
             // 外側の毛ほど早く墨が切れる
-            let dryStart: Double = 0.42 + 0.4 * (1 - abs(o)) * rnd.range(0.6, 1)
+            let dryStart: Double = 0.3 + 0.38 * (1 - abs(o)) * rnd.range(0.55, 1)
             let endF: Double = 1 - rnd.range(0, 0.18) * (0.4 + abs(o))
             var drawing: Bool = false
             for s in 0...steps {
@@ -134,7 +134,7 @@ enum YohakuScene {
                 // かすれ：途中から毛がところどころ紙に触れなくなる
                 let dry: Double = max(0, (f - dryStart) / max(0.05, 1 - dryStart))
                 let noise: Double = 0.5 + 0.5 * sin(f * freq + phase) * cos(f * freq * 0.37 + phase * 1.7)
-                let touch: Bool = noise > dry * 0.95
+                let touch: Bool = noise > dry * 0.85
                 if touch {
                     if drawing { body.addLine(to: pt) } else { body.move(to: pt) }
                     drawing = true
@@ -171,7 +171,7 @@ enum YohakuScene {
         let h: Double = Double(size.height)
         drawPaper(ctx, size: size, compact: compact)
         let f = ensoFrame(size, compact: compact)
-        enso(ctx, center: f.center, radius: f.radius, start: 2.2, alpha: compact ? 0.07 : 0.1)
+        enso(ctx, center: f.center, radius: f.radius, start: 2.2, alpha: compact ? 0.045 : 0.09)
         let topY: Double = compact ? 6 : h * 0.065
         var top = Path()
         top.move(to: CGPoint(x: 24, y: topY))
