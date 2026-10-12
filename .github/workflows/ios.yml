@@ -95,7 +95,7 @@ jobs:
           # 起動して撮る。真っ白（小さいファイル）なら、待って撮り直す（遅いシミュレーター対策）
           # 担当の枝では、SHOTS_ON_BRANCH に名前が合う写真だけ撮る（時間短縮）。main ではすべて撮る
           # 各担当は自分の枝でこの値に自分の写真の名前（正規表現）を足す。例："kakeibo|tab-2"
-          SHOTS_ON_BRANCH="tab-|home-focus"
+          SHOTS_ON_BRANCH="sky-time"
           shot() {
             out=$1; shift
             if [ "$GITHUB_REF_NAME" != "main" ] && ! echo "$out" | grep -qE "$SHOTS_ON_BRANCH"; then
@@ -241,6 +241,12 @@ jobs:
           shot shots/world-sky-dawn.png -demo -world sky -skyhour 6
           shot shots/world-sky-dusk.png -demo -world sky -skyhour 17
           shot shots/world-sky-night.png -demo -world sky -skyhour 22
+          # 空の時間帯ごとの飛ぶもの（朝スズメ・昼カモメと紙飛行機・夕方カラス・夜は飛行機と流れ星）と完了の反応
+          for hour in 07 13 17 22; do
+            shot "shots/sky-time-$hour.png" -demo -layout focus -world sky -tab 0 -skyhour $hour
+            shot "shots/sky-time-$hour-react.png" -demo -layout focus -world sky -tab 0 -skyhour $hour -motionphase 0.5 -motionreact
+            shot "shots/widgets-sky-time-$hour.png" -demo -widgetpreview -widgetsize motion -world sky -skyhour $hour
+          done
           shot shots/widgets-world-sky-night.png -demo -widgetpreview -world sky -skyhour 22
           shot shots/widgets-world-deepsea-other.png -demo -widgetpreview -widgetsize other -world deepsea
           shot shots/settings-world-new.png -settings -demo -world galaxy -settingsSection world

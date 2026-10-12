@@ -266,8 +266,8 @@ enum SkyScene {
             drawCloud(ctx, at: CGPoint(x: x, y: c.y * h), width: cw, color: cloudColor, seed: c.seed)
         }
         guard !compact else { return }
-        // 飛行機と飛行機雲（ときどき。止まった絵では出さない）
-        if t != 0 {
+        // 飛行機と飛行機雲（ときどき。夜は住人の層が灯りの点滅する飛行機を描くので出さない。止まった絵でも出さない）
+        if t != 0 && !phase.isNight {
             drawPlane(ctx, w: w, h: h, t: t, night: phase.isNight)
         }
         // 手前：大きくうすい雲（速く流れて、奥行きが出る）

@@ -234,36 +234,16 @@ enum CritterArt {
         }
     }
 
-    // MARK: 空：鳥の群れと紙飛行機が横切る。完了で風船が上る
+    // MARK: 空：時間帯ごとに飛ぶものが変わる（CritterSkyTime.swift）
 
     @_optimize(none)
     static func sky(_ ctx: GraphicsContext, size: CGSize, k: CritterKnobs, layer: Layer) {
-        let w: Double = Double(size.width)
-        let h: Double = Double(size.height)
-        let lane: Double = laneY(size)
         switch layer {
         case .idle:
-            let birdColor: Color = k.dark ? sceneColor(0xBAC3E8, 0.6) : sceneColor(0x2B4560, 0.55)
-            let bp: Double = (k.progress * 26 / 34 + 0.3).truncatingRemainder(dividingBy: 1)
-            let bx: Double = -40 + bp * (w + 80)
-            let by: Double = lane - 22 + sin(k.t * 0.5) * 4
-            let flock: [(Double, Double)] = [(0, 0), (-10, -5), (-10, 6), (-20, -10), (-19, 11)]
-            for (i, o) in flock.enumerated() {
-                let flap: Double = sin(k.t * 9 + Double(i) * 1.3) * 2.2
-                C.bird(D.local(ctx, at: D.pt(bx + o.0, by + o.1), scale: 1), flap: flap, color: birdColor)
-            }
-            let px: Double = w + 30 - k.progress * (w + 60)
-            let py: Double = lane + 14 + sin(k.progress * 4 * Double.pi) * 7
-            let tilt: Double = cos(k.progress * 4 * Double.pi) * 0.22
-            C.paperPlane(D.local(ctx, at: D.pt(px, py), scale: 1.05, angle: -tilt, flip: true), dark: k.dark)
+            skyFlyers(ctx, size: size, k: k)
         case .reaction:
             guard let r = k.react else { return }
-            let sway: Double = sin(r * 9)
-            let x: Double = w - 10 + sway * 2.5
-            let y: Double = h * 0.93 - D.ease(r) * (h * 0.93 + 40)
-            var c: GraphicsContext = D.local(ctx, at: D.pt(x, y), scale: 1, angle: sway * 0.08)
-            c.opacity = min(1, r * 10)
-            C.balloon(c, sway: sway)
+            skyReaction(ctx, size: size, k: k, r: r)
         }
     }
 
