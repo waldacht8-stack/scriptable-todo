@@ -373,7 +373,16 @@ jobs:
           # 消して作り直すと、その間リンクが 404 になったり下書きのまま残ったりするので、ファイルの差し替えにする
           shopt -s nullglob   # 写真を撮らなかったときも IPA だけ置けるように
           if gh release view ios-latest >/dev/null 2>&1; then
-            gh release upload ios-latest TodoApp.ipa shots/*.png --clobber
+            # --clobber は先に古いファイルを消すので、IPA は別名で上げ終えてから名前を入れ替える（404 の時間をなくす）
+            cp TodoApp.ipa TodoApp-new.ipa
+            gh release upload ios-latest TodoApp-new.ipa --clobber
+            assets=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/ios-latest" --jq '.assets[] | "\(.id) \(.name)"')
+            old=$(echo "$assets" | awk '$2=="TodoApp.ipa"{print $1}')
+            new=$(echo "$assets" | awk '$2=="TodoApp-new.ipa"{print $1}')
+            if [ -n "$old" ]; then gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$old"; fi
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/assets/$new" -f name=TodoApp.ipa >/dev/null
+            shots=(shots/*.png)
+            if [ ${#shots[@]} -gt 0 ]; then gh release upload ios-latest "${shots[@]}" --clobber; fi
             gh release edit ios-latest --draft=false --prerelease
           else
             gh release create ios-latest TodoApp.ipa shots/*.png --title "アプリ版（最新ビルド）" \

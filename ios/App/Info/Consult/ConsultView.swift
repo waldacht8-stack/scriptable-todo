@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - 相談（AI に悩みを話す。Gemini API の無料枠を使う）
 // - 送るのは、書いた文・選んだ気分・記録の要約（件数・平均の起床時刻・連続日数）だけ。TODO の題名や予定の中身は送らない
 // - API キーは Keychain にだけ保存（InfoSecrets）。会話は端末のファイル（consult-history.json）に最新40件まで
+// - 過去の会話は Face ID か iPhone のパスコードで開く（ConsultLock.swift）
 // - 起動引数 -demo では通信せず、見本の会話を出す。-consult で情報タブの「相談」を開く
 
 struct ConsultMessage: Codable, Identifiable, Equatable {
@@ -338,10 +339,12 @@ enum ConsultDemo {
 
 struct ConsultView: View {
     @StateObject private var model = ConsultModel()
+    @ObservedObject private var lock = ConsultLock.shared
     @EnvironmentObject var store: TodoStore
     @Environment(\.palette) private var p
     @Environment(\.motion) private var motion
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @State private var draft = ""
     @State private var showKeySheet = false
     @State private var confirmClear = false
@@ -352,6 +355,8 @@ struct ConsultView: View {
 
     var body: some View {
         let ctx = self.ctx
+        let hiddenCount: Int = model.messages.filter { lock.isHidden($0) }.count
+        let shown: [ConsultMessage] = hiddenCount > 0 ? model.messages.filter { !lock.isHidden($0) } : model.messages
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -361,12 +366,13 @@ struct ConsultView: View {
                         chips(ctx)
                         if !model.hasKey { keyCard }
                         if model.messages.isEmpty && model.hasKey { emptyHint }
-                        ForEach(model.messages) { m in
+                        if hiddenCount > 0 { ConsultLockedCard(lock: lock, count: hiddenCount) }
+                        ForEach(shown) { m in
                             ConsultBubble(message: m)
                                 .id(m.id)
                                 .transition(motion.appear)
                         }
-                        if let last = model.messages.last, !last.fromUser {
+                        if let last = shown.last, last == model.messages.last, !last.fromUser {
                             actions(ctx, reply: last)
                         }
                         if model.sending { typingIndicator.id("typing") }
@@ -385,7 +391,17 @@ struct ConsultView: View {
             }
             composer(ctx)
         }
-        .onAppear { self.ctx = ConsultContext.make(store: store) }
+        .onAppear {
+            self.ctx = ConsultContext.make(store: store)
+            lock.check()
+            lock.touch()
+        }
+        .onDisappear { lock.touch() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { lock.check() } else { lock.touch() }
+        }
+        .onChange(of: draft) { _, _ in lock.touch() }
+        .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in lock.check() }
         .onChange(of: store.open.count) { _, _ in self.ctx = ConsultContext.make(store: store) }
         .sheet(isPresented: $showKeySheet) {
             ConsultKeySheet(model: model).environment(\.palette, p)
@@ -580,6 +596,7 @@ struct ConsultView: View {
                 Button {
                     let text = draft
                     draft = ""
+                    lock.touch()
                     Task { await model.send(text, context: ctx) }
                 } label: {
                     Image(systemName: "arrow.up").font(.body.weight(.bold)).foregroundStyle(p.onAccent)

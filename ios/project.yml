@@ -28,6 +28,7 @@ targets:
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         NSCalendarsFullAccessUsageDescription: 予定をTODOに取り込み、TODOを予定として登録するために使います。
+        NSFaceIDUsageDescription: 過去の相談を、本人だけが見られるようにするために使います。
         NSLocationWhenInUseUsageDescription: 朝のブリーフィングで今いる場所の天気を表示するために使います。
         NSMicrophoneUsageDescription: Web版 Discord のボイスチャットで話すために使います。
         NSMotionUsageDescription: 二度寝していないかを歩数で確かめるために使います。
